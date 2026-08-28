@@ -17,19 +17,23 @@ import com.taskguide.app.data.model.Priority
 import com.taskguide.app.data.model.Step
 import com.taskguide.app.data.model.Task
 
-// ==================== 配色（毛玻璃 + 淡金，参考原神任务追踪） ====================
+// ==================== 配色（原神任务界面风格：磨砂黑 + 米白 + 暖金 + 紫菱） ====================
 object TGColors {
-    val Ink = Color(0xFF1F2430)          // 墨黑底
-    val InkLight = Color(0xFF2A3040)
-    val InkLighter = Color(0xFF3A4456)
-    val Gold = Color(0xFFC9A227)         // 鎏金
-    val GoldLight = Color(0xFFE8D9A0)    // 淡金
+    val Ink = Color(0xFF161B24)          // 深灰黑磨砂底
+    val InkLight = Color(0xFF1E2736)     // 深靛蓝（面板/任务条）
+    val InkLighter = Color(0xFF2A3246)
+    val Gold = Color(0xFFE0C06E)         // 暖金
+    val GoldLight = Color(0xFFF0D98C)    // 浅金高亮（主标题）
+    val OrangeWarm = Color(0xFFE8A15C)   // 暖橘黄（副文本/距离）
+    val Purple = Color(0xFFA78BFA)       // 紫（委托/任务标识）
+    val PurpleDeep = Color(0xFF7C5CD6)
     val Cinnabar = Color(0xFFC0392B)     // 朱砂（高优先级/警告）
-    val Jade = Color(0xFF2E8B7A)         // 玉青（完成）
-    val Paper = Color(0xFFF5EFE0)        // 宣纸
-    val Fog = Color(0xFF8A93A6)          // 雾灰
-    val CardBg = Color(0xCC2A3040)       // 半透明卡片底（毛玻璃感）
-    val CardBorder = Color(0x55C9A227)   // 淡金边
+    val Jade = Color(0xFF3E9C7E)         // 玉青（完成）
+    val Paper = Color(0xFFF5F0E0)        // 米白（主文）
+    val Fog = Color(0xFFA6AEBF)          // 浅灰辅助
+    val CardBg = Color(0xCC1E2736)       // 半透明任务条
+    val CardBorder = Color(0x59E0C06E)   // 淡金边
+    val SelectedBg = Color(0xEBF5F0E0)   // 选中：米白高亮
 }
 
 private val TGColorScheme = darkColorScheme(

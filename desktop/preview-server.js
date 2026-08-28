@@ -23,6 +23,12 @@ let mockState = {
     }
   ],
   progress: { done_today: 2, total_today: 5 },
+  todayTasks: [
+    { uuid: 't1', title: '一个月看完《深入理解计算机系统》', track_status: 'tracking', due_at: null, category: '学习', priority: 'high' },
+    { uuid: 't3', title: '交数字信号处理作业', track_status: 'pending', due_at: '今日 15:00', category: '学习', priority: 'high' },
+    { uuid: 't4', title: '买根数据线', track_status: 'pending', due_at: null, category: '生活', priority: 'low' },
+    { uuid: 't5', title: '给导师发周报', track_status: 'pending', due_at: '今日 20:00', category: '学习', priority: 'medium' }
+  ],
   reminder: { title: '交通信原理作业', due_at: 0, remaining_ms: 5_400_000 },
   habits: [
     { uuid: 'h1', title: '每天跑步30分钟', checked: true },
@@ -44,6 +50,7 @@ const server = http.createServer((req, res) => {
 
     switch (cmd) {
       case 'get_track_cards': return ok(res, mockState.trackCards);
+      case 'get_today_tasks': return ok(res, mockState.todayTasks);
       case 'get_progress': return ok(res, mockState.progress);
       case 'get_next_reminder': return ok(res, mockState.reminder);
       case 'get_habits_status': return ok(res, mockState.habits);

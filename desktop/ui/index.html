@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="widget" id="app">
-  <!-- 标题栏（可拖动） -->
+  <!-- 顶栏：HUD 风格 -->
   <header class="topbar" data-tauri-drag-region>
     <div class="title">任务指南</div>
     <div class="mode-switch">
@@ -18,16 +18,16 @@
     </div>
   </header>
 
-  <!-- 服务器连接（未连接时显示） -->
+  <!-- 服务器连接 -->
   <div class="connect-bar" id="connectBar">
     <input id="serverUrl" placeholder="手机IP:端口 (如 192.168.43.1:8899)" />
     <button id="connectBtn">连接</button>
   </div>
 
-  <!-- 追踪任务卡片列表 -->
+  <!-- 追踪任务（图2悬浮框样式） -->
   <section class="section">
     <div class="section-head">
-      <span class="section-title">追踪中</span>
+      <span class="section-title">进行中</span>
       <span class="section-count" id="trackCount">0</span>
     </div>
     <div id="trackList" class="track-list">
@@ -35,9 +35,19 @@
     </div>
   </section>
 
-  <!-- 完成进度 -->
+  <!-- 今日任务列表（图1：分组 + 选中高亮） -->
   <section class="section">
-    <div class="section-head"><span class="section-title">今日进度</span></div>
+    <div class="section-head">
+      <span class="section-title">今日任务</span>
+    </div>
+    <div id="taskList" class="task-list">
+      <div class="empty">暂无任务</div>
+    </div>
+  </section>
+
+  <!-- 今日进度 -->
+  <section class="section">
+    <div class="section-head"><span class="section-title">完成进度</span></div>
     <div class="progress-wrap">
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <span class="progress-text" id="progressText">0 / 0</span>
@@ -59,7 +69,7 @@
   <!-- 快捷添加 -->
   <div class="quick-add">
     <input id="quickInput" placeholder="速记一条任务…" />
-    <button id="quickAddBtn">+</button>
+    <button id="quickAddBtn">＋</button>
   </div>
 </div>
 <script src="app.js"></script>
