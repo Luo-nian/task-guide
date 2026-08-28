@@ -1,0 +1,29 @@
+[package]
+name = "task-guide-desktop"
+version = "1.0.0"
+description = "任务指南 桌面挂件（Tauri 2）"
+edition = "2021"
+
+[lib]
+name = "task_guide_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["tray-icon"] }
+tauri-plugin-autostart = "2.0"
+tauri-plugin-notification = "2.0"
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+tungstenite = { version = "0.23", features = ["native-tls"] }
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

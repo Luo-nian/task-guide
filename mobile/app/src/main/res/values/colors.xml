@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 任务指南配色（毛玻璃+淡金，参考原神任务追踪） -->
+    <color name="ink">#1F2430</color>          <!-- 墨黑底 -->
+    <color name="ink_light">#2A3040</color>
+    <color name="dai_blue">#3A4456</color>     <!-- 黛蓝 -->
+    <color name="gold">#C9A227</color>         <!-- 鎏金 -->
+    <color name="gold_light">#E8D9A0</color>   <!-- 淡金 -->
+    <color name="cinnabar">#C0392B</color>     <!-- 朱砂（高优先级/警告） -->
+    <color name="jade">#2E8B7A</color>         <!-- 玉青（完成） -->
+    <color name="paper">#F5EFE0</color>        <!-- 宣纸 -->
+    <color name="fog">#8A93A6</color>          <!-- 雾灰 -->
+</resources>

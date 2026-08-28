@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务指南</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="widget" id="app">
+  <!-- 标题栏（可拖动） -->
+  <header class="topbar" data-tauri-drag-region>
+    <div class="title">任务指南</div>
+    <div class="mode-switch">
+      <button class="mode-btn" data-mode="top" title="置顶">📌</button>
+      <button class="mode-btn" data-mode="normal" title="普通">🖼</button>
+      <button class="mode-btn" data-mode="tray" title="最小化到托盘">📥</button>
+    </div>
+  </header>
+
+  <!-- 服务器连接（未连接时显示） -->
+  <div class="connect-bar" id="connectBar">
+    <input id="serverUrl" placeholder="手机IP:端口 (如 192.168.43.1:8899)" />
+    <button id="connectBtn">连接</button>
+  </div>
+
+  <!-- 追踪任务卡片列表 -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-title">追踪中</span>
+      <span class="section-count" id="trackCount">0</span>
+    </div>
+    <div id="trackList" class="track-list">
+      <div class="empty">暂无追踪任务</div>
+    </div>
+  </section>
+
+  <!-- 完成进度 -->
+  <section class="section">
+    <div class="section-head"><span class="section-title">今日进度</span></div>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <span class="progress-text" id="progressText">0 / 0</span>
+    </div>
+  </section>
+
+  <!-- 倒计时提醒 -->
+  <section class="section" id="reminderSection" style="display:none">
+    <div class="section-head"><span class="section-title">下一个提醒</span></div>
+    <div class="reminder" id="reminderBox"></div>
+  </section>
+
+  <!-- 习惯状态 -->
+  <section class="section">
+    <div class="section-head"><span class="section-title">习惯</span></div>
+    <div id="habitList" class="habit-list"><div class="empty">无习惯任务</div></div>
+  </section>
+
+  <!-- 快捷添加 -->
+  <div class="quick-add">
+    <input id="quickInput" placeholder="速记一条任务…" />
+    <button id="quickAddBtn">+</button>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

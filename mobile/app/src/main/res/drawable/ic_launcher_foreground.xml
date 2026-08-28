@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 任务指南图标前景：淡金色指南针（任务"指南"） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 指南针外圈 -->
+    <path
+        android:strokeColor="#E8D9A0"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M54,28 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
+    <!-- 指针（菱形） -->
+    <path
+        android:fillColor="#C9A227"
+        android:pathData="M54,38 L60,54 L54,70 L48,54 Z" />
+    <!-- 中心点 -->
+    <path
+        android:fillColor="#E8D9A0"
+        android:pathData="M54,52 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

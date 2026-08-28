@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 应用通常用 Material3 主题，XML 主题只需无 ActionBar + 状态栏色 -->
+    <style name="Theme.TaskGuide" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:windowBackground">@color/ink</item>
+    </style>
+</resources>

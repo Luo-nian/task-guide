@@ -1,0 +1,16 @@
+# 数据库测试产物（保留 schema.sql，排除运行时生成的 db）
+*.db
+*.db-journal
+db/test_data.sql
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log

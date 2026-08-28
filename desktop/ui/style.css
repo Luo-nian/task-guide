@@ -1,0 +1,171 @@
+/* 任务指南 桌面挂件 —— 毛玻璃 + 淡金（参考原神任务追踪） */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --ink: #1F2430;
+  --ink-light: #2A3040;
+  --ink-lighter: #3A4456;
+  --gold: #C9A227;
+  --gold-light: #E8D9A0;
+  --cinnabar: #C0392B;
+  --jade: #2E8B7A;
+  --paper: #F5EFE0;
+  --fog: #8A93A6;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-weight: 400;  /* 普通字重，非黑体 */
+  font-size: 13px;
+  color: var(--paper);
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 毛玻璃主体 */
+.widget {
+  width: 100%; height: 100vh;
+  background: linear-gradient(160deg, rgba(31,36,48,0.78), rgba(42,48,64,0.78));
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid rgba(201,162,39,0.35);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  display: flex; flex-direction: column;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+/* 标题栏 */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px; margin-bottom: 8px;
+  border-bottom: 1px solid rgba(232,217,160,0.2);
+}
+.topbar .title {
+  color: var(--gold-light); font-size: 15px; font-weight: 600;
+  letter-spacing: 1px;
+}
+.mode-switch { display: flex; gap: 4px; }
+.mode-btn {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(201,162,39,0.3);
+  color: var(--fog); width: 26px; height: 26px; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.mode-btn:hover { background: rgba(201,162,39,0.2); color: var(--gold-light); }
+.mode-btn.active { background: var(--gold); color: var(--ink); }
+
+/* 连接栏 */
+.connect-bar {
+  display: flex; gap: 6px; margin-bottom: 8px; padding: 6px;
+  background: rgba(0,0,0,0.25); border-radius: 8px;
+}
+.connect-bar input {
+  flex: 1; background: transparent; border: 1px solid rgba(232,217,160,0.3);
+  color: var(--paper); padding: 4px 8px; border-radius: 6px; font-size: 12px;
+}
+.connect-bar button {
+  background: var(--gold); color: var(--ink); border: none;
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;
+}
+
+/* 区块 */
+.section { margin-bottom: 10px; }
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.section-title {
+  color: var(--gold-light); font-size: 12px; font-weight: 600;
+  letter-spacing: 1px;
+}
+.section-count {
+  color: var(--fog); font-size: 11px;
+  background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 8px;
+}
+
+.empty {
+  color: var(--fog); font-size: 11px; padding: 10px; text-align: center;
+}
+
+/* 追踪卡片（原神图二红框样式） */
+.track-list { display: flex; flex-direction: column; gap: 6px; }
+.track-card {
+  background: rgba(255,255,255,0.05);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px; padding: 8px 10px;
+}
+.track-card .tc-title {
+  color: var(--paper); font-size: 13px; font-weight: 500;
+  margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.track-card .tc-step {
+  color: var(--gold-light); font-size: 11px; margin-bottom: 2px;
+}
+.track-card .tc-attr {
+  color: var(--fog); font-size: 10px;
+}
+.track-card .tc-actions {
+  display: flex; gap: 4px; margin-top: 6px;
+}
+.track-card .tc-actions button {
+  flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(232,217,160,0.2);
+  color: var(--paper); padding: 3px; border-radius: 5px; cursor: pointer; font-size: 11px;
+}
+.track-card .tc-actions button:hover { background: rgba(201,162,39,0.25); }
+.track-card .tc-actions button.done-btn:hover { background: rgba(46,139,122,0.3); border-color: var(--jade); }
+.track-card .tc-progress {
+  height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px;
+  margin-top: 6px; overflow: hidden;
+}
+.track-card .tc-progress > div { height: 100%; background: var(--gold); transition: width .3s; }
+
+/* 进度条 */
+.progress-wrap { display: flex; align-items: center; gap: 8px; }
+.progress-bar {
+  flex: 1; height: 6px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  width: 0%; transition: width .4s;
+}
+.progress-text { color: var(--fog); font-size: 11px; min-width: 40px; text-align: right; }
+
+/* 倒计时提醒 */
+.reminder {
+  background: rgba(192,57,43,0.15); border-left: 3px solid var(--cinnabar);
+  border-radius: 6px; padding: 8px 10px;
+}
+.reminder .r-title { color: var(--paper); font-size: 12px; margin-bottom: 2px; }
+.reminder .r-time { color: var(--cinnabar); font-size: 11px; }
+
+/* 习惯 */
+.habit-list { display: flex; flex-direction: column; gap: 4px; }
+.habit-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; background: rgba(255,255,255,0.04); border-radius: 6px;
+}
+.habit-item .h-name { color: var(--paper); font-size: 12px; }
+.habit-item .h-done { color: var(--jade); font-size: 11px; }
+.habit-item .h-undo { color: var(--fog); font-size: 11px; }
+
+/* 快捷添加 */
+.quick-add {
+  display: flex; gap: 6px; margin-top: auto; padding-top: 8px;
+  border-top: 1px solid rgba(232,217,160,0.15);
+}
+.quick-add input {
+  flex: 1; background: rgba(0,0,0,0.25); border: 1px solid rgba(232,217,160,0.2);
+  color: var(--paper); padding: 5px 8px; border-radius: 6px; font-size: 12px;
+}
+.quick-add button {
+  background: var(--gold); color: var(--ink); border: none;
+  width: 28px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;
+}
+
+/* 滚动条 */
+.widget::-webkit-scrollbar { width: 4px; }
+.widget::-webkit-scrollbar-thumb { background: rgba(201,162,39,0.3); border-radius: 2px; }
