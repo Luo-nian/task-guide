@@ -240,7 +240,8 @@ body::after {
 }
 .nav-item:hover .nav-tip { opacity: 1; }
 .nav-spacer { flex: 1; }
-.nav-item.repo { border-top: 1px dashed var(--border-soft); padding-top: 7px; margin-top: 4px; }
+/* 历史项：只用间距分隔（原来的 padding-top 会把图标压低 7px，与其它 4 项不对齐） */
+.nav-item.repo { margin-top: 8px; }
 
 /* ============================================================
    中间列表区 30%
