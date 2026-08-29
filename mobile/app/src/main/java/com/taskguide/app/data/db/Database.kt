@@ -171,7 +171,7 @@ interface SyncMetaDao {
 // ==================== Database ====================
 @Database(
     entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

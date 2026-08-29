@@ -34,6 +34,7 @@ data class Task(
     @ColumnInfo(name = "done") val done: Int = 0,
     @ColumnInfo(name = "done_at") val doneAt: Long? = null,
     @ColumnInfo(name = "delayed_count") val delayedCount: Int = 0,
+    @ColumnInfo(name = "reward_points") val rewardPoints: Int = 10,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "deleted") val deleted: Int = 0

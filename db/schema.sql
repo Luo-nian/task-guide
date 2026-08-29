@@ -1,5 +1,6 @@
 -- ============================================================
--- 任务指南 TaskGuide —— 统一数据库 Schema v1.0
+-- 任务指南 TaskGuide —— 统一数据库 Schema v2.0
+-- v2: 新增任务积分系统（reward_points / total_points）
 -- 双端（Android / Tauri）共用此结构，保证同步一致
 -- SQLite 方言
 -- ============================================================
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     done          INTEGER NOT NULL DEFAULT 0,          -- 快捷完成标记 0/1
     done_at       INTEGER DEFAULT NULL,                -- 完成时间
     delayed_count INTEGER NOT NULL DEFAULT 0,          -- 延迟次数（统计拖延用）
+    reward_points INTEGER NOT NULL DEFAULT 10,         -- 完成本任务获得的积分（原神奖励区）
     created_at    INTEGER NOT NULL,                    -- 创建时间
     updated_at    INTEGER NOT NULL,                    -- 最后修改时间（同步冲突判断）
     deleted       INTEGER NOT NULL DEFAULT 0           -- 软删除 0/1（同步用）
@@ -89,4 +91,5 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
     ('reminder_strength','standard'),                   -- standard | repeat | alarm
     ('auto_start',       '1'),                          -- 电脑挂件开机自启 0/1
     ('delay_options',    'custom'),                     -- 延迟天数方式：custom=自定义
-    ('theme',            'frosted');                    -- frosted(毛玻璃) | card(简洁卡片)
+    ('theme',            'frosted'),                    -- frosted(毛玻璃) | card(简洁卡片)
+    ('total_points',     '0');                          -- 总积分（积分系统）

@@ -27,6 +27,7 @@ pub struct Task {
     pub done: i64,
     pub done_at: Option<i64>,
     pub delayed_count: i64,
+    pub reward_points: i64,
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted: i64,
@@ -90,6 +91,7 @@ pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
         done: r.get("done")?,
         done_at: r.get("done_at")?,
         delayed_count: r.get("delayed_count")?,
+        reward_points: r.get("reward_points")?,
         created_at: r.get("created_at")?,
         updated_at: r.get("updated_at")?,
         deleted: r.get("deleted")?,
@@ -263,7 +265,7 @@ fn set_display_mode(window: tauri::Window, mode: String) {
 fn connect_server(state: tauri::State<AppState>, url: String) -> String {
     *state.server_url.lock().unwrap() = url.clone();
     // 触发全量同步
-    match sync::full_sync(&state) {
+    match sync::full_sync(&state.db, &state.server_url) {
         Ok(_) => "已连接".to_string(),
         Err(e) => format!("连接失败: {}", e),
     }
@@ -272,6 +274,55 @@ fn connect_server(state: tauri::State<AppState>, url: String) -> String {
 #[tauri::command]
 fn get_server_url(state: tauri::State<AppState>) -> String {
     state.server_url.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn get_total_points(state: tauri::State<AppState>) -> i64 {
+    let db = state.db.lock().unwrap();
+    db.query_row("SELECT value FROM settings WHERE key='total_points'", [],
+        |r| r.get::<_, String>(0))
+        .ok().and_then(|s| s.parse::<i64>().ok()).unwrap_or(0)
+}
+
+#[tauri::command]
+fn get_task_detail(state: tauri::State<AppState>, task_uuid: String) -> serde_json::Value {
+    let db = state.db.lock().unwrap();
+    let task: Option<Task> = db.query_row(
+        "SELECT * FROM tasks WHERE uuid=?1", params![task_uuid], row_to_task
+    ).ok();
+    let steps: Vec<Step> = {
+        let mut stmt = db.prepare(
+            "SELECT * FROM steps WHERE task_uuid=?1 AND deleted=0 ORDER BY sort_order"
+        ).unwrap();
+        stmt.query_map(params![task_uuid], row_to_step).unwrap()
+            .filter_map(|r| r.ok()).collect()
+    };
+    serde_json::json!({ "task": task, "steps": steps })
+}
+
+#[tauri::command]
+fn start_tracking(state: tauri::State<AppState>, task_uuid: String) {
+    let now = chrono::Local::now().timestamp_millis();
+    {
+        let db = state.db.lock().unwrap();
+        db.execute("UPDATE tasks SET track_status='tracking', updated_at=?1 WHERE uuid=?2",
+            params![now, &task_uuid]).ok();
+        let next: Option<String> = db.query_row(
+            "SELECT uuid FROM steps WHERE task_uuid=?1 AND status!='done' AND deleted=0 ORDER BY sort_order LIMIT 1",
+            params![&task_uuid], |r| r.get(0)
+        ).ok();
+        if let Some(nu) = next {
+            db.execute("UPDATE steps SET status='doing', updated_at=?1 WHERE uuid=?2",
+                params![now, &nu]).ok();
+        }
+    }
+    sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+}
+
+#[tauri::command]
+fn set_window_size(window: tauri::Window, w: f64, h: f64) {
+    use tauri::PhysicalSize;
+    let _ = window.set_size(tauri::Size::Physical(PhysicalSize::new(w as u32, h as u32)));
 }
 
 // ==================== 启动 ====================
@@ -308,8 +359,9 @@ pub fn run() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_progress, get_next_reminder,
-            get_habits_status, advance_step, complete_task, add_task,
-            set_display_mode, connect_server, get_server_url
+            get_habits_status, get_task_detail, get_total_points,
+            advance_step, complete_task, add_task, start_tracking,
+            set_display_mode, set_window_size, connect_server, get_server_url
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

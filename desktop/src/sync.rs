@@ -50,9 +50,9 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
     let conn = db.lock().map_err(|e| e.to_string())?;
     for t in resp.tasks {
         let _ = conn.execute(
-            "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,created_at,updated_at,deleted) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
-            params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.created_at, t.updated_at, t.deleted]
+            "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,reward_points,created_at,updated_at,deleted) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+            params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.reward_points, t.created_at, t.updated_at, t.deleted]
         );
     }
     for s in resp.steps {
@@ -145,9 +145,9 @@ fn apply_change(db: &Arc<Mutex<Connection>>, op: &ChangeOp) {
             if let Some(d) = &op.data {
                 if let Ok(t) = serde_json::from_str::<Task>(d) {
                     let _ = conn.execute(
-                        "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,created_at,updated_at,deleted) \
-                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
-                        params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.created_at, t.updated_at, t.deleted]
+                        "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,reward_points,created_at,updated_at,deleted) \
+                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+                        params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.reward_points, t.created_at, t.updated_at, t.deleted]
                     );
                 }
             }

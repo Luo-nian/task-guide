@@ -46,7 +46,8 @@ class TaskGuideApp : Application() {
             "auto_start" to "1",
             "delay_options" to "custom",
             "theme" to "frosted",
-            "server_port" to "8899"
+            "server_port" to "8899",
+            "total_points" to "0"
         )
         defaults.forEach { (k, v) ->
             if (repo.getSetting(k, "") == "") repo.setSetting(k, v)

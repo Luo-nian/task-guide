@@ -56,14 +56,16 @@ class TaskRepository(private val db: AppDatabase) {
         priority: String = Priority.MEDIUM,
         dueAt: Long? = null,
         repeatRule: String? = null,
-        deadline: Long? = null
+        deadline: Long? = null,
+        rewardPoints: Int = 10
     ): Task {
         val t = now()
         val task = Task(
             uuid = newUuid(), type = type, title = title, desc = desc,
             category = category, priority = priority, dueAt = dueAt,
             repeatRule = repeatRule, deadline = deadline,
-            trackStatus = TrackStatus.PENDING, createdAt = t, updatedAt = t
+            trackStatus = TrackStatus.PENDING, rewardPoints = rewardPoints,
+            createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
         emit(ChangeOp("upsert", "task", task.uuid))
@@ -116,11 +118,14 @@ class TaskRepository(private val db: AppDatabase) {
         emit(ChangeOp("upsert", "task", uuid))
     }
 
-    /** 直接完成任务（无步骤或一键完成） */
+    /** 直接完成任务（无步骤或一键完成），累加积分 */
     suspend fun completeTask(uuid: String) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
         taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
+        // 积分奖励：total_points += reward_points
+        val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
+        settingsDao.set(com.taskguide.app.data.model.Setting("total_points", (current + task.rewardPoints).toString()))
         stepDao.getByTask(uuid).filter { it.status != StepStatus.DONE }.forEach {
             stepDao.updateStatus(it.uuid, StepStatus.DONE, t, t)
             emit(ChangeOp("upsert", "step", it.uuid))

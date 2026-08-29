@@ -8,69 +8,71 @@
 </head>
 <body>
 <div class="widget" id="app">
-  <!-- 顶栏：HUD 风格 -->
+
+  <!-- ===== 顶部状态栏（双模式共用） ===== -->
   <header class="topbar" data-tauri-drag-region>
-    <div class="title">任务指南</div>
-    <div class="mode-switch">
-      <button class="mode-btn" data-mode="top" title="置顶">📌</button>
-      <button class="mode-btn" data-mode="normal" title="普通">🖼</button>
-      <button class="mode-btn" data-mode="tray" title="最小化到托盘">📥</button>
+    <div class="title">◆ 任务指南</div>
+    <div class="top-right">
+      <span class="points" id="totalPoints">◆ 0</span>
+      <div class="mode-switch">
+        <button class="mode-btn" data-mode="top" title="置顶">📌</button>
+        <button class="mode-btn" data-mode="normal" title="普通">🖼</button>
+        <button class="mode-btn" data-mode="tray" title="最小化到托盘">📥</button>
+      </div>
     </div>
   </header>
 
-  <!-- 服务器连接 -->
+  <!-- 下一个提醒横幅（图1：新任务提示风格） -->
+  <div class="banner" id="reminderBanner" style="display:none"></div>
+
+  <!-- 连接栏 -->
   <div class="connect-bar" id="connectBar">
     <input id="serverUrl" placeholder="手机IP:端口 (如 192.168.43.1:8899)" />
     <button id="connectBtn">连接</button>
   </div>
 
-  <!-- 追踪任务（图2悬浮框样式） -->
-  <section class="section">
+  <!-- ===== 模式一：追踪条模式（图2 悬浮框，默认） ===== -->
+  <div id="trackMode" class="mode-track">
     <div class="section-head">
       <span class="section-title">进行中</span>
       <span class="section-count" id="trackCount">0</span>
+      <button class="expand-btn" id="expandBtn" title="展开面板">◤</button>
     </div>
-    <div id="trackList" class="track-list">
-      <div class="empty">暂无追踪任务</div>
+    <div id="miniTrackList" class="track-list"></div>
+    <div class="track-footer">
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <span class="progress-text" id="progressText">0/0</span>
+      </div>
     </div>
-  </section>
+  </div>
 
-  <!-- 今日任务列表（图1：分组 + 选中高亮） -->
-  <section class="section">
-    <div class="section-head">
-      <span class="section-title">今日任务</span>
+  <!-- ===== 模式二：详情面板（图1 左右分栏，点击展开） ===== -->
+  <div id="fullMode" class="mode-full" style="display:none">
+    <div class="full-layout">
+      <!-- 左导航列（分类图标，图1左侧竖导航） -->
+      <nav class="side-nav">
+        <div class="nav-item active" data-nav="tracking" title="进行中"><span class="nav-ico flag">⚑</span></div>
+        <div class="nav-item" data-nav="today" title="今日任务"><span class="nav-ico diamond">◆</span></div>
+        <div class="nav-item" data-nav="habits" title="习惯"><span class="nav-ico check">✓</span></div>
+      </nav>
+      <!-- 任务列表区 -->
+      <div class="list-pane">
+        <div id="fullTaskList"></div>
+      </div>
+      <!-- 详情区 -->
+      <div class="detail-pane" id="detailPane">
+        <div class="detail-empty">选择左侧任务查看详情</div>
+      </div>
     </div>
-    <div id="taskList" class="task-list">
-      <div class="empty">暂无任务</div>
-    </div>
-  </section>
+  </div>
 
-  <!-- 今日进度 -->
-  <section class="section">
-    <div class="section-head"><span class="section-title">完成进度</span></div>
-    <div class="progress-wrap">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      <span class="progress-text" id="progressText">0 / 0</span>
-    </div>
-  </section>
-
-  <!-- 倒计时提醒 -->
-  <section class="section" id="reminderSection" style="display:none">
-    <div class="section-head"><span class="section-title">下一个提醒</span></div>
-    <div class="reminder" id="reminderBox"></div>
-  </section>
-
-  <!-- 习惯状态 -->
-  <section class="section">
-    <div class="section-head"><span class="section-title">习惯</span></div>
-    <div id="habitList" class="habit-list"><div class="empty">无习惯任务</div></div>
-  </section>
-
-  <!-- 快捷添加 -->
+  <!-- 快捷添加（双模式共用） -->
   <div class="quick-add">
     <input id="quickInput" placeholder="速记一条任务…" />
     <button id="quickAddBtn">＋</button>
   </div>
+
 </div>
 <script src="app.js"></script>
 </body>
