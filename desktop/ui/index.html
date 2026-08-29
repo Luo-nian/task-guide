@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=v45">
 </head>
 <body>
 <div class="widget" id="app">
@@ -18,9 +18,8 @@
     <div class="top-right">
       <div class="level-badge" id="levelBadge" title="点击查看等级详情">
         <span class="level-icon" id="levelIcon">1</span>
-        <span class="level-text" id="levelText">历练学徒 <small id="levelPoints">· 0 分</small></span>
+        <span class="level-text" id="levelText">历练学徒</span>
       </div>
-      <span class="points" id="totalPoints" title="总积分">◆ 0</span>
       <button class="ico-btn" id="settingsBtn" title="设置">⚙</button>
     </div>
   </header>
@@ -28,20 +27,24 @@
   <!-- ===== 左侧图标导航 7% ===== -->
   <nav class="side-nav" id="sideNav">
     <button class="nav-item active" data-nav="overview" title="总览">
-      <span class="ico">◉</span>
+      <span class="ico ico-overview">◍</span>
       <span class="nav-tip">总览</span>
     </button>
-    <button class="nav-item" data-nav="tracking" title="追踪中">
-      <span class="ico">⚑</span>
-      <span class="nav-tip">追踪中</span>
+    <button class="nav-item" data-nav="daily" title="每日任务">
+      <span class="ico ico-daily">☀</span>
+      <span class="nav-tip">每日任务</span>
     </button>
-    <button class="nav-item" data-nav="today" title="今日">
-      <span class="ico">◆</span>
-      <span class="nav-tip">今日</span>
+    <button class="nav-item" data-nav="time-limited" title="限时任务">
+      <span class="ico ico-lim">⏳</span>
+      <span class="nav-tip">限时任务</span>
+    </button>
+    <button class="nav-item" data-nav="once" title="次数任务">
+      <span class="ico ico-once">⇄</span>
+      <span class="nav-tip">次数任务</span>
     </button>
     <div class="nav-spacer"></div>
     <button class="nav-item repo" data-nav="archive" title="历史任务">
-      <span class="ico"></span>
+      <span class="ico ico-archive">📜</span>
       <span class="nav-tip">历史任务</span>
     </button>
   </nav>
@@ -56,19 +59,19 @@
       </div>
       <div class="cat-grid" id="catGrid" style="padding: 0 6px 6px; display:flex; flex-direction:column; gap:6px;">
         <div class="cat-card" data-cat="daily">
-          <div class="cc-head"><span class="cc-ico daily">◆</span><span class="cc-name">每日任务</span><span class="cc-count" id="cDaily">0</span></div>
+          <div class="cc-head"><span class="cc-ico daily">☀</span><span class="cc-name">每日任务</span></div>
           <div class="cc-list" id="listDaily"></div>
         </div>
         <div class="cat-card" data-cat="goal">
-          <div class="cc-head"><span class="cc-ico goal">◎</span><span class="cc-name">目标任务</span><span class="cc-count" id="cGoal">0</span></div>
+          <div class="cc-head"><span class="cc-ico goal">◎</span><span class="cc-name">目标任务</span></div>
           <div class="cc-list" id="listGoal"></div>
         </div>
         <div class="cat-card" data-cat="time-limited">
-          <div class="cc-head"><span class="cc-ico lim">⏱</span><span class="cc-name">限时任务</span><span class="cc-count" id="cLim">0</span></div>
+          <div class="cc-head"><span class="cc-ico lim">⏳</span><span class="cc-name">限时任务</span></div>
           <div class="cc-list" id="listLim"></div>
         </div>
         <div class="cat-card" data-cat="once">
-          <div class="cc-head"><span class="cc-ico once">●</span><span class="cc-name">次数任务</span><span class="cc-count" id="cOnce">0</span></div>
+          <div class="cc-head"><span class="cc-ico once">⇄</span><span class="cc-name">次数任务</span></div>
           <div class="cc-list" id="listOnce"></div>
         </div>
       </div>
@@ -80,7 +83,6 @@
         <span class="vh-title" id="listViewTitle">追踪中</span>
         <span class="vh-hint" id="listViewHint"></span>
         <span class="vh-spacer"></span>
-        <input class="search" id="archiveSearch" placeholder="检索…" style="display:none" />
       </div>
       <div class="lv-body" id="listViewBody"></div>
     </div>
@@ -98,17 +100,14 @@
         </div>
       </div>
 
-      <!-- 等级卡 -->
+      <!-- 等级卡（只放等级名 + 问号，经验条在设置-个人信息） -->
       <div class="level-card" id="levelCard">
         <div class="level-character" id="levelChar">🗡</div>
         <div class="level-info">
           <div class="level-name" id="levelName">历练学徒</div>
-          <div class="level-title" id="levelTitle">初入冒险之道的勇者</div>
-          <div class="level-progress">
-            <div class="lp-bar"><div class="lp-fill" id="levelFill" style="width:0%"></div></div>
-            <div class="lp-text" id="levelText2">0 / 20 分</div>
-          </div>
+          <div class="level-title" id="levelTitle">敢开始，就已经赢了一半</div>
         </div>
+        <button class="level-q" id="levelQ" title="查看等级经验">？</button>
       </div>
 
       <!-- 进度条卡 -->
@@ -216,6 +215,22 @@
     </div>
   </div>
 
+  <!-- ===== 历史任务弹窗（独立小窗口，不用任务栏原生界面） ===== -->
+  <div class="overlay archive-overlay" id="archiveOverlay" style="display:none">
+    <div class="modal archive-modal">
+      <div class="m-head"><span>历史任务</span><button class="m-close" data-close-overlay="archiveOverlay">×</button></div>
+      <div class="arc-tabs">
+        <button class="arc-tab active" data-cat="all" onclick="switchArchiveCat('all')">全部</button>
+        <button class="arc-tab" data-cat="daily" onclick="switchArchiveCat('daily')">每日任务</button>
+        <button class="arc-tab" data-cat="goal" onclick="switchArchiveCat('goal')">目标任务</button>
+        <button class="arc-tab" data-cat="time-limited" onclick="switchArchiveCat('time-limited')">限时任务</button>
+        <button class="arc-tab" data-cat="once" onclick="switchArchiveCat('once')">次数任务</button>
+        <input class="search" id="archiveSearch" placeholder="检索…" style="margin-left:auto; width:110px" />
+      </div>
+      <div class="arc-body" id="archiveBody"></div>
+    </div>
+  </div>
+
   <!-- ===== 设置抽屉（卡片式分组） ===== -->
   <div class="overlay" id="settingsOverlay" style="display:none">
     <div class="modal settings-modal">
@@ -247,7 +262,26 @@
         </div>
 
         <div class="settings-section">
-          <div class="ss-title">进度与等级</div>
+          <div class="ss-title">个人信息</div>
+          <div class="setting-row">
+            <label>当前等级</label>
+            <span class="hint" id="setCurrentLevel">历练学徒</span>
+          </div>
+          <div class="setting-row">
+            <label>总积分</label>
+            <span class="hint" id="setTotalPoints">0</span>
+          </div>
+          <div class="setting-row level-exp-row">
+            <label>经验条</label>
+            <div class="exp-box">
+              <div class="exp-bar"><div class="exp-fill" id="setLevelFill" style="width:0%"></div></div>
+              <div class="exp-hint" id="setLevelHint">距下一级还差 0 分</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">进度显示</div>
           <div class="setting-row">
             <label>进度条样式</label>
             <select id="setProgressStyle">
@@ -256,13 +290,17 @@
               <option value="dots">点状</option>
             </select>
           </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">AI 任务拆解</div>
           <div class="setting-row">
-            <label>当前等级</label>
-            <span class="hint" id="setCurrentLevel">历练学徒</span>
+            <label>DeepSeek Key</label>
+            <input type="password" id="setAiKey" placeholder="sk-…（留空用本地模板）" />
           </div>
           <div class="setting-row">
-            <label>总积分</label>
-            <span class="hint" id="setTotalPoints">0</span>
+            <label>说明</label>
+            <span class="hint">填写后在详情页点"🤖 AI 拆解"自动拆步骤<br>单次约 0.0002 元，留空也能拆（内置模板）</span>
           </div>
         </div>
 
@@ -368,11 +406,11 @@
   <div class="ctx-menu" id="ctxMenu" style="display:none">
     <button data-cmd="track">开始追踪</button>
     <button data-cmd="untrack">取消追踪</button>
-    <button data-cmd="complete">标记完成</button>
+    <button data-cmd="complete">完成任务</button>
     <button data-cmd="delete" class="danger">删除</button>
   </div>
 
 </div>
-<script src="app.js"></script>
+<script src="app.js?v=v45"></script>
 </body>
 </html>

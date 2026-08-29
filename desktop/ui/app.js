@@ -33,6 +33,7 @@ let settings = {
   count_default: 1,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   night_notify: true,              // 22:00 未完成弹窗
+  ai_api_key: '',                  // DeepSeek API key（AI 拆解用，可留空走本地模板）
   pairing: null
 };
 let selectedUuid = null;
@@ -49,13 +50,13 @@ function catOf(t) {
 }
 const CAT_LABEL = { 'daily':'每日任务', 'goal':'目标任务', 'time-limited':'限时任务', 'once':'次数任务' };
 
-// =============== 5 段等级（集满积分升级） ===============
+// =============== 5 段等级（集满积分升级，励志角色） ===============
 const LEVELS = [
-  { lv:1, name:'历练学徒',  title:'初入冒险之道的勇者',         char:'🗡', icon:'1', min:0,   max:20  },
-  { lv:2, name:'风华游侠',  title:'已踏出第一步的行者',         char:'🏹', icon:'2', min:20,  max:60  },
-  { lv:3, name:'云霜骑士',  title:'守护同伴的意志觉醒',         char:'🛡', icon:'3', min:60,  max:120 },
-  { lv:4, name:'群星行者',  title:'穿越风暴的星辰',             char:'✨', icon:'4', min:120, max:200 },
-  { lv:5, name:'传奇勇者',  title:'铭刻于史的传奇',             char:'👑', icon:'5', min:200, max:999 }
+  { lv:1, name:'历练学徒',  title:'敢开始，就已经赢了一半',      char:'🗡', icon:'1', min:0,   max:20  },
+  { lv:2, name:'风华游侠',  title:'汗水从不会辜负你',            char:'🏹', icon:'2', min:20,  max:60  },
+  { lv:3, name:'破浪骑士',  title:'风浪越大，越显本色',          char:'🛡', icon:'3', min:60,  max:120 },
+  { lv:4, name:'群星行者',  title:'你走过的每一步都算数',        char:'✨', icon:'4', min:120, max:200 },
+  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',            char:'👑', icon:'5', min:200, max:999 }
 ];
 function levelOf(p) {
   let cur = LEVELS[0];
@@ -63,7 +64,8 @@ function levelOf(p) {
   return cur;
 }
 function nextLevelOf(p) {
-  for (const lv of LEVELS) { if (p < lv.max) return lv; }
+  // 返回第一个「最小积分门槛高于当前积分」的等级，即真正的下一级
+  for (const lv of LEVELS) { if (p < lv.min) return lv; }
   return null;
 }
 
@@ -114,6 +116,7 @@ function applySettingsToUi() {
   document.getElementById('setDailyRefresh').checked = settings.daily_refresh;
   document.getElementById('setNightNotify').checked = settings.night_notify;
   document.getElementById('setProgressStyle').value = settings.progress_style;
+  document.getElementById('setAiKey').value = settings.ai_api_key || '';
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
   // 进度条样式 tab 高亮
   document.querySelectorAll('.style-tab').forEach(t => {
@@ -131,7 +134,8 @@ async function persistSettingsServer() {
       time_limit_min: settings.time_limit_min,
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
-      night_notify: settings.night_notify ? '1' : '0'
+      night_notify: settings.night_notify ? '1' : '0',
+      ai_api_key: settings.ai_api_key || ''
     };
     for (const [k, v] of Object.entries(map)) {
       await call('set_setting', { key: k, value: String(v) });
@@ -161,7 +165,9 @@ async function fetchAll() {
 async function render() {
   try {
     await fetchAll();
-    document.getElementById('totalPoints').textContent = '◆ ' + points;
+    document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
+    const tpEl = document.getElementById('totalPoints');
+    if (tpEl) tpEl.textContent = '◆ ' + points;
     renderLevelBadge();
     renderSideNav();
     if (nav === 'overview') renderOverview();
@@ -170,6 +176,15 @@ async function render() {
     checkEmergency();
   } catch (e) {
     console.error('render 失败', e);
+    // 调试模式：把错误显示到页面右下角（不静默）
+    let dbg = document.getElementById('_dbg');
+    if (!dbg) {
+      dbg = document.createElement('div');
+      dbg.id = '_dbg';
+      dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#fff8dc;border:1px solid #c0392b;color:#a02820;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
+      document.body.appendChild(dbg);
+    }
+    dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
   }
 }
 
@@ -181,12 +196,16 @@ function renderSideNav() {
 }
 document.querySelectorAll('.nav-item').forEach(n => {
   n.addEventListener('click', () => {
+    // 历史任务 = 独立弹窗（不占用主视图）
+    if (n.dataset.nav === 'archive') { openArchiveModal(); return; }
     nav = n.dataset.nav;
     selectedUuid = null;
     document.getElementById('detailView').style.display = 'none';
     render();
   });
 });
+document.getElementById('archiveSearch').addEventListener('input', renderArchiveModal);
+document.querySelectorAll('[data-close-overlay="archiveOverlay"]').forEach(b => b.addEventListener('click', closeArchiveModal));
 
 // =============== 总览页（4 分类） ===============
 function renderOverview() {
@@ -197,7 +216,8 @@ function renderOverview() {
 
   for (const cat of Object.keys(groups)) {
     const arr = groups[cat];
-    document.getElementById('c' + catMapId(cat)).textContent = arr.length;
+    const cntEl = document.getElementById('c' + catMapId(cat));
+    if (cntEl) cntEl.textContent = arr.length;
     const box = document.getElementById('list' + catMapId(cat));
     if (arr.length === 0) {
       box.innerHTML = `<div class="cc-empty">暂无任务</div>`;
@@ -212,38 +232,42 @@ function catMapId(cat) {
 function catTaskHtml(t) {
   let meta = '';
   if (t.due_at) meta = '⏰ ' + fmtDue(t.due_at);
-  else if (isTracking(t)) meta = '◆ 追踪';
   else if (t.category === 'once' && t.count > 1) meta = '次数 ' + (t.done_count || 0) + '/' + t.count;
   const metaHtml = meta ? `<span class="ct-meta">${esc(meta)}</span>` : '';
+  // 追踪中：左侧不显示任何标识，右侧显示会动的涟漪菱形
+  const ri = isTracking(t) ? `<span class="ct-diamond"></span>` : '';
   return `<div class="cat-task ${isTracking(t)?'tracking':''}" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')" oncontextmenu="ctxOpen(event,'${t.uuid}')">
-    <span class="ct-diamond"></span>
     <span class="ct-title">${esc(t.title)}</span>
     ${metaHtml}
+    ${ri}
   </div>`;
 }
 
-// =============== 列表视图（追踪中/今日/历史任务） ===============
+// =============== 列表视图（每日任务 / 限时任务 / 次数任务） ===============
+function isTodayTask(t) {
+  if (t.category === 'daily' || t.category === 'once') return true;
+  if (t.category === 'time-limited' && t.due_at) {
+    if (typeof t.due_at === 'number') return isToday(t.due_at);
+  }
+  return false;
+}
 function renderListView() {
   document.getElementById('overviewView').style.display = 'none';
   document.getElementById('listView').style.display = '';
   const box = document.getElementById('listViewBody');
   let arr = [];
-  const titleMap = { tracking:'追踪中', today:'今日任务', archive:'历史任务' };
-  document.getElementById('listViewTitle').textContent = titleMap[nav];
+  const titleMap = { daily:'每日任务', 'time-limited':'限时任务', once:'次数任务' };
+  document.getElementById('listViewTitle').textContent = titleMap[nav] || '任务';
 
-  if (nav === 'tracking') {
-    arr = tasks.filter(isTracking);
-    document.getElementById('listViewHint').textContent = '正在进行的任务';
-    document.getElementById('archiveSearch').style.display = 'none';
-  } else if (nav === 'today') {
-    arr = tasks;
-    document.getElementById('listViewHint').textContent = '所有今日任务';
-    document.getElementById('archiveSearch').style.display = 'none';
-  } else if (nav === 'archive') {
-    const kw = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
-    arr = archive.filter(t => !kw || t.title.toLowerCase().includes(kw));
-    document.getElementById('listViewHint').textContent = '按时间从新到旧';
-    document.getElementById('archiveSearch').style.display = '';
+  if (nav === 'daily') {
+    arr = tasks.filter(t => t.category === 'daily');
+    document.getElementById('listViewHint').textContent = '每日 0 点自动刷新';
+  } else if (nav === 'time-limited') {
+    arr = tasks.filter(t => t.category === 'time-limited');
+    document.getElementById('listViewHint').textContent = '到期前记得完成';
+  } else if (nav === 'once') {
+    arr = tasks.filter(t => t.category === 'once');
+    document.getElementById('listViewHint').textContent = '次数任务可重复完成';
   }
 
   if (arr.length === 0) {
@@ -252,17 +276,55 @@ function renderListView() {
     box.innerHTML = arr.map(t => {
       let meta = '';
       if (t.due_at) meta = '⏰ ' + fmtDue(t.due_at);
-      else if (isTracking(t)) meta = '◆ 追踪';
       else if (t.category === 'once' && t.count > 1) meta = '次数 ' + (t.done_count || 0) + '/' + t.count;
       const metaHtml = meta ? `<span class="ct-meta">${esc(meta)}</span>` : '';
+      const ri = isTracking(t) ? `<span class="ct-diamond"></span>` : '';
       return `
       <div class="list-task ${isTracking(t)?'tracking':''}" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')" oncontextmenu="ctxOpen(event,'${t.uuid}')">
-        <span class="ct-diamond"></span>
         <span class="ct-title">${esc(t.title)}</span>
         ${metaHtml}
+        ${ri}
       </div>`;
     }).join('');
   }
+}
+
+// =============== 历史任务弹窗（独立小窗口，不用原生界面） ===============
+// 注意：必须用函数声明（提升），因为脚本顶部第 208 行会立即引用 closeArchiveModal
+function openArchiveModal() {
+  renderArchiveModal();
+  document.getElementById('archiveOverlay').style.display = '';
+}
+window.openArchiveModal = openArchiveModal;
+function closeArchiveModal() {
+  document.getElementById('archiveOverlay').style.display = 'none';
+}
+window.closeArchiveModal = closeArchiveModal;
+let archiveCat = 'all';
+function switchArchiveCat(cat) {
+  archiveCat = cat;
+  renderArchiveModal();
+}
+window.switchArchiveCat = switchArchiveCat;
+function renderArchiveModal() {
+  const kw = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
+  let arr = archive.filter(t => !kw || t.title.toLowerCase().includes(kw));
+  if (archiveCat !== 'all') arr = arr.filter(t => catOf(t) === archiveCat);
+  document.querySelectorAll('.arc-tab').forEach(b => b.classList.toggle('active', b.dataset.cat === archiveCat));
+  const box = document.getElementById('archiveBody');
+  if (arr.length === 0) {
+    box.innerHTML = `<div class="empty-line">暂无历史任务</div>`;
+    return;
+  }
+  box.innerHTML = arr.map(t => `
+    <div class="arc-item">
+      <span class="arc-ico cat-${catOf(t)}">${t.done_at ? '✓' : '·'}</span>
+      <div class="arc-main">
+        <div class="arc-title">${esc(t.title)}</div>
+        <div class="arc-sub">${CAT_LABEL[catOf(t)] || '未分类'} · 完成于 ${t.done_at ? fmtDue(t.done_at) : '—'}</div>
+      </div>
+      <span class="arc-points">+${t.reward_points || 10}</span>
+    </div>`).join('');
 }
 
 // =============== 右侧今日概览仪表盘 ===============
@@ -300,7 +362,8 @@ function renderDashboard() {
 function renderLevelBadge() {
   const lv = level || levelOf(points);
   document.getElementById('levelIcon').textContent = lv.icon;
-  document.getElementById('levelText').innerHTML = `${lv.name} <small>· ${points} 分</small>`;
+  // 徽章只显示等级名，分数只在设置-个人信息里看（避免多处重复）
+  document.getElementById('levelText').textContent = lv.name;
 }
 function renderLevelCard() {
   const lv = level || levelOf(points);
@@ -308,18 +371,23 @@ function renderLevelCard() {
   document.getElementById('levelChar').textContent = lv.char;
   document.getElementById('levelName').textContent = lv.name;
   document.getElementById('levelTitle').textContent = lv.title;
-  let pct = 100, txt = `${points} / ${lv.max} 分`;
+  // 总览等级卡：只放等级名 + 灰色问号（点问号看经验条）。分数/进度/下一级全部挪到设置-个人信息
+  const lt2 = document.getElementById('levelText2');
+  if (lt2) lt2.textContent = '';
+  const lf = document.getElementById('levelFill');
+  if (lf) lf.style.width = '0%';
+  // 设置-个人信息：经验条 + 分数 + 距下一级
+  document.getElementById('setCurrentLevel').textContent = lv.name + ' · ' + points + ' / ' + lv.max + ' 分';
+  document.getElementById('setTotalPoints').textContent = points;
+  let pct = 100;
   if (next) {
     pct = Math.min(100, Math.max(0, ((points - lv.min) / (lv.max - lv.min)) * 100));
-    txt = `${points} / ${lv.max} 分 · 下一级：${next.name}`;
+    document.getElementById('setLevelHint').textContent = '距下一级（' + next.name + '）还差 ' + (lv.max - points) + ' 分';
   } else {
     pct = 100;
-    txt = `${points} 分 · 已至巅峰`;
+    document.getElementById('setLevelHint').textContent = '已至巅峰，满级成就达成';
   }
-  document.getElementById('levelFill').style.width = pct + '%';
-  document.getElementById('levelText2').textContent = txt;
-  document.getElementById('setCurrentLevel').textContent = lv.name + '（' + (next ? ('距 ' + next.name + ' 还差 ' + (lv.max - points) + ' 分') : '已满级') + '）';
-  document.getElementById('setTotalPoints').textContent = points;
+  document.getElementById('setLevelFill').style.width = pct + '%';
 }
 
 // =============== 进度条三样式 ===============
@@ -409,7 +477,7 @@ window.openDetail = async function(uuid) {
   document.getElementById('detailChips').innerHTML = `
     <span class="chip cat-${catOf(t)}">${CAT_LABEL[catOf(t)] || ''}</span>
     <span class="chip prio-${(t.priority||'m').charAt(0)}">${PRIO_LABEL[t.priority] || ''}</span>
-    ${isTrk ? '<span class="chip tracking">◆ 追踪中</span>' : ''}
+    ${isTrk ? '<span class="chip tracking">追踪中</span>' : ''}
     ${t.count ? `<span class="chip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
   `;
 
@@ -423,15 +491,19 @@ window.openDetail = async function(uuid) {
 
     <div class="goal-box">
       <div class="goal-head">
-        <span>▶ 任务目标</span>
-        <span class="gh-progress">${doneSteps} / ${totalSteps || 0}</span>
+        <span>▶ 任务步骤</span>
+        <span class="gh-progress">${doneSteps} / ${totalSteps || 0} 已完成</span>
       </div>
-      ${totalSteps === 0 ? '<div class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">＋</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此添加）</span></div>' :
-        steps.map(s => `<div class="goal-item ${s.status==='done'?'done':''}" onclick="toggleStep('${t.uuid}','${s.uuid}','${s.status}')">
-          <span class="g-play">${s.status==='done'?'✓':'▶'}</span>
+      ${totalSteps === 0 ? '<div class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">＋</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此手动添加）</span></div>' :
+        steps.map(s => `<div class="goal-item ${s.status==='done'?'done':''}" onclick="toggleStep('${t.uuid}','${s.uuid}','${s.status}')" title="点击切换完成状态">
+          <span class="g-play">${s.status==='done'?'✓':'○'}</span>
           <span class="g-text">${esc(s.title)}</span>
           ${s.attr_value ? `<span class="g-attr">${esc(s.attr_label||'')}: ${esc(s.attr_value)}</span>` : ''}
-        </div>`).join('') + '<div class="goal-add" onclick="addStep(\'' + t.uuid + '\')">＋ 添加步骤</div>'}
+        </div>`).join('')}
+      <div class="goal-tools">
+        <div class="goal-add" onclick="addStep('${t.uuid}')">＋ 添加步骤</div>
+        <div class="goal-ai" onclick="aiBreakdown('${t.uuid}','${esc(t.title)}')">🤖 AI 拆解</div>
+      </div>
     </div>
 
     ${t.desc ? `<div class="detail-desc">${esc(t.desc)}</div>` : ''}
@@ -449,7 +521,7 @@ window.openDetail = async function(uuid) {
       <button class="track-btn ${isTrk?'tracking':''}" onclick="${isTrk ? `untrackTask('${t.uuid}')` : `trackTask('${t.uuid}')`}" ${(!isTrk && canTrack)?'disabled':''}>
         ${isTrk ? '停止追踪' : (canTrack ? '已达上限' : '追踪任务')}
       </button>
-      <button class="complete-btn" onclick="completeTask('${t.uuid}')">标记完成</button>
+      <button class="complete-btn" onclick="completeTask('${t.uuid}')">完成任务</button>
     </div>
   `;
 };
@@ -511,7 +583,7 @@ document.getElementById('blessClose').addEventListener('click', () => {
 // 步骤推进
 window.toggleStep = async function(taskUuid, stepUuid, curStatus) {
   const next = curStatus === 'done' ? 'todo' : 'done';
-  await call('advance_step', { stepUuid, status: next });
+  await call('advance_step', { taskUuid, stepUuid, status: next });
   openDetail(taskUuid);
   render();
 };
@@ -521,6 +593,26 @@ window.addStep = async function(taskUuid) {
   await call('add_step', { taskUuid, title });
   openDetail(taskUuid);
   render();
+};
+
+// AI 拆解：有 API key 走云端（preview-server 转发 DeepSeek），没有就用本地模板兜底
+window.aiBreakdown = async function(taskUuid, title) {
+  const btn = event && event.target;
+  if (btn) { btn.textContent = '拆解中…'; btn.style.opacity = '0.6'; }
+  try {
+    const r = await call('ai_breakdown', { title });
+    const steps = (r && r.steps) || [];
+    if (steps.length === 0) { alert('拆解失败，请稍后重试'); return; }
+    for (const s of steps) {
+      await call('add_step', { taskUuid, title: s });
+    }
+    openDetail(taskUuid);
+    render();
+  } catch (e) {
+    alert('AI 拆解失败：' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🤖 AI 拆解'; btn.style.opacity = ''; }
+  }
 };
 
 // 上下文菜单
@@ -642,6 +734,7 @@ bindSetting('setCountDefault', 'count_default', v => Math.max(1, Math.min(999, p
 bindSetting('setDailyRefresh', 'daily_refresh');
 bindSetting('setNightNotify', 'night_notify');
 bindSetting('setProgressStyle', 'progress_style');
+bindSetting('setAiKey', 'ai_api_key', v => String(v).trim());
 
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();
@@ -677,6 +770,17 @@ document.getElementById('setWidgetMode').addEventListener('click', () => {
 document.getElementById('levelBadge').addEventListener('click', () => {
   applySettingsToUi();
   document.getElementById('settingsOverlay').style.display = '';
+});
+// 等级卡灰色问号 → 打开设置-个人信息（看经验条）
+document.getElementById('levelQ').addEventListener('click', e => {
+  e.stopPropagation();
+  applySettingsToUi();
+  document.getElementById('settingsOverlay').style.display = '';
+  // 滚动到个人信息区块
+  const exp = document.getElementById('setCurrentLevel');
+  if (exp && exp.closest('.settings-section')) {
+    exp.closest('.settings-section').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 });
 
 // =============== 紧急任务弹窗 ===============
@@ -798,9 +902,20 @@ function isToday(ts) {
 
 // =============== 启动 ===============
 loadSettings();
-render();
-setInterval(render, 15000);
-setInterval(checkEmergency, 60000);
+document.title = '…loading…';
+// 等 DOM/资源全部 ready 再 render（避免 init 时拿不到某些元素）
+function startApp() {
+  render();
+  setTimeout(render, 250);
+  setTimeout(render, 1000);
+  setInterval(render, 15000);
+  setInterval(checkEmergency, 60000);
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 // 22:00 弹窗检测（每分钟查一次，到 22:00 且有未完成每日任务时弹）
 setInterval(() => {

@@ -41,16 +41,20 @@ function catToType(cat) {
 
 // 等级
 const LEVELS = [
-  { lv:1, name:'历练学徒',  title:'初入冒险之道的勇者',         char:'🗡', icon:'1', min:0,   max:20  },
-  { lv:2, name:'风华游侠',  title:'已踏出第一步的行者',         char:'🏹', icon:'2', min:20,  max:60  },
-  { lv:3, name:'云霜骑士',  title:'守护同伴的意志觉醒',         char:'🛡', icon:'3', min:60,  max:120 },
-  { lv:4, name:'群星行者',  title:'穿越风暴的星辰',             char:'✨', icon:'4', min:120, max:200 },
-  { lv:5, name:'传奇勇者',  title:'铭刻于史的传奇',             char:'👑', icon:'5', min:200, max:999 }
+  { lv:1, name:'历练学徒',  title:'敢开始，就已经赢了一半',      char:'🗡', icon:'1', min:0,   max:20  },
+  { lv:2, name:'风华游侠',  title:'汗水从不会辜负你',            char:'🏹', icon:'2', min:20,  max:60  },
+  { lv:3, name:'破浪骑士',  title:'风浪越大，越显本色',          char:'🛡', icon:'3', min:60,  max:120 },
+  { lv:4, name:'群星行者',  title:'你走过的每一步都算数',        char:'✨', icon:'4', min:120, max:200 },
+  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',            char:'👑', icon:'5', min:200, max:999 }
 ];
 function levelOf(p) {
   let cur = LEVELS[0];
   for (const lv of LEVELS) if (p >= lv.min) cur = lv;
   return cur;
+}
+function nextLevelOf(p) {
+  for (const lv of LEVELS) if (p < lv.min) return lv;
+  return null;
 }
 
 const now = nowMs();
@@ -99,15 +103,15 @@ let mockState = {
       type:'habit', cat:'daily', priority:'medium', category:'daily',
       updated_at: now - 3600_000
     }),
-    // 限时任务
+    // 限时任务（t3 今天 30 分钟后截止 → 算今日任务；t5 明天截止 → 只在限时任务分类出现）
     newTask('t3', '交数字信号处理作业', {
       type:'once', cat:'time-limited', priority:'high', category:'time-limited',
-      due_at: now + 6*3600_000, deadline: now + 6*3600_000,
+      due_at: now + 30*60_000, deadline: now + 30*60_000,
       desc:'第 3 章课后作业，拍照上传。'
     }),
     newTask('t5', '给导师发周报', {
       type:'once', cat:'time-limited', priority:'medium', category:'time-limited',
-      due_at: now + 12*3600_000, deadline: now + 14*3600_000, category:'time-limited'
+      due_at: now + 30*3600_000, deadline: now + 30*3600_000
     }),
     // 次数任务
     newTask('tSnack', '买辣条', {
@@ -183,6 +187,7 @@ const server = http.createServer(async (req, res) => {
   fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not Found'); }
     res.setHeader('Content-Type', MIME[path.extname(fp)] || 'text/plain');
+    res.setHeader('Cache-Control', 'no-store'); // 开发预览：禁止缓存，避免改完不生效
     res.writeHead(200);
     res.end(data);
   });
@@ -292,6 +297,35 @@ async function handleApi(cmd, q, req, res) {
       return ok(res, { status:'ok', uuid: stepUuid });
     }
 
+    case 'ai_breakdown': {
+      const title = q.title || '';
+      // 有 API key → 转发 DeepSeek；没有 → 本地模板兜底（0 成本）
+      const key = mockState.settings.ai_api_key || '';
+      let steps = [];
+      if (key) {
+        try {
+          const r = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages: [
+                { role: 'system', content: '你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，直接输出步骤列表，不要序号和解释。' },
+                { role: 'user', content: title }
+              ],
+              temperature: 0.3,
+              max_tokens: 300
+            })
+          });
+          const data = await r.json();
+          const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+          steps = text.split(/\n+/).map(s => s.replace(/^\d+[.、)\s]+/, '').trim()).filter(s => s.length >= 2 && s.length <= 30).slice(0, 6);
+        } catch (e) { /* 云端失败 → 回落本地模板 */ }
+      }
+      if (steps.length === 0) steps = localBreakdown(title);
+      return ok(res, { steps });
+    }
+
     case 'set_setting': {
       mockState.settings[q.key] = q.value;
       return ok(res, { status:'ok' });
@@ -312,6 +346,28 @@ async function handleApi(cmd, q, req, res) {
 }
 
 function ok(res, obj) { res.writeHead(200); res.end(JSON.stringify(obj)); }
+
+// 本地模板拆解（未配置 API key 时的 0 成本兜底）
+function localBreakdown(title) {
+  const t = title || '';
+  const has = (kw) => t.includes(kw);
+  if (has('看') || has('读') || has('书') || has('背')) {
+    return ['通读核心内容', '划重点记笔记', '做一遍自测题', '总结复盘'];
+  }
+  if (has('复习') || has('学') || has('练')) {
+    return ['整理知识点框架', '重点章节精读', '做配套练习题', '错题回顾总结'];
+  }
+  if (has('写') || has('交') || has('报告') || has('作业') || has('论文')) {
+    return ['收集所需资料', '列出大纲初稿', '完成正文内容', '检查格式并提交'];
+  }
+  if (has('买') || has('购') || has('快递') || has('取')) {
+    return ['列清单确认需求', '比价下单', '确认收货'];
+  }
+  if (has('锻炼') || has('运动') || has('跑') || has('健身')) {
+    return ['热身 5 分钟', '完成主体训练', '拉伸放松 5 分钟'];
+  }
+  return ['明确目标范围', '列出执行步骤', '逐项推进完成'];
+}
 
 server.listen(PORT, () => {
   console.log('════════════════════════════════════════');
