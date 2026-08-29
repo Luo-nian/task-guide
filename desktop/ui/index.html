@@ -9,21 +9,183 @@
 <body>
 <div class="widget" id="app">
 
-  <!-- ===== 顶部状态栏 ===== -->
+  <!-- ===== 顶栏 ===== -->
   <header class="topbar" data-tauri-drag-region>
-    <div class="title">◆ 任务栏</div>
+    <div class="title">
+      <span class="title-glyph"></span>
+      <span>任务栏</span>
+    </div>
     <div class="top-right">
+      <div class="level-badge" id="levelBadge" title="点击查看等级详情">
+        <span class="level-icon" id="levelIcon">1</span>
+        <span class="level-text" id="levelText">历练学徒 <small id="levelPoints">· 0 分</small></span>
+      </div>
       <span class="points" id="totalPoints" title="总积分">◆ 0</span>
       <button class="ico-btn" id="settingsBtn" title="设置">⚙</button>
-      <div class="mode-switch">
-        <button class="mode-btn" data-mode="top" title="置顶">📌</button>
-        <button class="mode-btn" data-mode="normal" title="普通">🖼</button>
-        <button class="mode-btn" data-mode="tray" title="托盘">📥</button>
-      </div>
     </div>
   </header>
 
-  <!-- ===== 紧急任务弹窗（图3，48h内/36h档） ===== -->
+  <!-- ===== 左侧图标导航 7% ===== -->
+  <nav class="side-nav" id="sideNav">
+    <button class="nav-item active" data-nav="overview" title="总览">
+      <span class="ico">◉</span>
+      <span class="nav-tip">总览</span>
+    </button>
+    <button class="nav-item" data-nav="tracking" title="追踪中">
+      <span class="ico">⚑</span>
+      <span class="nav-tip">追踪中</span>
+    </button>
+    <button class="nav-item" data-nav="today" title="今日">
+      <span class="ico">◆</span>
+      <span class="nav-tip">今日</span>
+    </button>
+    <div class="nav-spacer"></div>
+    <button class="nav-item repo" data-nav="archive" title="历史任务">
+      <span class="ico"></span>
+      <span class="nav-tip">历史任务</span>
+    </button>
+  </nav>
+
+  <!-- ===== 中间列表区 30% ===== -->
+  <section class="list-pane" id="listPane">
+    <!-- 总览：4 分类卡 -->
+    <div class="overview-view" id="overviewView">
+      <div class="view-head">
+        <span class="vh-title">总览</span>
+        <span class="vh-hint">每日 / 目标 / 限时 / 次数</span>
+      </div>
+      <div class="cat-grid" id="catGrid" style="padding: 0 6px 6px; display:flex; flex-direction:column; gap:6px;">
+        <div class="cat-card" data-cat="daily">
+          <div class="cc-head"><span class="cc-ico daily">◆</span><span class="cc-name">每日任务</span><span class="cc-count" id="cDaily">0</span></div>
+          <div class="cc-list" id="listDaily"></div>
+        </div>
+        <div class="cat-card" data-cat="goal">
+          <div class="cc-head"><span class="cc-ico goal">◎</span><span class="cc-name">目标任务</span><span class="cc-count" id="cGoal">0</span></div>
+          <div class="cc-list" id="listGoal"></div>
+        </div>
+        <div class="cat-card" data-cat="time-limited">
+          <div class="cc-head"><span class="cc-ico lim">⏱</span><span class="cc-name">限时任务</span><span class="cc-count" id="cLim">0</span></div>
+          <div class="cc-list" id="listLim"></div>
+        </div>
+        <div class="cat-card" data-cat="once">
+          <div class="cc-head"><span class="cc-ico once">●</span><span class="cc-name">次数任务</span><span class="cc-count" id="cOnce">0</span></div>
+          <div class="cc-list" id="listOnce"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 列表视图（追踪中 / 今日 / 历史任务） -->
+    <div class="list-view" id="listView" style="display:none">
+      <div class="view-head">
+        <span class="vh-title" id="listViewTitle">追踪中</span>
+        <span class="vh-hint" id="listViewHint"></span>
+        <span class="vh-spacer"></span>
+        <input class="search" id="archiveSearch" placeholder="检索…" style="display:none" />
+      </div>
+      <div class="lv-body" id="listViewBody"></div>
+    </div>
+  </section>
+
+  <!-- ===== 右侧主区 63% ===== -->
+  <section class="main-pane" id="mainPane">
+    <!-- 今日概览仪表盘（默认） -->
+    <div class="dashboard-view" id="dashboardView">
+      <div class="dash-greeting">
+        <div class="dash-greet-icon">◆</div>
+        <div style="flex:1">
+          <div class="dash-greet-text" id="dashGreetText">下午好，冒险者</div>
+          <div class="dash-greet-sub" id="dashGreetSub">愿今日所行皆有回响</div>
+        </div>
+      </div>
+
+      <!-- 等级卡 -->
+      <div class="level-card" id="levelCard">
+        <div class="level-character" id="levelChar">🗡</div>
+        <div class="level-info">
+          <div class="level-name" id="levelName">历练学徒</div>
+          <div class="level-title" id="levelTitle">初入冒险之道的勇者</div>
+          <div class="level-progress">
+            <div class="lp-bar"><div class="lp-fill" id="levelFill" style="width:0%"></div></div>
+            <div class="lp-text" id="levelText2">0 / 20 分</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 进度条卡 -->
+      <div class="progress-card">
+        <div class="progress-head">
+          <div class="progress-title">今日进度</div>
+          <div class="progress-style-tabs" id="progressStyleTabs">
+            <div class="style-tab" data-style="bar"  title="条形">▭</div>
+            <div class="style-tab" data-style="circle" title="圆形">◐</div>
+            <div class="style-tab" data-style="dots"  title="点状">⋯</div>
+          </div>
+        </div>
+        <div class="progress-body">
+          <div id="progressContent"></div>
+          <div class="progress-stat">
+            <span class="num" id="progressDone">0</span><span class="sep">/</span><span class="total" id="progressTotal">0</span>
+            <span class="label" id="progressLabel">已完成</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 任务统计 -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">今日剩余</div>
+          <div class="stat-value" id="statRemain">0<span class="unit">项</span></div>
+          <div class="stat-trend" id="statRemainTrend">加油 ✦</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">追踪中</div>
+          <div class="stat-value" id="statTracking">0<span class="unit">项</span></div>
+          <div class="stat-trend up" id="statTrackingTrend">进行时</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本周完成</div>
+          <div class="stat-value" id="statWeek">0<span class="unit">项</span></div>
+          <div class="stat-trend" id="statWeekTrend">稳步前行</div>
+        </div>
+      </div>
+
+      <!-- 22:00 提醒 / 紧急任务提示卡 -->
+      <div class="tip-card" id="tipCard">
+        <div class="tip-ico">⏰</div>
+        <div class="tip-text" id="tipText">每日任务每日 0 点自动刷新，22:00 还没完成会弹窗提醒</div>
+      </div>
+    </div>
+
+    <!-- 任务详情页 -->
+    <div class="detail-view" id="detailView" style="display:none">
+      <div class="dv-head">
+        <button class="dv-back" id="detailBack" title="返回">◀</button>
+        <div class="dv-title-zone">
+          <div class="dv-name" id="detailName"></div>
+          <div class="dv-sub" id="detailSub"></div>
+          <div class="chip-row" id="detailChips"></div>
+        </div>
+      </div>
+      <div class="dv-body" id="detailBody"></div>
+    </div>
+  </section>
+
+  <!-- ===== 折叠态（桌面挂件） ===== -->
+  <section class="folded-view" id="foldedView" style="display:none">
+    <div class="folded-bar" id="foldedBar">
+      <span class="fb-icon">◆</span>
+      <span class="fb-text">点击展开</span>
+      <span class="fb-meta"></span>
+      <span class="fb-progress"><span class="fb-fill" style="width:0%"></span></span>
+      <button class="fb-btn" id="fbNext" title="下一个任务">→</button>
+      <button class="fb-btn complete" id="fbComplete" title="已完成">✓</button>
+    </div>
+  </section>
+
+  <!-- ===== FAB 新建按钮 ===== -->
+  <button class="fab" id="fabAdd" title="新建任务">＋</button>
+
+  <!-- ===== 紧急任务弹窗 ===== -->
   <div class="emergency-overlay" id="emergencyOverlay" style="display:none">
     <div class="emergency-modal">
       <div class="em-bar"><span class="em-alert">⚠</span><span class="em-title">任务即将超时</span><button class="em-close" id="emClose">×</button></div>
@@ -39,52 +201,126 @@
     </div>
   </div>
 
-  <!-- ===== 设置抽屉 ===== -->
-  <div class="overlay" id="settingsOverlay" style="display:none">
-    <div class="modal settings-modal">
-      <div class="m-head"><span>⚙ 设置</span><button class="m-close" data-close-overlay="settingsOverlay">×</button></div>
-      <div class="m-body">
-        <div class="setting-row">
-          <label>追踪上限</label>
-          <input type="number" id="setTrackingMax" min="1" max="20" />
-          <span class="hint">可同时追踪的任务数（默认 3）</span>
-        </div>
-        <div class="setting-row">
-          <label>紧急提醒</label>
-          <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <label>≤48h 提醒</label>
-          <input type="number" id="setEtaShort" min="1" max="100" />
-          <span class="hint">% of 总时长（默认 30 = 3/10）</span>
-        </div>
-        <div class="setting-row">
-          <label>&gt;48h 提前提醒</label>
-          <input type="number" id="setEtaLong" min="1" max="240" />
-          <span class="hint">小时（默认 36）</span>
-        </div>
-        <div class="setting-row">
-          <label>配对状态</label>
-          <span class="hint" id="setPairingStatus">未配对</span>
-          <button class="small-btn" id="setUnpair">解除配对</button>
-        </div>
-        <div class="setting-row">
-          <label>配对服务器</label>
-          <input type="text" id="setPairInput" placeholder="手机IP:端口" />
-          <button class="small-btn primary" id="setPairBtn">连接</button>
-        </div>
-        <div class="setting-row">
-          <label>关于</label>
-          <span class="hint">任务栏 · 原神式任务追踪 · v3</span>
-        </div>
+  <!-- ===== 完成祝福弹窗 ===== -->
+  <div class="bless-overlay" id="blessOverlay" style="display:none">
+    <div class="bless-card">
+      <div class="bless-top">
+        <div class="bless-icon">★</div>
+        <div class="bless-title" id="blessTitle">恭喜你已完成今日任务</div>
+        <div class="bless-sub" id="blessSub">逐梦的脚步，从未停歇</div>
+      </div>
+      <div class="bless-msg" id="blessMsg">愿你继续保持这份热情<br>下一段旅程在前方等你</div>
+      <div class="bless-action">
+        <button class="bless-btn" id="blessClose">继续前行</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== 新建任务表单抽屉 ===== -->
+  <!-- ===== 设置抽屉（卡片式分组） ===== -->
+  <div class="overlay" id="settingsOverlay" style="display:none">
+    <div class="modal settings-modal">
+      <div class="m-head"><span>设置</span><button class="m-close" data-close-overlay="settingsOverlay">×</button></div>
+      <div class="m-body">
+
+        <div class="settings-section">
+          <div class="ss-title">任务默认</div>
+          <div class="setting-row">
+            <label>限时任务默认时长</label>
+            <input type="number" id="setTimeLimit" min="1" max="1440" />
+            <span class="hint">分钟（默认 5）</span>
+          </div>
+          <div class="setting-row">
+            <label>次数任务默认次数</label>
+            <input type="number" id="setCountDefault" min="1" max="999" />
+            <span class="hint">次（默认 1）</span>
+          </div>
+          <div class="setting-row">
+            <label>每日任务自动刷新</label>
+            <label class="switch"><input type="checkbox" id="setDailyRefresh" /><span class="slider"></span></label>
+            <span class="hint">每 0 点自动出现在列表</span>
+          </div>
+          <div class="setting-row">
+            <label>22:00 未完成弹窗</label>
+            <label class="switch"><input type="checkbox" id="setNightNotify" /><span class="slider"></span></label>
+            <span class="hint">每日任务未完成提醒</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">进度与等级</div>
+          <div class="setting-row">
+            <label>进度条样式</label>
+            <select id="setProgressStyle">
+              <option value="bar">条形</option>
+              <option value="circle">圆形</option>
+              <option value="dots">点状</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>当前等级</label>
+            <span class="hint" id="setCurrentLevel">历练学徒</span>
+          </div>
+          <div class="setting-row">
+            <label>总积分</label>
+            <span class="hint" id="setTotalPoints">0</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">追踪与提醒</div>
+          <div class="setting-row">
+            <label>同时追踪上限</label>
+            <input type="number" id="setTrackingMax" min="1" max="20" />
+            <span class="hint">项（默认 3）</span>
+          </div>
+          <div class="setting-row">
+            <label>紧急提醒</label>
+            <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
+            <span class="hint">即将超时的任务</span>
+          </div>
+          <div class="setting-row">
+            <label>≤48h 提醒阈值</label>
+            <input type="number" id="setEtaShort" min="1" max="100" />
+            <span class="hint">% 总时长（默认 30）</span>
+          </div>
+          <div class="setting-row">
+            <label>&gt;48h 提前提醒</label>
+            <input type="number" id="setEtaLong" min="1" max="240" />
+            <span class="hint">小时（默认 36）</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">连接与外观</div>
+          <div class="setting-row">
+            <label>配对状态</label>
+            <span class="hint" id="setPairingStatus">未配对</span>
+            <button class="small-btn danger" id="setUnpair">解除配对</button>
+          </div>
+          <div class="setting-row">
+            <label>配对服务器</label>
+            <input type="text" id="setPairInput" placeholder="手机IP:端口" />
+            <button class="small-btn primary" id="setPairBtn">连接</button>
+          </div>
+          <div class="setting-row">
+            <label>进入桌面挂件模式</label>
+            <button class="small-btn" id="setWidgetMode">开启挂件</button>
+            <span class="hint">挂件显示今日进度</span>
+          </div>
+          <div class="setting-row">
+            <label>关于</label>
+            <span class="hint">任务栏 · 原神风任务追踪</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 新建任务抽屉 ===== -->
   <div class="overlay" id="addOverlay" style="display:none">
     <div class="modal add-modal">
-      <div class="m-head"><span>＋ 新建任务</span><button class="m-close" data-close-overlay="addOverlay">×</button></div>
+      <div class="m-head"><span>新建任务</span><button class="m-close" data-close-overlay="addOverlay">×</button></div>
       <div class="m-body">
         <label class="label">任务名</label>
         <input type="text" id="addTitle" placeholder="例：每日锻炼" />
@@ -94,23 +330,27 @@
           <button type="button" class="cat-btn" data-cat="daily">每日任务</button>
           <button type="button" class="cat-btn" data-cat="goal">目标任务</button>
           <button type="button" class="cat-btn" data-cat="time-limited">限时任务</button>
-          <button type="button" class="cat-btn" data-cat="once">小任务（单次）</button>
+          <button type="button" class="cat-btn" data-cat="once">次数任务</button>
         </div>
         <span class="hint" id="addCatHint">请选择一个分类</span>
 
-        <label class="label">限时时长（所有任务都可设置）</label>
-        <div class="deadline-row">
-          <button type="button" class="ddl-btn" data-ddl="none">不限</button>
+        <label class="label">限时时长（仅限时任务必填）</label>
+        <div class="ddl-row" id="addDdlRow">
+          <button type="button" class="ddl-btn" data-ddl="5min">5 分钟</button>
           <button type="button" class="ddl-btn" data-ddl="60min">1 小时</button>
           <button type="button" class="ddl-btn" data-ddl="6h">6 小时</button>
           <button type="button" class="ddl-btn" data-ddl="1d">1 天</button>
           <button type="button" class="ddl-btn" data-ddl="3d">3 天</button>
           <button type="button" class="ddl-btn" data-ddl="7d">7 天</button>
           <button type="button" class="ddl-btn" data-ddl="30d">30 天</button>
+          <button type="button" class="ddl-btn" data-ddl="none">不限</button>
         </div>
 
+        <label class="label">次数（仅次数任务）</label>
+        <input type="number" id="addCount" min="1" max="999" value="1" style="max-width:120px" />
+
         <label class="label">优先级</label>
-        <div class="prio-row">
+        <div class="prio-row" id="addPrioRow">
           <button type="button" class="prio-btn" data-prio="high">高</button>
           <button type="button" class="prio-btn" data-prio="medium">中</button>
           <button type="button" class="prio-btn" data-prio="low">低</button>
@@ -124,76 +364,7 @@
     </div>
   </div>
 
-  <!-- ===== 侧栏（左导航：分类 + 仓库） ===== -->
-  <div class="side-nav" id="sideNav">
-    <button class="nav-item active" data-nav="overview" title="总览"><span class="ico">◉</span></button>
-    <button class="nav-item" data-nav="tracking" title="追踪中"><span class="ico">⚑</span></button>
-    <button class="nav-item" data-nav="today" title="今日"><span class="ico">◆</span></button>
-    <button class="nav-item" data-nav="habits" title="习惯"><span class="ico">✓</span></button>
-    <div class="nav-spacer"></div>
-    <button class="nav-item repo" data-nav="archive" title="仓库（已完成）"><span class="ico">▣</span></button>
-  </div>
-
-  <!-- ===== 主内容 ===== -->
-  <div class="main-pane">
-    <!-- 总览默认页：4 个分类卡片 -->
-    <section class="view overview-view" id="overviewView">
-      <div class="view-head">
-        <span class="vh-title">总览</span>
-        <span class="vh-hint" id="overviewHint">每日 / 目标 / 限时 / 单次</span>
-      </div>
-      <div class="cat-grid">
-        <div class="cat-card" data-cat="daily">
-          <div class="cc-head"><span class="cc-ico daily">◆</span><span class="cc-name">每日任务</span><span class="cc-count" id="cDaily">0</span></div>
-          <div class="cc-list" id="listDaily"></div>
-        </div>
-        <div class="cat-card" data-cat="goal">
-          <div class="cc-head"><span class="cc-ico goal">◎</span><span class="cc-name">目标任务</span><span class="cc-count" id="cGoal">0</span></div>
-          <div class="cc-list" id="listGoal"></div>
-        </div>
-        <div class="cat-card" data-cat="time-limited">
-          <div class="cc-head"><span class="cc-ico lim">⏱</span><span class="cc-name">限时任务</span><span class="cc-count" id="cLim">0</span></div>
-          <div class="cc-list" id="listLim"></div>
-        </div>
-        <div class="cat-card" data-cat="once">
-          <div class="cc-head"><span class="cc-ico once">●</span><span class="cc-name">小任务（单次）</span><span class="cc-count" id="cOnce">0</span></div>
-          <div class="cc-list" id="listOnce"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 追踪中 / 今日 / 习惯 / 仓库 通用列表 -->
-    <section class="view list-view" id="listView" style="display:none">
-      <div class="view-head">
-        <span class="vh-title" id="listViewTitle">追踪中</span>
-        <span class="vh-hint" id="listViewHint"></span>
-        <input class="search" id="archiveSearch" placeholder="检索已完成任务…" style="display:none" />
-      </div>
-      <div class="lv-body" id="listViewBody"></div>
-    </section>
-
-    <!-- 详情面板 -->
-    <section class="view detail-view" id="detailView" style="display:none">
-      <div class="dv-head">
-        <button class="dv-back" id="detailBack">◀</button>
-        <span class="dv-title" id="detailTitle">任务详情</span>
-      </div>
-      <div class="dv-body" id="detailBody"></div>
-    </section>
-  </div>
-
-  <!-- ===== 折叠态：单条（图4 平时挂件）—— 顶级，独立于 main-pane ===== -->
-  <section class="view folded-view" id="foldedView" style="display:none">
-    <div class="folded-bar" id="foldedBar" title="点击展开总览"></div>
-  </section>
-
-  <!-- ===== 底部 FAB ===== -->
-  <button class="fab" id="fabAdd" title="新建任务">＋</button>
-
-  <!-- ===== 折叠/展开按钮（顶栏） ===== -->
-  <button class="fold-btn" id="foldBtn" title="折叠/展开">◣</button>
-
-  <!-- ===== 上下文菜单（追踪/完成/取消） ===== -->
+  <!-- ===== 上下文菜单 ===== -->
   <div class="ctx-menu" id="ctxMenu" style="display:none">
     <button data-cmd="track">开始追踪</button>
     <button data-cmd="untrack">取消追踪</button>
