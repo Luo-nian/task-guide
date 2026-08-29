@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v45">
+<link rel="stylesheet" href="style.css?v=v46">
 </head>
 <body>
 <div class="widget" id="app">
@@ -16,35 +16,35 @@
       <span>任务栏</span>
     </div>
     <div class="top-right">
-      <div class="level-badge" id="levelBadge" title="点击查看等级详情">
-        <span class="level-icon" id="levelIcon">1</span>
+      <div class="level-badge" id="levelBadge" title="点击查看等级经验">
+        <span class="level-icon" id="levelIcon"></span>
         <span class="level-text" id="levelText">历练学徒</span>
       </div>
-      <button class="ico-btn" id="settingsBtn" title="设置">⚙</button>
+      <button class="ico-btn" id="settingsBtn" title="设置"><span class="ico-slot" data-icon="gear" data-icon-size="17"></span></button>
     </div>
   </header>
 
   <!-- ===== 左侧图标导航 7% ===== -->
   <nav class="side-nav" id="sideNav">
     <button class="nav-item active" data-nav="overview" title="总览">
-      <span class="ico ico-overview">◍</span>
+      <span class="ico ico-overview" data-icon="overview" data-icon-size="15"></span>
       <span class="nav-tip">总览</span>
     </button>
     <button class="nav-item" data-nav="daily" title="每日任务">
-      <span class="ico ico-daily">☀</span>
+      <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
       <span class="nav-tip">每日任务</span>
     </button>
     <button class="nav-item" data-nav="time-limited" title="限时任务">
-      <span class="ico ico-lim">⏳</span>
+      <span class="ico ico-lim" data-icon="lim" data-icon-size="15"></span>
       <span class="nav-tip">限时任务</span>
     </button>
     <button class="nav-item" data-nav="once" title="次数任务">
-      <span class="ico ico-once">⇄</span>
+      <span class="ico ico-once" data-icon="once" data-icon-size="15"></span>
       <span class="nav-tip">次数任务</span>
     </button>
     <div class="nav-spacer"></div>
     <button class="nav-item repo" data-nav="archive" title="历史任务">
-      <span class="ico ico-archive">📜</span>
+      <span class="ico ico-archive" data-icon="archive" data-icon-size="15"></span>
       <span class="nav-tip">历史任务</span>
     </button>
   </nav>
@@ -59,19 +59,19 @@
       </div>
       <div class="cat-grid" id="catGrid" style="padding: 0 6px 6px; display:flex; flex-direction:column; gap:6px;">
         <div class="cat-card" data-cat="daily">
-          <div class="cc-head"><span class="cc-ico daily">☀</span><span class="cc-name">每日任务</span></div>
+          <div class="cc-head"><span class="cc-ico daily" data-icon="daily" data-icon-size="11" data-icon-sw="2.1"></span><span class="cc-name">每日任务</span></div>
           <div class="cc-list" id="listDaily"></div>
         </div>
         <div class="cat-card" data-cat="goal">
-          <div class="cc-head"><span class="cc-ico goal">◎</span><span class="cc-name">目标任务</span></div>
+          <div class="cc-head"><span class="cc-ico goal" data-icon="goal" data-icon-size="11" data-icon-sw="2.1"></span><span class="cc-name">目标任务</span></div>
           <div class="cc-list" id="listGoal"></div>
         </div>
         <div class="cat-card" data-cat="time-limited">
-          <div class="cc-head"><span class="cc-ico lim">⏳</span><span class="cc-name">限时任务</span></div>
+          <div class="cc-head"><span class="cc-ico lim" data-icon="lim" data-icon-size="11" data-icon-sw="2.1"></span><span class="cc-name">限时任务</span></div>
           <div class="cc-list" id="listLim"></div>
         </div>
         <div class="cat-card" data-cat="once">
-          <div class="cc-head"><span class="cc-ico once">⇄</span><span class="cc-name">次数任务</span></div>
+          <div class="cc-head"><span class="cc-ico once" data-icon="once" data-icon-size="11" data-icon-sw="2.1"></span><span class="cc-name">次数任务</span></div>
           <div class="cc-list" id="listOnce"></div>
         </div>
       </div>
@@ -93,7 +93,7 @@
     <!-- 今日概览仪表盘（默认） -->
     <div class="dashboard-view" id="dashboardView">
       <div class="dash-greeting">
-        <div class="dash-greet-icon">◆</div>
+        <div class="dash-greet-icon" data-icon="sparkle" data-icon-size="16"></div>
         <div style="flex:1">
           <div class="dash-greet-text" id="dashGreetText">下午好，冒险者</div>
           <div class="dash-greet-sub" id="dashGreetSub">愿今日所行皆有回响</div>
@@ -102,12 +102,12 @@
 
       <!-- 等级卡（只放等级名 + 问号，经验条在设置-个人信息） -->
       <div class="level-card" id="levelCard">
-        <div class="level-character" id="levelChar">🗡</div>
+        <div class="level-character" id="levelChar"></div>
         <div class="level-info">
           <div class="level-name" id="levelName">历练学徒</div>
           <div class="level-title" id="levelTitle">敢开始，就已经赢了一半</div>
         </div>
-        <button class="level-q" id="levelQ" title="查看等级经验">？</button>
+        <button class="level-q" id="levelQ" title="查看等级经验"><span class="ico-slot" data-icon="question" data-icon-size="14" data-icon-sw="2"></span></button>
       </div>
 
       <!-- 进度条卡 -->
@@ -115,9 +115,9 @@
         <div class="progress-head">
           <div class="progress-title">今日进度</div>
           <div class="progress-style-tabs" id="progressStyleTabs">
-            <div class="style-tab" data-style="bar"  title="条形">▭</div>
-            <div class="style-tab" data-style="circle" title="圆形">◐</div>
-            <div class="style-tab" data-style="dots"  title="点状">⋯</div>
+            <div class="style-tab" data-style="bar"  title="条形"><span class="ico-slot" data-icon="bar" data-icon-size="15" data-icon-sw="1.9"></span></div>
+            <div class="style-tab" data-style="circle" title="圆形"><span class="ico-slot" data-icon="circle" data-icon-size="15" data-icon-sw="1.9"></span></div>
+            <div class="style-tab" data-style="dots"  title="点状"><span class="ico-slot" data-icon="dots" data-icon-size="15" data-icon-sw="1.9"></span></div>
           </div>
         </div>
         <div class="progress-body">
@@ -150,7 +150,7 @@
 
       <!-- 22:00 提醒 / 紧急任务提示卡 -->
       <div class="tip-card" id="tipCard">
-        <div class="tip-ico">⏰</div>
+        <div class="tip-ico" data-icon="bell" data-icon-size="15"></div>
         <div class="tip-text" id="tipText">每日任务每日 0 点自动刷新，22:00 还没完成会弹窗提醒</div>
       </div>
     </div>
@@ -158,7 +158,7 @@
     <!-- 任务详情页 -->
     <div class="detail-view" id="detailView" style="display:none">
       <div class="dv-head">
-        <button class="dv-back" id="detailBack" title="返回">◀</button>
+        <button class="dv-back" id="detailBack" title="返回"><span class="ico-slot" data-icon="back" data-icon-size="15"></span></button>
         <div class="dv-title-zone">
           <div class="dv-name" id="detailName"></div>
           <div class="dv-sub" id="detailSub"></div>
@@ -172,22 +172,22 @@
   <!-- ===== 折叠态（桌面挂件） ===== -->
   <section class="folded-view" id="foldedView" style="display:none">
     <div class="folded-bar" id="foldedBar">
-      <span class="fb-icon">◆</span>
+      <span class="fb-icon" data-icon="sparkle" data-icon-size="14"></span>
       <span class="fb-text">点击展开</span>
       <span class="fb-meta"></span>
       <span class="fb-progress"><span class="fb-fill" style="width:0%"></span></span>
-      <button class="fb-btn" id="fbNext" title="下一个任务">→</button>
-      <button class="fb-btn complete" id="fbComplete" title="已完成">✓</button>
+      <button class="fb-btn" id="fbNext" title="下一个任务"><span class="ico-slot" data-icon="next" data-icon-size="14"></span></button>
+      <button class="fb-btn complete" id="fbComplete" title="已完成"><span class="ico-slot" data-icon="check" data-icon-size="14" data-icon-sw="2.4"></span></button>
     </div>
   </section>
 
   <!-- ===== FAB 新建按钮 ===== -->
-  <button class="fab" id="fabAdd" title="新建任务">＋</button>
+  <button class="fab" id="fabAdd" title="新建任务"><span class="ico-slot" data-icon="plus" data-icon-size="20" data-icon-sw="2.2"></span></button>
 
   <!-- ===== 紧急任务弹窗 ===== -->
   <div class="emergency-overlay" id="emergencyOverlay" style="display:none">
     <div class="emergency-modal">
-      <div class="em-bar"><span class="em-alert">⚠</span><span class="em-title">任务即将超时</span><button class="em-close" id="emClose">×</button></div>
+      <div class="em-bar"><span class="em-alert" data-icon="warn" data-icon-size="16"></span><span class="em-title">任务即将超时</span><button class="em-close" id="emClose"><span class="ico-slot" data-icon="close" data-icon-size="13" data-icon-sw="2.2"></span></button></div>
       <div class="em-body">
         <div class="em-task" id="emTaskName"></div>
         <div class="em-msg">您有一个任务即将超时，请尽快完成或处理</div>
@@ -204,7 +204,7 @@
   <div class="bless-overlay" id="blessOverlay" style="display:none">
     <div class="bless-card">
       <div class="bless-top">
-        <div class="bless-icon">★</div>
+        <div class="bless-icon" data-icon="star" data-icon-size="20" data-icon-sw="1.7"></div>
         <div class="bless-title" id="blessTitle">恭喜你已完成今日任务</div>
         <div class="bless-sub" id="blessSub">逐梦的脚步，从未停歇</div>
       </div>
@@ -218,7 +218,7 @@
   <!-- ===== 历史任务弹窗（独立小窗口，不用任务栏原生界面） ===== -->
   <div class="overlay archive-overlay" id="archiveOverlay" style="display:none">
     <div class="modal archive-modal">
-      <div class="m-head"><span>历史任务</span><button class="m-close" data-close-overlay="archiveOverlay">×</button></div>
+      <div class="m-head"><span>历史任务</span><button class="m-close" data-close-overlay="archiveOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="arc-tabs">
         <button class="arc-tab active" data-cat="all" onclick="switchArchiveCat('all')">全部</button>
         <button class="arc-tab" data-cat="daily" onclick="switchArchiveCat('daily')">每日任务</button>
@@ -234,7 +234,7 @@
   <!-- ===== 设置抽屉（卡片式分组） ===== -->
   <div class="overlay" id="settingsOverlay" style="display:none">
     <div class="modal settings-modal">
-      <div class="m-head"><span>设置</span><button class="m-close" data-close-overlay="settingsOverlay">×</button></div>
+      <div class="m-head"><span>设置</span><button class="m-close" data-close-overlay="settingsOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
 
         <div class="settings-section">
@@ -358,7 +358,7 @@
   <!-- ===== 新建任务抽屉 ===== -->
   <div class="overlay" id="addOverlay" style="display:none">
     <div class="modal add-modal">
-      <div class="m-head"><span>新建任务</span><button class="m-close" data-close-overlay="addOverlay">×</button></div>
+      <div class="m-head"><span>新建任务</span><button class="m-close" data-close-overlay="addOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
         <label class="label">任务名</label>
         <input type="text" id="addTitle" placeholder="例：每日锻炼" />
@@ -411,6 +411,6 @@
   </div>
 
 </div>
-<script src="app.js?v=v45"></script>
+<script src="app.js?v=v46"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@ function newTask(uuid, title, opts = {}) {
     reward_points: opts.reward_points ?? 10,
     count: opts.count ?? 1,                // 次数任务总次数
     done_count: opts.done_count ?? 0,      // 次数任务已完成次数
-    delayed_count: 0, done: 0, done_at: null,
+    delayed_count: 0, done: 0, done_at: opts.done_at ?? null,   // 原来硬编码 null，历史任务的完成时间被吞掉
     created_at: opts.created_at ?? nowMs(),
     updated_at: opts.updated_at ?? nowMs(),
     deleted: 0

@@ -848,24 +848,26 @@ body::after {
 }
 .reward-item.hl .reward-num { color: var(--gold-deep); font-weight: 700; }
 
-/* 底部按钮 —— 竖排小号椭圆 */
+/* 底部按钮 —— 竖排小号椭圆（收窄到 190px，不再占半屏） */
 .btn-row {
-  display: flex; flex-direction: column; gap: 8px;
-  margin-top: 14px;
-  max-width: 320px;
+  display: flex; flex-direction: column; gap: 7px;
+  margin-top: 12px;
+  max-width: 190px;
   margin-left: auto; margin-right: auto;
 }
 .btn-row button {
   width: 100%;
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 8px 18px;                 /* 缩小 */
+  padding: 7px 14px;                 /* 小尺寸 */
   border-radius: 999px;              /* 椭圆 */
   cursor: pointer;
-  font-size: 12px; font-weight: 700;
+  font-size: 12px; font-weight: 600;
   border: 1px solid var(--border-mid);
   transition: all .2s;
   letter-spacing: 0.5px;
 }
+/* 按钮内图标：统一 SVG，不用 ◆■✓ 字符 */
+.btn-row button .svg-ico { flex: 0 0 auto; opacity: .95; }
 .btn-row .track-btn { background: linear-gradient(160deg, var(--gold-light), var(--gold-deep)); color: #fff; box-shadow: 0 2px 10px var(--glow-gold), inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
 .btn-row .track-btn:hover { box-shadow: 0 4px 16px var(--glow-gold), inset 0 0 0 1px rgba(255, 255, 255, 0.4); }
 .btn-row .track-btn.tracking { background: linear-gradient(160deg, var(--azure), #2E6FA0); color: #fff; box-shadow: 0 2px 10px var(--glow-azure), inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
@@ -874,9 +876,8 @@ body::after {
 /* 完成任务：暖橘金渐变（不绿不灰，像完成不像失败） */
 .btn-row .complete-btn { background: linear-gradient(160deg, #E8A15C, #D0712F); color: #fff; box-shadow: 0 2px 10px rgba(216, 138, 63, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
 .btn-row .complete-btn:hover { box-shadow: 0 4px 16px rgba(216, 138, 63, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.4); }
-.btn-row .track-btn::before { content: "◆"; font-size: 10px; }
-.btn-row .track-btn.tracking::before { content: "■"; font-size: 10px; }
-.btn-row .complete-btn::before { content: "✓"; font-weight: 900; font-size: 12px; }
+/* 按钮前缀图标改由 JS 注入内联 SVG（下方 .btn-ico 控制尺寸） */
+.btn-row .btn-ico { display: inline-flex; align-items: center; margin-right: 2px; }
 
 /* ============================================================
    折叠态（桌面挂件模式）
@@ -1006,7 +1007,10 @@ body::after {
   border-bottom: 1px dashed var(--border-soft);
 }
 .setting-row:last-child { border-bottom: none; }
-.setting-row label { color: var(--ink-soft); font-size: 12px; min-width: 100px; }
+.setting-row label { color: var(--ink-soft); font-size: 12px; }
+/* 只有行首的文字标签才留 100px 宽度；switch 本身也是 <label>，不能被撑开成 100px */
+.setting-row > label:first-child { min-width: 100px; }
+.setting-row label.switch { min-width: 0; flex: 0 0 auto; }
 .setting-row .hint { color: var(--ink-faint); font-size: 10.5px; }
 .setting-row input[type=text], .setting-row input[type=number] { flex: 1; max-width: 130px; }
 .setting-row select { flex: 1; max-width: 160px; }
@@ -1038,7 +1042,7 @@ input::placeholder { color: var(--ink-faint); }
 .small-btn.danger:hover { background: rgba(184, 86, 56, 0.1); }
 
 /* switch 控件（缩短：36→30px） */
-.switch { position: relative; width: 30px; height: 17px; display: inline-block; flex: 0 0 30px; }
+.switch { position: relative; width: 30px; height: 17px; min-width: 0; display: inline-block; flex: 0 0 30px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; inset: 0; background: rgba(110, 80, 30, 0.18); border-radius: 20px; cursor: pointer; transition: .2s; }
 .slider::before { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(58, 46, 26, 0.25); transition: .2s; }
@@ -1301,4 +1305,59 @@ input::placeholder { color: var(--ink-faint); }
   border: 1px solid var(--border-soft);
   padding: 1px 8px; border-radius: 999px;
   white-space: nowrap;
+}
+
+/* ==================== SVG 图标系统（v4.6） ====================
+   统一用内联 SVG 替代 Unicode / emoji 字符：
+   原因——⏳📜🛡🗡 等字符会被系统 emoji 字体接管渲染成彩色图标，
+   与暖色浅色 UI 风格冲突，且各字符宽度不一致导致视觉失衡。
+   ============================================================ */
+.svg-ico { display: block; flex: 0 0 auto; }
+.ico-slot { display: inline-flex; align-items: center; justify-content: center; }
+
+/* 承载 SVG 的容器统一居中 */
+.nav-item .ico,
+.cc-ico,
+.level-icon,
+.level-character,
+.level-q,
+.dash-greet-icon,
+.tip-ico,
+.fb-icon,
+.em-alert,
+.bless-icon,
+.style-tab,
+.dv-back,
+.fab,
+.ico-btn,
+.fb-btn,
+.em-close,
+.m-close {
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* 奖励区图标容器：改 SVG 后不再靠 font-size 撑尺寸 */
+.reward-ico {
+  font-size: 0;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(201, 162, 39, 0.16);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--gold-deep);
+  margin-bottom: 3px;
+}
+.reward-item.hl .reward-ico { background: rgba(255, 255, 255, 0.6); }
+
+/* 分隔线：去掉中间菱形字符，留一条渐变细线 */
+.divider {
+  display: block; height: 1px; margin: 15px 0 11px;
+  background: linear-gradient(90deg, transparent, var(--border-mid), transparent);
+}
+.divider::before, .divider::after { display: none; }
+
+/* 历史弹窗：未完成记录的小圆点（已完成用 ✓ 图标） */
+.arc-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  display: inline-block;
 }
