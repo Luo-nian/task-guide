@@ -1,4 +1,4 @@
-package com.taskguide.app
+package com.taskbar.app
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -21,8 +21,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.taskguide.app.ui.*
-import com.taskguide.app.ui.TGColors
+import com.taskbar.app.ui.*
+import com.taskbar.app.ui.TGColors
 
 class MainActivity : ComponentActivity() {
 

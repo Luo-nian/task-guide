@@ -1,4 +1,4 @@
-package com.taskguide.app.ui
+package com.taskbar.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,10 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.taskguide.app.data.model.Priority
-import com.taskguide.app.data.model.Task
-import com.taskguide.app.data.model.TaskType
-import com.taskguide.app.data.model.TrackStatus
+import com.taskbar.app.data.model.Priority
+import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.model.TaskType
+import com.taskbar.app.data.model.TrackStatus
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,20 +61,44 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                 task.deadline?.let { Spacer(Modifier.height(2.dp)); Text("截止 ${dateFmt.format(Date(it))}", color = TGColors.Cinnabar, fontSize = 12.sp) }
             }
         }
-        // 操作按钮
+        // 操作按钮（图1：追踪目标为主按钮）
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (task.trackStatus == TrackStatus.TRACKING) {
-                    Button(onClick = { vm.stopTracking(uuid) }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Fog)) { Text("停止追踪") }
-                } else if (task.type != TaskType.HABIT) {
-                    Button(onClick = { vm.startTracking(uuid) }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) { Text("开始追踪", color = TGColors.Ink) }
+                val isTracking = task.trackStatus == TrackStatus.TRACKING
+                Button(
+                    onClick = {
+                        if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid)
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isTracking) TGColors.Purple.copy(alpha = 0.25f) else TGColors.Paper
+                    )
+                ) {
+                    Text(
+                        if (isTracking) "◆ 当前追踪中·停止" else "◆ 追踪目标",
+                        color = if (isTracking) TGColors.Purple else TGColors.Ink,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-                Button(onClick = { vm.completeTask(uuid); navController.popBackStack() }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)) { Text("完成") }
-                OutlinedButton(onClick = { showDelayDialog = true }) { Text("延迟") }
+                Button(onClick = { vm.completeTask(uuid); navController.popBackStack() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)) { Text("完成") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                OutlinedButton(onClick = { showDelayDialog = true }) { Text("延迟") }
                 OutlinedButton(onClick = { navController.navigate("edit/$uuid") }) { Text("编辑") }
                 OutlinedButton(onClick = { vm.deleteTask(uuid); navController.popBackStack() }, colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.Cinnabar)) { Text("删除") }
+            }
+        }
+        // 奖励区（图1：完成任务可获得）
+        item {
+            TGCard(Modifier.fillMaxWidth()) {
+                Text("完成任务可获得", color = TGColors.Fog, fontSize = 11.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    RewardItem("💠", "+${task.rewardPoints}", highlight = true)
+                    RewardItem("📘", "进度")
+                    RewardItem("🏆", "坚持")
+                }
             }
         }
         // 步骤内嵌子模块
@@ -225,4 +249,4 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
 
 // ViewModel 扩展：暴露单个 task 的 Flow（供详情页用）
 private fun TaskViewModel.observeTaskFlow(uuid: String) =
-    (getApplication<com.taskguide.app.TaskGuideApp>()).repo.observeTask(uuid)
+    (getApplication<com.taskbar.app.TaskBarApp>()).repo.observeTask(uuid)

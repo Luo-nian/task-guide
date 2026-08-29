@@ -1,4 +1,4 @@
-package com.taskguide.app.server
+package com.taskbar.app.server
 
 import android.content.Context
 import android.net.nsd.NsdManager

@@ -1,4 +1,4 @@
-package com.taskguide.app.data.model
+package com.taskbar.app.data.model
 
 import androidx.room.Entity
 import androidx.room.ForeignKey

@@ -1,4 +1,4 @@
-package com.taskguide.app.ui
+package com.taskbar.app.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -12,9 +12,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taskguide.app.BuildConfig
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.server.SyncService
+import com.taskbar.app.BuildConfig
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.server.SyncService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,6 +36,18 @@ fun SettingsScreen(vm: TaskViewModel) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("设置", color = TGColors.GoldLight, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp, 12.dp))
 
+        // 我的积分（图1奖励区风格）
+        val points by vm.totalPoints.collectAsState()
+        TGCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("💠 我的积分", color = TGColors.GoldLight, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("◆ $points", color = TGColors.GoldLight, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("完成任务可获得积分，完成后自动累加", color = TGColors.Fog, fontSize = 11.sp)
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 提醒强度
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒强度", color = TGColors.GoldLight, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -98,10 +110,10 @@ fun SettingsScreen(vm: TaskViewModel) {
 
 private suspend fun exportJson(ctx: android.content.Context): String {
     return try {
-        val app = ctx.applicationContext as TaskGuideApp
+        val app = ctx.applicationContext as TaskBarApp
         val payload = app.repo.buildFullSyncPayload()
         val json = Json { encodeDefaults = true; prettyPrint = true }
-            .encodeToString(com.taskguide.app.data.model.FullSyncPayload.serializer(), payload)
+            .encodeToString(com.taskbar.app.data.model.FullSyncPayload.serializer(), payload)
         val dir = File(ctx.getExternalFilesDir(null), "backups").apply { mkdirs() }
         val file = File(dir, "taskguide-backup-${System.currentTimeMillis()}.json")
         file.writeText(json, Charsets.UTF_8)

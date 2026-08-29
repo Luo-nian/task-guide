@@ -1,13 +1,13 @@
-package com.taskguide.app.server
+package com.taskbar.app.server
 
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.content.ContextCompat
-import com.taskguide.app.BuildConfig
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.notify.NotificationHelper
+import com.taskbar.app.BuildConfig
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.notify.NotificationHelper
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer

@@ -23,20 +23,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
-        android:name=".TaskGuideApp"
+        android:name=".TaskBarApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.TaskGuide"
+        android:theme="@style/Theme.TaskBar"
         tools:targetApi="34">
 
         <!-- 主入口 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.TaskGuide">
+            android:theme="@style/Theme.TaskBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -71,9 +71,9 @@
             android:label="@string/widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.taskguide.app.WIDGET_REFRESH" />
-                <action android:name="com.taskguide.app.WIDGET_STEP_DONE" />
-                <action android:name="com.taskguide.app.WIDGET_ADD_TASK" />
+                <action android:name="com.taskbar.app.WIDGET_REFRESH" />
+                <action android:name="com.taskbar.app.WIDGET_STEP_DONE" />
+                <action android:name="com.taskbar.app.WIDGET_ADD_TASK" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

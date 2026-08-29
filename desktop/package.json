@@ -1,8 +1,8 @@
 {
-  "name": "task-guide-desktop",
+  "name": "taskbar-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "任务指南 桌面端（Tauri 2 + Web 预览）",
+  "description": "任务栏 桌面客户端（Tauri 2 + Web 预览）",
   "scripts": {
     "preview": "node preview-server.js",
     "tauri": "tauri",

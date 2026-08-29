@@ -1,18 +1,18 @@
-package com.taskguide.app
+package com.taskbar.app
 
 import android.app.Application
 import androidx.room.Room
-import com.taskguide.app.data.db.AppDatabase
-import com.taskguide.app.data.model.Setting
-import com.taskguide.app.data.repo.TaskRepository
-import com.taskguide.app.notify.ReminderScheduler
-import com.taskguide.app.server.SyncService
+import com.taskbar.app.data.db.AppDatabase
+import com.taskbar.app.data.model.Setting
+import com.taskbar.app.data.repo.TaskRepository
+import com.taskbar.app.notify.ReminderScheduler
+import com.taskbar.app.server.SyncService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class TaskGuideApp : Application() {
+class TaskBarApp : Application() {
 
     lateinit var repo: TaskRepository
         private set
@@ -32,7 +32,7 @@ class TaskGuideApp : Application() {
         appScope.launch {
             initDefaultSettings()
             // 重新调度所有未完成提醒
-            ReminderScheduler.rescheduleAll(repo, this@TaskGuideApp)
+            ReminderScheduler.rescheduleAll(repo, this@TaskBarApp)
         }
 
         // 启动同步前台服务（Ktor 服务器常驻）
@@ -55,7 +55,7 @@ class TaskGuideApp : Application() {
     }
 
     companion object {
-        lateinit var instance: TaskGuideApp
+        lateinit var instance: TaskBarApp
             private set
     }
 }

@@ -1,17 +1,17 @@
-package com.taskguide.app.data.repo
+package com.taskbar.app.data.repo
 
-import com.taskguide.app.data.db.AppDatabase
-import com.taskguide.app.data.model.ChangeOp
-import com.taskguide.app.data.model.DEFAULT_TRACK_LIMIT
-import com.taskguide.app.data.model.HabitLog
-import com.taskguide.app.data.model.Priority
-import com.taskguide.app.data.model.Step
-import com.taskguide.app.data.model.StepStatus
-import com.taskguide.app.data.model.SyncMeta
-import com.taskguide.app.data.model.Task
-import com.taskguide.app.data.model.TaskType
-import com.taskguide.app.data.model.TrackCardItem
-import com.taskguide.app.data.model.TrackStatus
+import com.taskbar.app.data.db.AppDatabase
+import com.taskbar.app.data.model.ChangeOp
+import com.taskbar.app.data.model.DEFAULT_TRACK_LIMIT
+import com.taskbar.app.data.model.HabitLog
+import com.taskbar.app.data.model.Priority
+import com.taskbar.app.data.model.Step
+import com.taskbar.app.data.model.StepStatus
+import com.taskbar.app.data.model.SyncMeta
+import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.model.TaskType
+import com.taskbar.app.data.model.TrackCardItem
+import com.taskbar.app.data.model.TrackStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -125,7 +125,7 @@ class TaskRepository(private val db: AppDatabase) {
         taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
         // 积分奖励：total_points += reward_points
         val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
-        settingsDao.set(com.taskguide.app.data.model.Setting("total_points", (current + task.rewardPoints).toString()))
+        settingsDao.set(com.taskbar.app.data.model.Setting("total_points", (current + task.rewardPoints).toString()))
         stepDao.getByTask(uuid).filter { it.status != StepStatus.DONE }.forEach {
             stepDao.updateStatus(it.uuid, StepStatus.DONE, t, t)
             emit(ChangeOp("upsert", "step", it.uuid))
@@ -248,14 +248,17 @@ class TaskRepository(private val db: AppDatabase) {
         settingsDao.observe("track_limit").map { it?.toIntOrNull() ?: DEFAULT_TRACK_LIMIT }
 
     suspend fun setTrackLimit(limit: Int) = settingsDao.set(
-        com.taskguide.app.data.model.Setting("track_limit", limit.toString())
+        com.taskbar.app.data.model.Setting("track_limit", limit.toString())
     )
 
     suspend fun getSetting(key: String, default: String = ""): String =
         settingsDao.get(key) ?: default
 
+    /** 观察设置值变化（Flow） */
+    fun observeSetting(key: String): Flow<String?> = settingsDao.observe(key)
+
     suspend fun setSetting(key: String, value: String) = settingsDao.set(
-        com.taskguide.app.data.model.Setting(key, value)
+        com.taskbar.app.data.model.Setting(key, value)
     )
 
     // ==================== 同步元信息 ====================

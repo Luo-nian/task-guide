@@ -1,4 +1,4 @@
-package com.taskguide.app.ui
+package com.taskbar.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taskguide.app.data.model.Priority
-import com.taskguide.app.data.model.Step
-import com.taskguide.app.data.model.Task
+import com.taskbar.app.data.model.Priority
+import com.taskbar.app.data.model.Step
+import com.taskbar.app.data.model.Task
 
 // ==================== 配色（原神任务界面风格：磨砂黑 + 米白 + 暖金 + 紫菱） ====================
 object TGColors {
@@ -127,5 +127,24 @@ fun TypeChip(type: String) {
 fun EmptyState(text: String, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(text, color = TGColors.Fog, fontSize = 14.sp)
+    }
+}
+
+/** 奖励项（图1奖励区：图标+数量） */
+@Composable
+fun RewardItem(icon: String, label: String, highlight: Boolean = false) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (highlight) TGColors.Gold.copy(alpha = 0.12f)
+                else Color.White.copy(alpha = 0.04f)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(icon, fontSize = 18.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(label, color = if (highlight) TGColors.GoldLight else TGColors.Paper, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }

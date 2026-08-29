@@ -1,4 +1,4 @@
-package com.taskguide.app.data.db
+package com.taskbar.app.data.db
 
 import androidx.room.Dao
 import androidx.room.Database
@@ -7,13 +7,13 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
-import com.taskguide.app.data.model.HabitLog
-import com.taskguide.app.data.model.Setting
-import com.taskguide.app.data.model.Step
-import com.taskguide.app.data.model.SyncMeta
-import com.taskguide.app.data.model.Task
-import com.taskguide.app.data.model.TaskType
-import com.taskguide.app.data.model.TrackStatus
+import com.taskbar.app.data.model.HabitLog
+import com.taskbar.app.data.model.Setting
+import com.taskbar.app.data.model.Step
+import com.taskbar.app.data.model.SyncMeta
+import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.model.TaskType
+import com.taskbar.app.data.model.TrackStatus
 import kotlinx.coroutines.flow.Flow
 
 // ==================== Task DAO ====================

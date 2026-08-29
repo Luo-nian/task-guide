@@ -1,11 +1,11 @@
 [package]
-name = "task-guide-desktop"
+name = "taskbar-desktop"
 version = "1.0.0"
-description = "任务指南 桌面挂件（Tauri 2）"
+description = "任务栏 桌面客户端（Tauri 2）"
 edition = "2021"
 
 [lib]
-name = "task_guide_desktop_lib"
+name = "taskbar_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

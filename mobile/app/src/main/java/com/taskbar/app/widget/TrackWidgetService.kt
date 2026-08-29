@@ -1,13 +1,13 @@
-package com.taskguide.app.widget
+package com.taskbar.app.widget
 
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
-import com.taskguide.app.MainActivity
-import com.taskguide.app.R
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.data.model.TrackCardItem
+import com.taskbar.app.MainActivity
+import com.taskbar.app.R
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.TrackCardItem
 import kotlinx.coroutines.runBlocking
 
 class TrackWidgetService : RemoteViewsService() {
@@ -23,7 +23,7 @@ class TrackWidgetFactory(private val context: Context) : RemoteViewsService.Remo
 
     override fun onDataSetChanged() {
         // RemoteViewsFactory 允许同步阻塞取数
-        val app = context.applicationContext as TaskGuideApp
+        val app = context.applicationContext as TaskBarApp
         items = runBlocking { app.repo.getTrackCards() }
     }
 

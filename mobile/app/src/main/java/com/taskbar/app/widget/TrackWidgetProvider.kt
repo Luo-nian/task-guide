@@ -1,4 +1,4 @@
-package com.taskguide.app.widget
+package com.taskbar.app.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -7,10 +7,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import com.taskguide.app.MainActivity
-import com.taskguide.app.R
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.notify.ioScope
+import com.taskbar.app.MainActivity
+import com.taskbar.app.R
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.notify.ioScope
 import kotlinx.coroutines.launch
 
 class TrackWidgetProvider : AppWidgetProvider() {
@@ -93,8 +93,8 @@ class TrackWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        const val ACTION_REFRESH = "com.taskguide.app.WIDGET_REFRESH"
-        const val ACTION_ADD_TASK = "com.taskguide.app.WIDGET_ADD_TASK"
+        const val ACTION_REFRESH = "com.taskbar.app.WIDGET_REFRESH"
+        const val ACTION_ADD_TASK = "com.taskbar.app.WIDGET_ADD_TASK"
 
         /** 数据变更后调用，刷新所有小部件 */
         fun refreshAll(context: Context) {

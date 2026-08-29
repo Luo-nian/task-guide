@@ -1,4 +1,4 @@
-package com.taskguide.app.notify
+package com.taskbar.app.notify
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,9 +8,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.data.model.TrackStatus
-import com.taskguide.app.server.SyncService
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.TrackStatus
+import com.taskbar.app.server.SyncService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,7 +52,7 @@ object ReminderScheduler {
     }
 
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
-    suspend fun rescheduleAll(repo: com.taskguide.app.data.repo.TaskRepository, context: Context) {
+    suspend fun rescheduleAll(repo: com.taskbar.app.data.repo.TaskRepository, context: Context) {
         val now = System.currentTimeMillis()
         val strength = repo.getSetting("reminder_strength", "standard")
         val tasks = repo.observeMainList().first()
@@ -79,7 +79,7 @@ class ReminderWorker(
         val strength = inputData.getString("strength") ?: "standard"
         val repeatCount = inputData.getInt(ReminderScheduler.KEY_REPEAT, 0)
 
-        val app = applicationContext as TaskGuideApp
+        val app = applicationContext as TaskBarApp
         val t = app.repo.observeTask(uuid).first() ?: return Result.success()
 
         // 已完成则不提醒
@@ -109,7 +109,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val uuid = intent.getStringExtra("task_uuid") ?: return
-        val app = context.applicationContext as TaskGuideApp
+        val app = context.applicationContext as TaskBarApp
         when (intent.action) {
             ACTION_DONE -> {
                 ioScope.launch {
@@ -138,8 +138,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_DONE = "com.taskguide.app.ACTION_DONE"
-        const val ACTION_DELAY = "com.taskguide.app.ACTION_DELAY"
+        const val ACTION_DONE = "com.taskbar.app.ACTION_DONE"
+        const val ACTION_DELAY = "com.taskbar.app.ACTION_DELAY"
     }
 }
 
@@ -148,7 +148,7 @@ class BootReceiver : BroadcastReceiver() {
         // 开机后启动同步服务
         SyncService.start(context)
         // 重新调度所有提醒（在协程里）
-        val app = context.applicationContext as TaskGuideApp
+        val app = context.applicationContext as TaskBarApp
         ioScope.launch {
             ReminderScheduler.rescheduleAll(app.repo, context)
         }

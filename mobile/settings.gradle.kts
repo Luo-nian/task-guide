@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TaskGuide"
+rootProject.name = "TaskBar"
 include(":app")

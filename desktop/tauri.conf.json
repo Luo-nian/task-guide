@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TaskGuide",
+  "productName": "任务栏",
   "version": "1.0.0",
-  "identifier": "com.taskguide.desktop",
+  "identifier": "com.taskbar.desktop",
   "build": {
     "frontendDist": "ui"
   },
@@ -11,16 +11,16 @@
     "windows": [
       {
         "label": "main",
-        "title": "任务指南",
-        "width": 340,
-        "height": 560,
-        "minWidth": 260,
-        "minHeight": 400,
-        "x": 50,
+        "title": "任务栏",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 360,
+        "minHeight": 480,
+        "x": 100,
         "y": 80,
         "transparent": true,
         "decorations": false,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "resizable": true,
         "shadow": false
       }

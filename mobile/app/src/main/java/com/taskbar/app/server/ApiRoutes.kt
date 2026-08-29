@@ -1,11 +1,11 @@
-package com.taskguide.app.server
+package com.taskbar.app.server
 
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.data.model.ChangeOp
-import com.taskguide.app.data.model.ChangesRequest
-import com.taskguide.app.data.model.IncrementalPayload
-import com.taskguide.app.data.model.WsMessage
-import com.taskguide.app.data.repo.ChangeBus
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.ChangeOp
+import com.taskbar.app.data.model.ChangesRequest
+import com.taskbar.app.data.model.IncrementalPayload
+import com.taskbar.app.data.model.WsMessage
+import com.taskbar.app.data.repo.ChangeBus
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -39,14 +39,14 @@ fun Application.configureServer() {
 
         // 全量同步（首次连接）
         get("/api/sync/full") {
-            val app = TaskGuideApp.instance
+            val app = TaskBarApp.instance
             call.respond(app.repo.buildFullSyncPayload())
         }
 
         // 增量同步
         get("/api/sync/incremental") {
             val since = call.request.queryParameters["since"]?.toLongOrNull() ?: 0L
-            val app = TaskGuideApp.instance
+            val app = TaskBarApp.instance
             val changes = app.repo.buildIncrementalChanges(since)
             call.respond(IncrementalPayload(changes, System.currentTimeMillis()))
         }
@@ -54,14 +54,14 @@ fun Application.configureServer() {
         // 电脑端推送自己的变更
         post("/api/sync/changes") {
             val req = call.receive<ChangesRequest>()
-            val app = TaskGuideApp.instance
+            val app = TaskBarApp.instance
             req.changes.forEach { app.repo.applyChange(it) }
             call.respondText { """{"status":"ok","accepted":${req.changes.size}}""" }
         }
 
         // WebSocket 实时推送
         webSocket("/ws") {
-            val app = TaskGuideApp.instance
+            val app = TaskBarApp.instance
             // 子协程：接收电脑端上报的变更
             val incomingJob = launch {
                 for (frame in incoming) {

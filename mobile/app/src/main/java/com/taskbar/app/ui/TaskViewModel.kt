@@ -1,21 +1,22 @@
-package com.taskguide.app.ui
+package com.taskbar.app.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.taskguide.app.TaskGuideApp
-import com.taskguide.app.data.model.Step
-import com.taskguide.app.data.model.Task
-import com.taskguide.app.data.repo.TaskRepository
-import com.taskguide.app.widget.TrackWidgetProvider
+import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.Step
+import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.repo.TaskRepository
+import com.taskbar.app.widget.TrackWidgetProvider
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val repo: TaskRepository = (app as TaskGuideApp).repo
+    private val repo: TaskRepository = (app as TaskBarApp).repo
     private val ctx = app.applicationContext
 
     val mainList: StateFlow<List<Task>> = repo.observeMainList()
@@ -32,6 +33,11 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     val trackLimit: StateFlow<Int> = repo.observeTrackLimit()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+
+    /** 总积分（积分系统） */
+    val totalPoints: StateFlow<Int> = repo.observeSetting("total_points")
+        .map { it?.toIntOrNull() ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun steps(taskUuid: String) = repo.observeSteps(taskUuid)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

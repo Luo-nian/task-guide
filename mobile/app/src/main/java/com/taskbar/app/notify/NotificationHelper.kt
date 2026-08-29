@@ -1,4 +1,4 @@
-package com.taskguide.app.notify
+package com.taskbar.app.notify
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationCompat
-import com.taskguide.app.MainActivity
+import com.taskbar.app.MainActivity
 
 /**
  * 通知帮助类：3 档强度

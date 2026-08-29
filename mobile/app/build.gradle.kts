@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.taskguide.app"
+    namespace = "com.taskbar.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.taskguide.app"
+        applicationId = "com.taskbar.app"
         minSdk = 26          // Android 8.0，覆盖 vivo OriginOS
         targetSdk = 34
         versionCode = 1

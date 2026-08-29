@@ -1,6 +1,6 @@
 -- ============================================================
--- 任务指南 TaskGuide —— 统一数据库 Schema v2.0
--- v2: 新增任务积分系统（reward_points / total_points）
+-- 任务栏 TaskBar —— 统一数据库 Schema v3.0
+-- v3: 任务分类（4 类）、紧急提醒设置、追踪上限可调、配对持久化键
 -- 双端（Android / Tauri）共用此结构，保证同步一致
 -- SQLite 方言
 -- ============================================================
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     type          TEXT    NOT NULL DEFAULT 'once',     -- once | repeat | note | habit | goal
     title         TEXT    NOT NULL,                    -- 任务标题
     desc          TEXT    DEFAULT '',                  -- 备注
-    category      TEXT    DEFAULT '',                  -- 自定义分类（学习/生活/锻炼...）
+    category      TEXT    NOT NULL DEFAULT 'once',     -- 用户分类：daily / goal / time-limited / once
     priority      TEXT    NOT NULL DEFAULT 'medium',   -- high | medium | low
     due_at        INTEGER DEFAULT NULL,                -- 提醒时间（Unix 毫秒时间戳）
     repeat_rule   TEXT    DEFAULT NULL,                -- 重复规则：daily / weekly:1,4 / monthly:15
@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at    INTEGER NOT NULL,                    -- 最后修改时间（同步冲突判断）
     deleted       INTEGER NOT NULL DEFAULT 0           -- 软删除 0/1（同步用）
 );
+CREATE INDEX IF NOT EXISTS idx_tasks_status   ON tasks(track_status);
+CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated  ON tasks(updated_at);
 
 -- ------------------------------------------------------------
 -- 步骤表：任务拆解为多步骤，逐步推进（原神追踪模式）
@@ -87,9 +91,13 @@ CREATE TABLE IF NOT EXISTS settings (
 -- 默认设置
 -- ------------------------------------------------------------
 INSERT OR IGNORE INTO settings (key, value) VALUES
-    ('track_limit',      '3'),                          -- 同时追踪上限
+    ('track_limit',      '3'),                          -- 兼容旧字段
+    ('tracking_max',     '3'),                          -- 同时追踪上限（可调）
     ('reminder_strength','standard'),                   -- standard | repeat | alarm
     ('auto_start',       '1'),                          -- 电脑挂件开机自启 0/1
     ('delay_options',    'custom'),                     -- 延迟天数方式：custom=自定义
     ('theme',            'frosted'),                    -- frosted(毛玻璃) | card(简洁卡片)
-    ('total_points',     '0');                          -- 总积分（积分系统）
+    ('total_points',     '0'),                          -- 总积分
+    ('emergency_on',     '1'),                          -- 紧急提醒开关 0/1
+    ('eta_short_pct',    '30'),                         -- ≤48h 阈值百分比（默认 30 = 3/10）
+    ('eta_long_h',       '36');                         -- >48h 提前小时数（默认 36）

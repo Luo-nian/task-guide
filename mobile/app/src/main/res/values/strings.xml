@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">任务指南</string>
-    <string name="widget_label">任务指南 · 追踪</string>
+    <string name="app_name">任务栏</string>
+    <string name="widget_label">任务栏 · 追踪</string>
 </resources>

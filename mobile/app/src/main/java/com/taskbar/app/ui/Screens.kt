@@ -1,4 +1,4 @@
-package com.taskguide.app.ui
+package com.taskbar.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,16 +14,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.taskguide.app.data.model.Priority
-import com.taskguide.app.data.model.Step
-import com.taskguide.app.data.model.StepStatus
-import com.taskguide.app.data.model.Task
-import com.taskguide.app.data.model.TaskType
-import com.taskguide.app.data.model.TrackStatus
+import com.taskbar.app.data.model.Priority
+import com.taskbar.app.data.model.Step
+import com.taskbar.app.data.model.StepStatus
+import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.model.TaskType
+import com.taskbar.app.data.model.TrackStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,13 +47,28 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            Text(
-                "任务指南",
-                color = TGColors.GoldLight,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(16.dp, 12.dp)
-            )
+            // 顶栏：标题 + 积分（原神风格）
+            val points by vm.totalPoints.collectAsState()
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp, 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "◆ 任务指南",
+                    color = TGColors.GoldLight,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(TGColors.Gold.copy(alpha = 0.12f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text("◆ $points", color = TGColors.Gold, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角 + 添加第一个", Modifier.fillMaxSize())
             } else {
@@ -81,6 +97,17 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 左侧菱形标识（紫=追踪中 / 灰=待办，原神风格）
+        Box(
+            Modifier
+                .size(12.dp)
+                .background(
+                    if (task.trackStatus == TrackStatus.TRACKING) TGColors.Purple else TGColors.Fog.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(3.dp)
+                )
+                .graphicsLayer { rotationZ = 45f }
+        )
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TypeChip(task.type)
@@ -88,8 +115,8 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit) {
                 PriorityChip(task.priority)
                 if (task.trackStatus == TrackStatus.TRACKING) {
                     Spacer(Modifier.width(6.dp))
-                    Box(Modifier.clip(RoundedCornerShape(4.dp)).background(TGColors.Gold.copy(alpha = 0.25f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                        Text("追踪中", color = TGColors.GoldLight, fontSize = 11.sp)
+                    Box(Modifier.clip(RoundedCornerShape(4.dp)).background(TGColors.Purple.copy(alpha = 0.22f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                        Text("追踪中", color = TGColors.Purple, fontSize = 11.sp)
                     }
                 }
             }
@@ -97,7 +124,7 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit) {
             Text(task.title, color = TGColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             task.dueAt?.let {
                 Spacer(Modifier.height(2.dp))
-                Text("⏰ ${dateFmt.format(Date(it))}", color = TGColors.Fog, fontSize = 11.sp)
+                Text("⏰ ${dateFmt.format(Date(it))}", color = TGColors.OrangeWarm, fontSize = 11.sp)
             }
         }
         // 追踪/完成按钮
