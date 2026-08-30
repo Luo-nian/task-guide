@@ -2,6 +2,10 @@
 target/
 dist/
 node_modules/
+gen/
+
+# 本地编译配置（含本机路径，不入库）
+.cargo/
 
 # 本地数据库（运行时生成）
 taskguide.db
