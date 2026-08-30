@@ -28,27 +28,27 @@ class TaskBarApp : Application() {
         instance = this
         installCrashHandler()
 
+        // Room 初始化失败也不能 throw —— application 一抛就被系统杀，整个 app 闪退
+        // 即使数据库不可用，UI 也要能起来（让用户至少看到错误提示而不是黑屏闪退）
         try {
             val db = Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
                 .fallbackToDestructiveMigration()
                 .build()
             repo = TaskRepository(db)
         } catch (e: Exception) {
-            Log.e("TaskBarApp", "Room 初始化失败", e)
-            throw e  // 数据库初始化失败必须崩（无法恢复）
+            Log.e("TaskBarApp", "Room 初始化失败，repo 设为 null", e)
         }
 
-        // 首次安装初始化默认设置
+        // 首次安装初始化默认设置（异步，失败不影响启动）
         appScope.launch {
             runCatching { initDefaultSettings() }
             runCatching { ReminderScheduler.rescheduleAll(repo, this@TaskBarApp) }
         }
 
-        // 启动同步前台服务（容错：失败不影响 app 启动）
-        appScope.launch {
-            runCatching { SyncService.start(this@TaskBarApp) }
-                .onFailure { Log.e("TaskBarApp", "SyncService 启动失败", it) }
-        }
+        // 注意：SyncService 不在此启动！原因：
+        // - 启动期任何前台服务异常都可能让 application 被系统杀（Android 14 起尤其严格）
+        // - 改为在 MainActivity.onCreate 的 LaunchedEffect 里延迟启动（UI 起来后再启）
+        // - 这样闪退时至少能看到崩溃提示，crash.log 也能记到现场
     }
 
     /**

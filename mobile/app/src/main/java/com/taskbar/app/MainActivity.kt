@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.taskbar.app.server.SyncService
 import com.taskbar.app.ui.*
 import com.taskbar.app.ui.TGColors
 
@@ -41,6 +43,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TaskGuideTheme {
+                // 延迟启动同步服务：等 UI 起来 1.5s 后再启动，
+                // 这样 SyncService 启动期异常不会连带把 application 干掉，
+                // UI 至少能展示给用户 + crash.log 能记录现场
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(1500)
+                    runCatching { SyncService.start(this@MainActivity) }
+                        .onFailure { Log.e("MainActivity", "SyncService 延迟启动失败", it) }
+                }
                 MainApp()
             }
         }
