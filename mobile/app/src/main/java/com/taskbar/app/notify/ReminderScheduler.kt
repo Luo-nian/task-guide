@@ -24,9 +24,9 @@ internal val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 object ReminderScheduler {
 
     private const val PREFIX = "reminder_"
-    private const val KEY_UUID = "task_uuid"
-    private const val KEY_REPEAT = "repeat_count"
-    private const val MAX_REPEAT = 3
+    internal const val KEY_UUID = "task_uuid"
+    internal const val KEY_REPEAT = "repeat_count"
+    internal const val MAX_REPEAT = 3
 
     fun tagFor(uuid: String) = PREFIX + uuid
 
