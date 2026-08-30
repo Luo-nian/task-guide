@@ -29,15 +29,16 @@ class TaskBarApp : Application() {
         installCrashHandler()
 
         // Room 初始化失败也不能 throw —— application 一抛就被系统杀，整个 app 闪退
-        // 即使数据库不可用，UI 也要能起来（让用户至少看到错误提示而不是黑屏闪退）
-        try {
-            val db = Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
+        // 兜底：磁盘库失败时降级为内存库，保证 repo 永远有值（TaskViewModel 构造才不崩）
+        val db = try {
+            Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
                 .fallbackToDestructiveMigration()
                 .build()
-            repo = TaskRepository(db)
         } catch (e: Exception) {
-            Log.e("TaskBarApp", "Room 初始化失败，repo 设为 null", e)
+            Log.e("TaskBarApp", "磁盘库初始化失败，降级内存库", e)
+            Room.inMemoryDatabaseBuilder(this, AppDatabase::class.java).build()
         }
+        repo = TaskRepository(db)
 
         // 首次安装初始化默认设置（异步，失败不影响启动）
         appScope.launch {
