@@ -680,10 +680,20 @@ window.aiBreakdown = async function(taskUuid, title) {
     }
     openDetail(taskUuid);
     render();
+    // 让用户知道实际走了哪条链路：填了 Key 却走本地模板 = 云端调用失败，
+    // 这种情况要明说，否则用户会一直以为在用 AI
+    if (btn) {
+      const usedCloud = r.source === 'cloud';
+      const hasKey = !!(settings.ai_api_key || '').trim();
+      btn.innerHTML = svgIcon(usedCloud ? 'sparkle' : 'ai', 13, 1.9) + ' 已拆 ' + steps.length + ' 步'
+        + (usedCloud ? ' · 云端' : (hasKey ? ' · 云端失败，用模板' : ' · 本地模板'));
+      btn.style.opacity = '';
+      setTimeout(() => { btn.innerHTML = svgIcon('ai',13,1.9) + ' AI 拆解'; }, 2600);
+    }
   } catch (e) {
     alert('AI 拆解失败：' + e.message);
   } finally {
-    if (btn) { btn.innerHTML = svgIcon('ai',13,1.9) + ' AI 拆解'; btn.style.opacity = ''; }
+    if (btn) { btn.style.opacity = ''; }
   }
 };
 
@@ -981,8 +991,13 @@ function startApp() {
   render();
   setTimeout(render, 250);
   setTimeout(render, 1000);
+  // 设置平时只在改动时推后端，启动补推一次，
+  // 避免「改过设置但那次请求失败」导致后端一直用默认值
+  persistSettingsServer().catch(() => {});
   setInterval(render, 15000);
   setInterval(checkEmergency, 60000);
+  checkNightNotify();                    // 启动即查一次（22 点后开机也能补提醒）
+  setInterval(checkNightNotify, 60000);
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', startApp);
@@ -990,15 +1005,30 @@ if (document.readyState === 'loading') {
   startApp();
 }
 
-// 22:00 弹窗检测（每分钟查一次，到 22:00 且有未完成每日任务时弹）
-setInterval(() => {
-  if (!settings.night_notify) return;
-  const now = new Date();
-  if (now.getHours() === 22 && now.getMinutes() === 0) {
-    const undoneDaily = tasks.filter(t => t.category === 'daily' && t.track_status !== 'done');
-    if (undoneDaily.length > 0) {
-      const names = undoneDaily.map(t => t.title).join('、');
-      alert('今日还有未完成的每日任务：\n' + names + '\n\n请尽快完成或处理');
-    }
-  }
-}, 60000);
+// =============== 22:00 未完成提醒 ===============
+// 判定交给后端（按「今天是否已提醒过」去重），前端只负责弹窗。
+// 旧实现要求 now.getMinutes() === 0 —— 22:00 那一分钟若没运行（没开机 / 休眠）
+// 就永远不会提醒；且用 alert 会阻塞界面。改为已过 22 点 + 当日未提醒即可触发。
+async function checkNightNotify() {
+  try {
+    const r = await call('check_night_notify', {});
+    if (r && r.pending) showNightNotify(r.titles || []);
+  } catch (e) { /* 提醒失败不影响主流程 */ }
+}
+function showNightNotify(titles) {
+  const shown = titles.slice(0, 8);
+  const items = shown.map(t =>
+    '<div class="night-list-item"><span class="dot"></span><span>' + esc(t) + '</span></div>'
+  ).join('');
+  const more = titles.length > shown.length
+    ? '<div class="night-empty">…等共 ' + titles.length + ' 项</div>' : '';
+  document.getElementById('nightMsg').innerHTML =
+    '还有 <b>' + titles.length + '</b> 项没完成：' +
+    '<div class="night-list">' + items + more + '</div>';
+  document.getElementById('nightOverlay').style.display = '';
+}
+document.getElementById('nightClose').addEventListener('click', () => {
+  document.getElementById('nightOverlay').style.display = 'none';
+  // 告知后端今天已提醒，避免一晚上反复弹
+  call('dismiss_night_notify', {}).catch(() => {});
+});

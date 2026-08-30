@@ -1214,6 +1214,49 @@ input::placeholder { color: var(--ink-faint); }
 }
 .bless-btn:hover { box-shadow: 0 6px 18px var(--glow-gold); }
 
+/* ===== 22:00 未完成提醒弹窗（复用祝福弹窗布局，改夜色警示调） ===== */
+.night-overlay {
+  background: radial-gradient(circle at center, rgba(230, 236, 248, 0.94), rgba(38, 46, 72, 0.55));
+}
+.night-card {
+  background: linear-gradient(160deg, #F7F9FE, #E4EAF6);
+  border-color: var(--azure, #4F86B5);
+  box-shadow: 0 0 60px rgba(79, 134, 181, 0.35), 0 12px 40px rgba(30, 40, 66, 0.3);
+}
+.night-card::before { border-color: rgba(79, 134, 181, 0.35); }
+.night-top { background: linear-gradient(180deg, rgba(214, 228, 246, 0.9), transparent); }
+.night-icon {
+  background: linear-gradient(135deg, #6FA3CE, #3D6B96);
+  box-shadow: 0 0 16px rgba(79, 134, 181, 0.45), inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+}
+.night-title { color: #33536F; }
+.night-msg { color: var(--ink); }
+.night-btn {
+  background: linear-gradient(160deg, #6FA3CE, #3D6B96);
+  box-shadow: 0 4px 12px rgba(79, 134, 181, 0.4);
+}
+.night-btn:hover { box-shadow: 0 6px 18px rgba(79, 134, 181, 0.5); }
+/* 未完成任务列表 */
+.night-list {
+  max-height: 168px; overflow-y: auto;
+  margin: 0 14px 6px; padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(79, 134, 181, 0.22);
+  border-radius: 10px;
+  text-align: left;
+}
+.night-list-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 0; font-size: 12.5px; color: var(--ink);
+  border-bottom: 1px dashed rgba(79, 134, 181, 0.18);
+}
+.night-list-item:last-child { border-bottom: none; }
+.night-list-item .dot {
+  flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%;
+  background: #3D6B96;
+}
+.night-empty { color: var(--ink-soft); font-size: 12px; text-align: center; padding: 10px 0; }
+
 /* 上下文菜单 */
 .ctx-menu {
   position: absolute; z-index: 50;

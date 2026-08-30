@@ -40,12 +40,15 @@ function catToType(cat) {
 }
 
 // 等级
+// 字段必须与前端 app.js 的 LEVELS 完全一致：v4.6 起图标走内联 SVG，
+// 用 ico 指定图标名（lv1~lv5）。旧版的 char(emoji) / icon(数字) 已废弃——
+// 保留它们会让预览模式与真客户端显示不同图标，且 emoji 会被系统字体接管成彩色块。
 const LEVELS = [
-  { lv:1, name:'历练学徒',  title:'敢开始，就已经赢了一半',      char:'🗡', icon:'1', min:0,   max:20  },
-  { lv:2, name:'风华游侠',  title:'汗水从不会辜负你',            char:'🏹', icon:'2', min:20,  max:60  },
-  { lv:3, name:'破浪骑士',  title:'风浪越大，越显本色',          char:'🛡', icon:'3', min:60,  max:120 },
-  { lv:4, name:'群星行者',  title:'你走过的每一步都算数',        char:'✨', icon:'4', min:120, max:200 },
-  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',            char:'👑', icon:'5', min:200, max:999 }
+  { lv:1, name:'历练学徒',  title:'敢开始，就已经赢了一半',      ico:'lv1', min:0,   max:20  },
+  { lv:2, name:'风华游侠',  title:'汗水从不会辜负你',            ico:'lv2', min:20,  max:60  },
+  { lv:3, name:'破浪骑士',  title:'风浪越大，越显本色',          ico:'lv3', min:60,  max:120 },
+  { lv:4, name:'群星行者',  title:'你走过的每一步都算数',        ico:'lv4', min:120, max:200 },
+  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',            ico:'lv5', min:200, max:999 }
 ];
 function levelOf(p) {
   let cur = LEVELS[0];
@@ -141,29 +144,47 @@ function findTask(uuid) {
       || null;
 }
 
-// 进度条 mock：今日任务 = 每日 + 当日限时；额外完成 = 次数任务超额
+// 每日进度：今日任务 = 每日 + 当日到期限时；次数任务按「次数」而非「项数」计。
+// 修掉了旧实现的 bug：旧版先 filter 掉已完成的任务，再在剩余里找 track_status==='done'，
+// 导致 done 恒为 0，进度条永远不涨，完成祝福也永远不触发。
 function computeDailyProgress() {
-  const todayTasks = mockState.tasks.filter(t => {
-    if (t.track_status === 'done') return false;
+  const n = new Date();
+  const dayStart = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  const dayEnd = dayStart + 86400_000;
+
+  // 是否属于「今天该做的事」：daily 全部 + 截止在今天内的限时任务
+  const inToday = t => {
+    if (!t) return false;
     if (t.category === 'daily') return true;
-    if (t.category === 'time-limited' && t.due_at) {
-      const d = new Date(t.due_at), n = new Date();
-      return d.toDateString() === n.toDateString();
+    if (t.category === 'time-limited') {
+      const d = t.due_at || t.deadline;
+      return d && d >= dayStart && d < dayEnd;
     }
     return false;
-  });
-  const total = todayTasks.length;
-  let done = 0, over = 0;
-  for (const t of todayTasks) {
-    if (t.category === 'once' && t.count > 1) {
-      // 次数任务按 done_count 算
-      done += t.done_count || 0;
-    } else if (t.track_status === 'done' || t.daily_done) {
-      done += 1;
-    }
-  }
+  };
+  const doneInToday = t => (t.done_at || 0) >= dayStart && (t.done_at || 0) < dayEnd;
+
+  // 普通任务（count<=1）：未完成 + 今日已完成都要计入 total，
+  // 否则每完成一项 total 就减 1，进度条永远停在 0%
+  const pending = mockState.tasks.filter(
+    t => t.track_status !== 'done' && (t.count || 1) <= 1 && inToday(t));
+  const finished = mockState.archive.filter(
+    t => t.track_status === 'done' && (t.count || 1) <= 1 && inToday(t) && doneInToday(t));
+
+  // 次数任务：按 done_count / count 累加
+  const countTasks = [
+    ...mockState.tasks.filter(t => (t.count || 1) > 1 && inToday(t)),
+    ...mockState.archive.filter(t => (t.count || 1) > 1 && inToday(t) && doneInToday(t))
+  ];
+  const countDone = countTasks.reduce((s, t) => s + (t.done_count || 0), 0);
+  const countTotal = countTasks.reduce((s, t) => s + (t.count || 0), 0);
+
+  let total = pending.length + finished.length + countTotal;
+  let done = finished.length + countDone;
+  let over = 0;
   if (done > total) { over = done - total; done = total; }
-  const week = mockState.archive.filter(t => (t.done_at || 0) > now - 7*86400_000).length;
+
+  const week = mockState.archive.filter(t => (t.done_at || 0) > Date.now() - 7 * 86400_000).length;
   return { done, total, over, week, style: mockState.settings.progress_style || 'bar' };
 }
 
@@ -299,9 +320,10 @@ async function handleApi(cmd, q, req, res) {
 
     case 'ai_breakdown': {
       const title = q.title || '';
-      // 有 API key → 转发 DeepSeek；没有 → 本地模板兜底（0 成本）
-      const key = mockState.settings.ai_api_key || '';
+      // 有 API key → 转发 DeepSeek；失败或没有 → 本地模板兜底（0 成本）
+      const key = (mockState.settings.ai_api_key || '').trim();
       let steps = [];
+      let source = 'local';
       if (key) {
         try {
           const r = await fetch('https://api.deepseek.com/chat/completions', {
@@ -310,20 +332,60 @@ async function handleApi(cmd, q, req, res) {
             body: JSON.stringify({
               model: 'deepseek-chat',
               messages: [
-                { role: 'system', content: '你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，直接输出步骤列表，不要序号和解释。' },
+                { role: 'system', content: '你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，每行一步，不要序号和解释。' },
                 { role: 'user', content: title }
               ],
               temperature: 0.3,
               max_tokens: 300
-            })
+            }),
+            // 12 秒超时：Key 填错或网络不通时，前端不能一直卡在「拆解中…」
+            signal: AbortSignal.timeout(12000)
           });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
           const data = await r.json();
           const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-          steps = text.split(/\n+/).map(s => s.replace(/^\d+[.、)\s]+/, '').trim()).filter(s => s.length >= 2 && s.length <= 30).slice(0, 6);
-        } catch (e) { /* 云端失败 → 回落本地模板 */ }
+          steps = parseStepLines(text);
+          if (steps.length > 0) source = 'cloud';
+          else console.warn('[ai] DeepSeek 返回空，回落本地模板');
+        } catch (e) {
+          console.warn('[ai] DeepSeek 调用失败（' + e.message + '），回落本地模板');
+        }
       }
       if (steps.length === 0) steps = localBreakdown(title);
-      return ok(res, { steps });
+      return ok(res, { steps, source });
+    }
+
+    // 22:00 未完成提醒判定（按本地日期去重，与 Rust 侧口径一致）
+    // 预览时想立刻看弹窗效果：/api/check_night_notify?force=1
+    case 'check_night_notify': {
+      const raw = String(mockState.settings.night_notify ?? '1').toLowerCase();
+      const on = raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+      if (!on) return ok(res, { pending: false });
+      const d = new Date();
+      const today = d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+      if (mockState.settings.last_night_notify === today) return ok(res, { pending: false });
+      if (q.force !== '1' && d.getHours() < 22) return ok(res, { pending: false });
+
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const dayEnd = dayStart + 86400_000;
+      const titles = mockState.tasks
+        .filter(t => t.track_status !== 'done' && (
+          t.category === 'daily' ||
+          (t.category === 'time-limited' && (t.due_at || t.deadline) &&
+           (t.due_at || t.deadline) >= dayStart && (t.due_at || t.deadline) < dayEnd)
+        ))
+        .map(t => t.title).slice(0, 20);
+      if (titles.length === 0) return ok(res, { pending: false });
+      return ok(res, { pending: true, titles, count: titles.length });
+    }
+    case 'dismiss_night_notify': {
+      const d = new Date();
+      mockState.settings.last_night_notify = d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+      return ok(res, { status: 'ok' });
     }
 
     case 'set_setting': {
@@ -346,6 +408,19 @@ async function handleApi(cmd, q, req, res) {
 }
 
 function ok(res, obj) { res.writeHead(200); res.end(JSON.stringify(obj)); }
+
+// 从模型输出里挑出步骤行：去序号/项目符号，长度过滤，最多 6 条
+// 与 Rust 侧 parse_step_lines 保持同一口径，避免预览和真客户端结果不一致
+function parseStepLines(text) {
+  return String(text || '').split(/\r?\n+/)
+    .map(l => l.trim())
+    .map(l => l
+      .replace(/^\d+\s*[.、)）\]]\s*/, '')   // 1. / 1、/ 1) / 1）
+      .replace(/^[-*•·]\s*/, '')             // - / * / • / ·
+      .trim())
+    .filter(s => s.length >= 2 && s.length <= 30)
+    .slice(0, 6);
+}
 
 // 本地模板拆解（未配置 API key 时的 0 成本兜底）
 function localBreakdown(title) {

@@ -1,5 +1,8 @@
-// 任务栏 桌面端 Rust 后端 v3
+// 任务栏 桌面端 Rust 后端 v4
 // Tauri 2 + rusqlite + 同步客户端
+// v4: 补齐前端实际调用但后端缺失的命令（get_level / get_daily_progress /
+//     add_step / ai_breakdown），修正 advance_step、add_task 参数契约，
+//     22:00 未完成提醒改为后端 tick + 按日去重（原前端 setInterval 会漏触发）
 #![allow(dead_code)]
 
 use rusqlite::{Connection, params, OptionalExtension};
@@ -7,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, WindowEvent};
+use chrono::{Datelike, Local, TimeZone, Timelike};
 
 mod sync;
 
@@ -77,6 +81,118 @@ pub struct AppState {
     pub server_url: Arc<Mutex<String>>,
     pub device_id: Arc<Mutex<String>>,
     pub config_dir: Arc<Mutex<String>>,
+}
+
+// =============== 数据库迁移 ===============
+// 旧库没有 count / done_count 列（次数任务），CREATE TABLE IF NOT EXISTS 不会补列，
+// 必须显式 ALTER，否则次数任务在老库上会静默失效。
+fn migrate(conn: &Connection) {
+    let has = |col: &str| -> bool {
+        let mut stmt = match conn.prepare("PRAGMA table_info(tasks)") { Ok(s) => s, Err(_) => return false };
+        let names: Vec<String> = stmt.query_map([], |r| r.get::<_, String>(1))
+            .map(|rows| rows.filter_map(|x| x.ok()).collect())
+            .unwrap_or_default();
+        names.iter().any(|n| n == col)
+    };
+    if !has("count") {
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN count INTEGER NOT NULL DEFAULT 1;");
+        log::info!("[migrate] tasks 新增列 count");
+    }
+    if !has("done_count") {
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN done_count INTEGER NOT NULL DEFAULT 0;");
+        log::info!("[migrate] tasks 新增列 done_count");
+    }
+}
+
+// =============== 日期 / 等级 工具 ===============
+// 返回今天 00:00:00 ~ 明日 00:00:00 的毫秒区间（本地时区）
+fn today_range() -> (i64, i64) {
+    let now = Local::now();
+    let start = Local.with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0)
+        .single()
+        .map(|d| d.timestamp_millis())
+        .unwrap_or_else(|| now.timestamp_millis());
+    (start, start + 86_400_000)
+}
+
+// 等级表必须与前端 app.js 的 LEVELS 保持一致，否则真客户端与预览会显示不同等级
+fn level_of(points: i64) -> serde_json::Value {
+    // (等级, 本级下限, 名称, 标语, 图标名)
+    const TABLE: [(i64, i64, &str, &str, &str); 5] = [
+        (1,   0, "历练学徒", "敢开始，就已经赢了一半", "lv1"),
+        (2,  20, "风华游侠", "汗水从不会辜负你",       "lv2"),
+        (3,  60, "破浪骑士", "风浪越大，越显本色",     "lv3"),
+        (4, 120, "群星行者", "你走过的每一步都算数",   "lv4"),
+        (5, 200, "传奇勇者", "你就是自己的传说",       "lv5"),
+    ];
+    let mut cur = &TABLE[0];
+    for row in TABLE.iter() { if points >= row.1 { cur = row; } }
+    // min/max 取自相邻等级：本级下限 → 下一级下限（末级用 999 兜底）
+    let idx = (cur.0 - 1) as usize;
+    let max = if idx + 1 < TABLE.len() { TABLE[idx + 1].1 } else { 999 };
+    serde_json::json!({
+        "lv": cur.0, "name": cur.2, "title": cur.3, "ico": cur.4,
+        "min": cur.1, "max": max
+    })
+}
+
+fn read_setting(db: &Connection, key: &str, default: &str) -> String {
+    db.query_row("SELECT value FROM settings WHERE key=?1", params![key], |r| r.get::<_, String>(0))
+        .unwrap_or_else(|_| default.to_string())
+}
+
+// 开关值兼容：前端可能写 "1" / "true" / "on"，统一按真值判断
+fn is_on(v: &str) -> bool {
+    matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "on" | "yes")
+}
+
+// 22:00 未完成提醒判定。
+// 用「日期去重 + 已过 22 点」而非「整点命中」，这样 22:30 才开机、
+// 或夜里休眠被唤醒，依然能补上提醒（原实现要求 minutes===0，极易漏）。
+#[tauri::command]
+fn check_night_notify(state: tauri::State<AppState>) -> serde_json::Value {
+    let db = state.db.lock().unwrap();
+    if !is_on(&read_setting(&db, "night_notify", "1")) {
+        return serde_json::json!({ "pending": false });
+    }
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    // 今天已经提醒过就不再打扰
+    if read_setting(&db, "last_night_notify", "") == today {
+        return serde_json::json!({ "pending": false });
+    }
+    if Local::now().hour() < 22 {
+        return serde_json::json!({ "pending": false });
+    }
+
+    let (day_start, day_end) = today_range();
+    let titles: Vec<String> = match db.prepare(
+        "SELECT title FROM tasks WHERE deleted=0 AND track_status!='done' AND \
+         (category='daily' OR (category='time-limited' AND COALESCE(due_at,deadline) IS NOT NULL \
+          AND COALESCE(due_at,deadline) >= ?1 AND COALESCE(due_at,deadline) < ?2)) \
+         ORDER BY created_at LIMIT 20"
+    ) {
+        Ok(mut stmt) => stmt.query_map(params![day_start, day_end], |r| r.get::<_, String>(0))
+            .map(|rows| rows.filter_map(|x| x.ok()).collect())
+            .unwrap_or_default(),
+        Err(e) => { log::warn!("[night] 查询未完成每日任务失败：{}", e); Vec::new() }
+    };
+
+    if titles.is_empty() {
+        return serde_json::json!({ "pending": false });
+    }
+    serde_json::json!({ "pending": true, "titles": titles, "count": titles.len() })
+}
+
+// 前端弹过提醒后调用，写入当天日期，避免一晚上反复弹
+#[tauri::command]
+fn dismiss_night_notify(state: tauri::State<AppState>) {
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let db = state.db.lock().unwrap();
+    let _ = db.execute(
+        "INSERT INTO settings(key,value) VALUES('last_night_notify',?1) \
+         ON CONFLICT(key) DO UPDATE SET value=?1",
+        params![today]
+    );
 }
 
 // =============== 行解析 ===============
@@ -211,6 +327,75 @@ fn get_progress(state: tauri::State<AppState>) -> ProgressInfo {
     ProgressInfo { done_today: done, total_today: total }
 }
 
+// 每日进度（今日任务完成度）—— 前端进度条 / 祝福弹窗的数据源
+// 口径：daily 全部 + 今日到期的 time-limited；已完成与未完成都要计入 total，
+// 否则每完成一项 total 就减 1，进度条永远停在 0%（预览服务器的旧实现就有这个 bug）。
+#[tauri::command]
+fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
+    let (day_start, day_end) = today_range();
+    let now = Local::now().timestamp_millis();
+    let db = state.db.lock().unwrap();
+
+    // 普通任务（count<=1）分开统计，次数任务单独按「次数」计
+    // 未完成：daily 全部 + 今日到期的限时任务
+    let pending: i64 = db.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND track_status!='done' \
+         AND COALESCE(count,1) <= 1 AND \
+         (category='daily' OR (category='time-limited' AND COALESCE(due_at,deadline) IS NOT NULL \
+          AND COALESCE(due_at,deadline) >= ?1 AND COALESCE(due_at,deadline) < ?2))",
+        params![day_start, day_end], |r| r.get(0)
+    ).unwrap_or(0);
+
+    // 已完成：done_at 落在今天且属于 daily / time-limited
+    let finished: i64 = db.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND track_status='done' \
+         AND COALESCE(count,1) <= 1 AND \
+         done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2 AND \
+         (category='daily' OR category='time-limited')",
+        params![day_start, day_end], |r| r.get(0)
+    ).unwrap_or(0);
+
+    // 次数任务（如「喝水 8 次」）：按 done_count / count 计入，
+    // 未完成的全部计入，已完成的只算今天完成的（否则历史次数任务会天天累加）
+    let count_done: i64 = db.query_row(
+        "SELECT COALESCE(SUM(done_count),0) FROM tasks WHERE deleted=0 AND count > 1 \
+         AND category='daily' AND \
+         (track_status != 'done' OR (done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2))",
+        params![day_start, day_end], |r| r.get(0)
+    ).unwrap_or(0);
+    let count_total: i64 = db.query_row(
+        "SELECT COALESCE(SUM(count),0) FROM tasks WHERE deleted=0 AND count > 1 \
+         AND category='daily' AND \
+         (track_status != 'done' OR (done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2))",
+        params![day_start, day_end], |r| r.get(0)
+    ).unwrap_or(0);
+
+    let mut total = pending + finished + count_total;
+    let mut done = finished + count_done;
+    let mut over = 0;
+    if done > total { over = done - total; done = total; }
+
+    let week: i64 = db.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND done_at IS NOT NULL AND done_at >= ?1",
+        params![now - 7 * 86_400_000], |r| r.get(0)
+    ).unwrap_or(0);
+
+    let style = read_setting(&db, "progress_style", "bar");
+    serde_json::json!({ "done": done, "total": total, "over": over, "week": week, "style": style })
+}
+
+// 等级信息（等级卡 / 顶栏徽章数据源）
+#[tauri::command]
+fn get_level(state: tauri::State<AppState>) -> serde_json::Value {
+    let db = state.db.lock().unwrap();
+    let points: i64 = read_setting(&db, "total_points", "0").parse().unwrap_or(0);
+    let style = read_setting(&db, "progress_style", "bar");
+    let mut lv = level_of(points);
+    lv["points"] = serde_json::json!(points);
+    lv["style"] = serde_json::json!(style);
+    lv
+}
+
 #[tauri::command]
 fn get_next_reminder(state: tauri::State<AppState>) -> Option<ReminderInfo> {
     let db = state.db.lock().unwrap();
@@ -240,56 +425,216 @@ fn get_habits_status(state: tauri::State<AppState>) -> Vec<serde_json::Value> {
     }).unwrap().filter_map(|r| r.ok()).collect()
 }
 
+// 手动新增步骤（前端「点此手动添加」与 AI 拆解都走这里）
 #[tauri::command]
-fn advance_step(state: tauri::State<AppState>, step_uuid: String) {
+fn add_step(state: tauri::State<AppState>, task_uuid: String, title: String) -> serde_json::Value {
+    let now = Local::now().timestamp_millis();
+    let step_uuid = uuid::Uuid::new_v4().to_string();
+    {
+        let db = state.db.lock().unwrap();
+        let sort: i64 = db.query_row(
+            "SELECT COALESCE(MAX(sort_order),0)+1 FROM steps WHERE task_uuid=?1",
+            params![&task_uuid], |r| r.get(0)
+        ).unwrap_or(0);
+        db.execute(
+            "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,done_at,created_at,updated_at,deleted) \
+             VALUES (?1,?2,?3,'todo','','',?4,NULL,?5,?5,0)",
+            params![&step_uuid, &task_uuid, &title, sort, now]
+        ).ok();
+    }
+    sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
+    serde_json::json!({ "status": "ok", "uuid": step_uuid })
+}
+
+// AI 任务拆解：配了 DeepSeek Key 走云端，失败/未配置回落到本地模板（0 成本）
+// 返回 source 字段（"cloud" / "local"）让前端能提示用户实际走了哪条链路
+#[tauri::command]
+fn ai_breakdown(state: tauri::State<AppState>, title: String) -> serde_json::Value {
+    let key = {
+        let db = state.db.lock().unwrap();
+        read_setting(&db, "ai_api_key", "")
+    };
+    let mut source = "local";
+    let mut steps: Vec<String> = Vec::new();
+
+    if !key.trim().is_empty() {
+        match call_deepseek(key.trim(), &title) {
+            Ok(v) if !v.is_empty() => { steps = v; source = "cloud"; }
+            Ok(_) => log::warn!("[ai] DeepSeek 返回空，回落本地模板"),
+            Err(e) => log::warn!("[ai] DeepSeek 调用失败（{}），回落本地模板", e),
+        }
+    }
+    if steps.is_empty() { steps = local_breakdown(&title); }
+
+    serde_json::json!({ "steps": steps, "source": source })
+}
+
+fn call_deepseek(key: &str, title: &str) -> Result<Vec<String>, String> {
+    // 12 秒超时：key 填错或网络不通时，前端不能一直卡在「拆解中…」
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let body = serde_json::json!({
+        "model": "deepseek-chat",
+        "messages": [
+            { "role": "system", "content": "你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，直接输出步骤列表，每行一步，不要序号和解释。" },
+            { "role": "user", "content": title }
+        ],
+        "temperature": 0.3,
+        "max_tokens": 300
+    });
+    let resp = client.post("https://api.deepseek.com/chat/completions")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", key))
+        .json(&body)
+        .send()
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let data: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    let text = data.get("choices").and_then(|c| c.get(0))
+        .and_then(|c| c.get("message")).and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str()).unwrap_or("");
+    Ok(parse_step_lines(text))
+}
+
+// 从模型输出里挑出步骤行：去序号/项目符号，长度过滤，最多 6 条
+fn parse_step_lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(|l| l.trim())
+        .map(|l| {
+            let mut s = l;
+            // 去掉 "1." "1、" "1)" "- " "* " 等前缀
+            s = s.trim_start_matches(|c: char| c.is_ascii_digit());
+            s = s.trim_start_matches(['.', '、', ')', '）', ']', ' ']);
+            s = s.trim_start_matches(['-', '*', '•', '·', ' ']);
+            s.trim()
+        })
+        .filter(|s| s.chars().count() >= 2 && s.chars().count() <= 30)
+        .take(6)
+        .map(|s| s.to_string())
+        .collect()
+}
+
+// 本地模板拆解（未配置 Key 或云端失败时的兜底）
+fn local_breakdown(title: &str) -> Vec<String> {
+    let has = |kw: &str| title.contains(kw);
+    if has("看") || has("读") || has("书") || has("背") {
+        return vec!["通读核心内容", "划重点记笔记", "做一遍自测题", "总结复盘"]
+            .into_iter().map(String::from).collect();
+    }
+    if has("复习") || has("学") || has("练") {
+        return vec!["整理知识点框架", "重点章节精读", "做配套练习题", "错题回顾总结"]
+            .into_iter().map(String::from).collect();
+    }
+    if has("写") || has("交") || has("报告") || has("作业") || has("论文") {
+        return vec!["收集所需资料", "列出大纲初稿", "完成正文内容", "检查格式并提交"]
+            .into_iter().map(String::from).collect();
+    }
+    if has("买") || has("购") || has("快递") || has("取") {
+        return vec!["列清单确认需求", "比价下单", "确认收货"]
+            .into_iter().map(String::from).collect();
+    }
+    if has("锻炼") || has("运动") || has("跑") || has("健身") {
+        return vec!["热身 5 分钟", "完成主体训练", "拉伸放松 5 分钟"]
+            .into_iter().map(String::from).collect();
+    }
+    vec!["明确目标范围", "列出执行步骤", "逐项推进完成"]
+        .into_iter().map(String::from).collect()
+}
+
+#[tauri::command]
+fn advance_step(
+    state: tauri::State<AppState>,
+    step_uuid: String,
+    task_uuid: Option<String>,
+    status: Option<String>,
+) {
     let now = chrono::Local::now().timestamp_millis();
+    let want_done = status.as_deref().map(|s| s != "todo").unwrap_or(true);
     let task_uuid = {
         let db = state.db.lock().unwrap();
-        db.execute("UPDATE steps SET status='done', done_at=?1, updated_at=?2 WHERE uuid=?3",
-            params![now, now, &step_uuid]).ok();
-        let task_uuid: String = db.query_row(
-            "SELECT task_uuid FROM steps WHERE uuid=?1", params![&step_uuid], |r| r.get(0)
-        ).unwrap_or_default();
+        // 前端会传 taskUuid，用它可以少一次查询；不传时回落到按 step 反查
+        let t_uuid: String = match &task_uuid {
+            Some(t) if !t.is_empty() => t.clone(),
+            _ => db.query_row(
+                "SELECT task_uuid FROM steps WHERE uuid=?1", params![&step_uuid], |r| r.get(0)
+            ).unwrap_or_default(),
+        };
+        if want_done {
+            db.execute("UPDATE steps SET status='done', done_at=?1, updated_at=?2 WHERE uuid=?3",
+                params![now, now, &step_uuid]).ok();
+        } else {
+            // 取消完成：状态回退到 todo，并清掉 done_at
+            db.execute("UPDATE steps SET status='todo', done_at=NULL, updated_at=?1 WHERE uuid=?2",
+                params![now, &step_uuid]).ok();
+        }
         let next: Option<String> = db.query_row(
             "SELECT uuid FROM steps WHERE task_uuid=?1 AND status!='done' AND deleted=0 ORDER BY sort_order LIMIT 1",
-            params![&task_uuid], |r| r.get(0)
+            params![&t_uuid], |r| r.get(0)
         ).ok();
-        if let Some(nu) = next {
+        if !want_done {
+            // 取消步骤：不自动推进下一步，也不把已完成的任务回退
+        } else if let Some(nu) = next {
             db.execute("UPDATE steps SET status='doing', updated_at=?1 WHERE uuid=?2",
                 params![now, &nu]).ok();
         } else {
-            // 全部步骤完成 → 任务完成 + 加积分
-            db.execute("UPDATE tasks SET track_status='done', done=1, done_at=?1, updated_at=?2 WHERE uuid=?3",
-                params![now, now, &task_uuid]).ok();
-            // 累加积分
-            let rp: i64 = db.query_row(
-                "SELECT reward_points FROM tasks WHERE uuid=?1", params![&task_uuid], |r| r.get(0)
-            ).unwrap_or(10);
-            db.execute(
-                "INSERT INTO settings(key,value) VALUES('total_points',?1) \
-                 ON CONFLICT(key) DO UPDATE SET value=printf('%d', CAST(value AS INTEGER) + ?2)",
-                params![(rp + 0).to_string(), rp]
-            ).ok();
+            // 全部步骤完成 → 任务完成 + 加积分（只在任务尚未完成时执行，避免重复加分）
+            let already: i64 = db.query_row(
+                "SELECT COUNT(*) FROM tasks WHERE uuid=?1 AND track_status='done'",
+                params![&t_uuid], |r| r.get(0)
+            ).unwrap_or(0);
+            if already == 0 {
+                db.execute("UPDATE tasks SET track_status='done', done=1, done_at=?1, updated_at=?2 WHERE uuid=?3",
+                    params![now, now, &t_uuid]).ok();
+                let rp: i64 = db.query_row(
+                    "SELECT reward_points FROM tasks WHERE uuid=?1", params![&t_uuid], |r| r.get(0)
+                ).unwrap_or(10);
+                db.execute(
+                    "INSERT INTO settings(key,value) VALUES('total_points',?1) \
+                     ON CONFLICT(key) DO UPDATE SET value=printf('%d', CAST(value AS INTEGER) + ?2)",
+                    params![(rp + 0).to_string(), rp]
+                ).ok();
+            }
         }
-        task_uuid
+        t_uuid
     };
     sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
 }
 
 #[tauri::command]
-fn complete_task(state: tauri::State<AppState>, task_uuid: String) {
+fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json::Value {
     let now = chrono::Local::now().timestamp_millis();
-    let rp: i64 = {
+    // 次数任务（count>1）：先累加 done_count，满额才算真正完成并结算积分
+    let info: (i64, i64, i64) = {
         let db = state.db.lock().unwrap();
-        let rp: i64 = db.query_row(
-            "SELECT reward_points FROM tasks WHERE uuid=?1", params![&task_uuid], |r| r.get(0)
-        ).unwrap_or(10);
-        db.execute("UPDATE tasks SET track_status='done', done=1, done_at=?1, updated_at=?2 WHERE uuid=?3",
-            params![now, now, &task_uuid]).ok();
+        db.query_row(
+            "SELECT COALESCE(count,1), COALESCE(done_count,0), COALESCE(reward_points,10) \
+             FROM tasks WHERE uuid=?1", params![&task_uuid], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        ).unwrap_or((1, 0, 10))
+    };
+    let (cnt, done_cnt, rp) = info;
+
+    if cnt > 1 && done_cnt + 1 < cnt {
+        {
+            let db = state.db.lock().unwrap();
+            db.execute("UPDATE tasks SET done_count=done_count+1, updated_at=?1 WHERE uuid=?2",
+                params![now, &task_uuid]).ok();
+        }
+        sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+        return serde_json::json!({ "status": "ok", "partial": true, "done_count": done_cnt + 1, "count": cnt });
+    }
+
+    {
+        let db = state.db.lock().unwrap();
+        db.execute("UPDATE tasks SET track_status='done', done=1, done_at=?1, updated_at=?2, \
+                    done_count=?3 WHERE uuid=?4",
+            params![now, now, cnt, &task_uuid]).ok();
         db.execute("UPDATE steps SET status='done', done_at=?1, updated_at=?2 WHERE task_uuid=?3 AND status!='done'",
             params![now, now, &task_uuid]).ok();
-        rp
-    };
+    }
     // 累加积分
     {
         let db = state.db.lock().unwrap();
@@ -300,6 +645,7 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) {
         ).ok();
     }
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    serde_json::json!({ "status": "ok", "partial": false })
 }
 
 #[tauri::command]
@@ -320,6 +666,7 @@ fn add_task(
     category: Option<String>,
     deadline_key: Option<String>,
     priority: Option<String>,
+    count: Option<i64>,
 ) -> serde_json::Value {
     let now = chrono::Local::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
@@ -329,12 +676,16 @@ fn add_task(
     let ddl = deadline_key.as_deref().unwrap_or("none");
     let deadline_ms = deadline_key_to_ms(ddl);
     let deadline = deadline_ms.map(|d| now + d);
+    // 次数任务：前端传 count（如「喝水 8 次」），默认 1
+    let cnt = count.unwrap_or(1).max(1);
     {
         let db = state.db.lock().unwrap();
+        // 限时任务同时写 deadline 与 due_at：前端渲染读 due_at，跨端同步用 deadline，
+        // 只写一列会导致「今日到期」判定与详情页显示对不上
         db.execute(
-            "INSERT INTO tasks (uuid,type,title,category,priority,deadline,track_status,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,'pending',?7,?7)",
-            params![&uuid, &typ, &title, &cat, &prio, &deadline, now]
+            "INSERT INTO tasks (uuid,type,title,category,priority,due_at,deadline,count,done_count,track_status,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?6,?7,0,'pending',?8,?8)",
+            params![&uuid, &typ, &title, &cat, &prio, &deadline, cnt, now]
         ).ok();
     }
     sync::push_change(&state.db, &state.server_url, "task", &uuid);
@@ -574,6 +925,7 @@ pub fn run() {
     let db_path = std::env::current_dir().unwrap().join("taskguide.db");
     let conn = Connection::open(&db_path).expect("打开数据库失败");
     conn.execute_batch(include_str!("../db/schema.sql")).expect("建表失败");
+    migrate(&conn);
     let _ = conn.execute_batch(
         "INSERT OR IGNORE INTO settings(key,value) VALUES \
          ('theme','frosted'),('track_limit','3'),('tracking_max','3'),\
@@ -622,7 +974,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,
             get_habits_status, get_task_detail, get_total_points,
-            advance_step, complete_task, delete_task, add_task, start_tracking, stop_tracking,
+            get_level, get_daily_progress, ai_breakdown, check_night_notify, dismiss_night_notify,
+            advance_step, add_step, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             set_display_mode, set_window_size,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing

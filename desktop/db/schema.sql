@@ -1,6 +1,7 @@
 -- ============================================================
 -- 任务指南 TaskGuide —— 统一数据库 Schema v2.0
 -- v2: 新增任务积分系统（reward_points / total_points）
+-- v2.1: 新增次数任务列（count / done_count），手机端与桌面端共用
 -- 双端（Android / Tauri）共用此结构，保证同步一致
 -- SQLite 方言
 -- ============================================================
@@ -25,6 +26,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     done          INTEGER NOT NULL DEFAULT 0,          -- 快捷完成标记 0/1
     done_at       INTEGER DEFAULT NULL,                -- 完成时间
     delayed_count INTEGER NOT NULL DEFAULT 0,          -- 延迟次数（统计拖延用）
+    count         INTEGER NOT NULL DEFAULT 1,          -- 次数任务：需要完成的总次数
+    done_count    INTEGER NOT NULL DEFAULT 0,          -- 次数任务：已完成的次数
     reward_points INTEGER NOT NULL DEFAULT 10,         -- 完成本任务获得的积分（原神奖励区）
     created_at    INTEGER NOT NULL,                    -- 创建时间
     updated_at    INTEGER NOT NULL,                    -- 最后修改时间（同步冲突判断）
