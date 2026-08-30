@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 坚持：奖杯（对齐桌面端 v4.6 trophy 图标） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M8,4.4h8v4.2a4,4 0 0 1 -8,0V4.4Z"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M8,5.8H5.6a2.4,2.4 0 0 0 2.4,2.4M16,5.8h2.4a2.4,2.4 0 0 1 -2.4,2.4"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,12.6v3.4M9.6,19.6h4.8M10.2,16h3.6l0.5,3.6h-4.6l0.5,-3.6Z"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

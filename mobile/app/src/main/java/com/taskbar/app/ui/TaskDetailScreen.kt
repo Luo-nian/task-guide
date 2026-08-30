@@ -1,25 +1,20 @@
 package com.taskbar.app.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.taskbar.app.R
 import com.taskbar.app.data.model.Priority
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
@@ -53,15 +48,29 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                     TypeChip(task.type); Spacer(Modifier.width(6.dp)); PriorityChip(task.priority)
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(task.title, color = TGColors.Paper, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(task.title, color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 if (task.desc.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp)); Text(task.desc, color = TGColors.Fog, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp)); Text(task.desc, color = TGColors.InkSoft, fontSize = 13.sp)
                 }
-                task.dueAt?.let { Spacer(Modifier.height(4.dp)); Text("提醒 ${dateFmt.format(Date(it))}", color = TGColors.Gold, fontSize = 12.sp) }
-                task.deadline?.let { Spacer(Modifier.height(2.dp)); Text("截止 ${dateFmt.format(Date(it))}", color = TGColors.Cinnabar, fontSize = 12.sp) }
+                task.dueAt?.let {
+                    Spacer(Modifier.height(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TGIcon(R.drawable.ic_bell, contentDescription = null, tint = TGColors.GoldDeep, size = 13.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("提醒 ${dateFmt.format(Date(it))}", color = TGColors.GoldDeep, fontSize = 12.sp)
+                    }
+                }
+                task.deadline?.let {
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TGIcon(R.drawable.ic_clock, contentDescription = null, tint = TGColors.Crimson, size = 13.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("截止 ${dateFmt.format(Date(it))}", color = TGColors.Crimson, fontSize = 12.sp)
+                    }
+                }
             }
         }
-        // 操作按钮（图1：追踪目标为主按钮）
+        // 操作按钮
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val isTracking = task.trackStatus == TrackStatus.TRACKING
@@ -71,40 +80,57 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isTracking) TGColors.Purple.copy(alpha = 0.25f) else TGColors.Paper
+                        containerColor = if (isTracking) TGColors.Selected else TGColors.Gold,
+                        contentColor = if (isTracking) TGColors.Violet else TGColors.Ink
                     )
                 ) {
+                    TGIcon(
+                        R.drawable.ic_track,
+                        contentDescription = null,
+                        tint = if (isTracking) TGColors.Violet else TGColors.Ink,
+                        size = 16.dp
+                    )
+                    Spacer(Modifier.width(5.dp))
                     Text(
-                        if (isTracking) "◆ 当前追踪中·停止" else "◆ 追踪目标",
-                        color = if (isTracking) TGColors.Purple else TGColors.Ink,
+                        if (isTracking) "当前追踪中·停止" else "追踪目标",
                         fontWeight = FontWeight.Medium
                     )
                 }
-                Button(onClick = { vm.completeTask(uuid); navController.popBackStack() },
-                    colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)) { Text("完成") }
+                Button(
+                    onClick = { vm.completeTask(uuid); navController.popBackStack() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)
+                ) { Text("完成", color = Color.White) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 OutlinedButton(onClick = { showDelayDialog = true }) { Text("延迟") }
                 OutlinedButton(onClick = { navController.navigate("edit/$uuid") }) { Text("编辑") }
-                OutlinedButton(onClick = { vm.deleteTask(uuid); navController.popBackStack() }, colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.Cinnabar)) { Text("删除") }
+                OutlinedButton(
+                    onClick = { vm.deleteTask(uuid); navController.popBackStack() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.Crimson)
+                ) { Text("删除") }
             }
         }
-        // 奖励区（图1：完成任务可获得）
+        // 奖励区
         item {
             TGCard(Modifier.fillMaxWidth()) {
-                Text("完成任务可获得", color = TGColors.Fog, fontSize = 11.sp)
+                Text("完成任务可获得", color = TGColors.InkMute, fontSize = 11.sp)
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RewardItem("💠", "+${task.rewardPoints}", highlight = true)
-                    RewardItem("📘", "进度")
-                    RewardItem("🏆", "坚持")
+                    RewardItem(R.drawable.ic_coin, "+${task.rewardPoints}", highlight = true)
+                    RewardItem(R.drawable.ic_trend, "进度")
+                    RewardItem(R.drawable.ic_trophy, "坚持")
                 }
             }
         }
         // 步骤内嵌子模块
         item {
             TGCard(Modifier.fillMaxWidth()) {
-                Text("步骤 (${steps.count { it.status == "done" }}/${steps.size})", color = TGColors.GoldLight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "步骤 (${steps.count { it.status == "done" }}/${steps.size})",
+                    color = TGColors.Ink,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Spacer(Modifier.height(8.dp))
                 steps.forEach { step -> StepRow(step, vm); Spacer(Modifier.height(4.dp)) }
                 Spacer(Modifier.height(8.dp))
@@ -124,7 +150,9 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                         vm.addStep(uuid, newStepTitle.trim(), newStepAttrLabel.trim(), newStepAttrValue.trim())
                         newStepTitle = ""; newStepAttrLabel = ""; newStepAttrValue = ""
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) { Text("添加步骤", color = TGColors.Ink) }
+                }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) {
+                    Text("添加步骤", color = TGColors.Ink)
+                }
             }
         }
     }
@@ -145,7 +173,7 @@ private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
         title = { Text("延迟任务") },
         text = {
             Column {
-                Text("输入延迟天数", color = TGColors.Fog, fontSize = 13.sp)
+                Text("输入延迟天数", color = TGColors.InkMute, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = text, onValueChange = { text = it.filter { c -> c.isDigit() } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -158,7 +186,7 @@ private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text.toIntOrNull() ?: 1) }) { Text("确定", color = TGColors.Gold) } },
+        confirmButton = { TextButton(onClick = { onConfirm(text.toIntOrNull() ?: 1) }) { Text("确定", color = TGColors.GoldDeep) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
@@ -186,24 +214,35 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
         }
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(if (editUuid == null) "新建任务" else "编辑任务", color = TGColors.GoldLight) },
-            navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Filled.ArrowBack, "返回") } },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = TGColors.InkLight)
-        )
-    }) { p ->
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
+            TopAppBar(
+                title = { Text(if (editUuid == null) "新建任务" else "编辑任务", color = TGColors.Ink) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 20.dp)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = TGColors.PanelSolid,
+                    titleContentColor = TGColors.Ink,
+                    navigationIconContentColor = TGColors.Ink
+                )
+            )
+        }
+    ) { p ->
         Column(Modifier.padding(p).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(title, { title = it }, label = { Text("标题 *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(desc, { desc = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-            Text("类型", color = TGColors.GoldLight, fontSize = 13.sp)
+            Text("类型", color = TGColors.InkSoft, fontSize = 13.sp)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(listOf(TaskType.ONCE to "单次", TaskType.REPEAT to "重复", TaskType.NOTE to "速记", TaskType.HABIT to "习惯", TaskType.GOAL to "目标")) { (v, l) ->
                     FilterChip(selected = type == v, onClick = { type = v }, label = { Text(l) })
                 }
             }
-            Text("优先级", color = TGColors.GoldLight, fontSize = 13.sp)
+            Text("优先级", color = TGColors.InkSoft, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(Priority.HIGH to "高", Priority.MEDIUM to "中", Priority.LOW to "低").forEach { (v, l) ->
                     FilterChip(selected = priority == v, onClick = { priority = v }, label = { Text(l) })
@@ -211,7 +250,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
             }
             OutlinedTextField(category, { category = it }, label = { Text("分类(学习/生活/锻炼...)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             if (type != TaskType.NOTE && type != TaskType.HABIT) {
-                Text("提醒", color = TGColors.GoldLight, fontSize = 13.sp)
+                Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     delayOptions.forEachIndexed { idx, l ->
                         FilterChip(selected = delayIdx == idx, onClick = { delayIdx = idx }, label = { Text(l) })

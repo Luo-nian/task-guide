@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Compose 应用用 Material3 主题（见 ui/UiFoundation.kt），
-         这里只管系统栏配色：v4.6 起改为暖色浅色，需同步开 light 状态栏 -->
+    <!-- API 27+ 才支持浅色导航栏（minSdk 26，所以单独放 v27 避免 lint 报旧版本无效属性） -->
     <style name="Theme.TaskBar" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@color/bg_paper_deep</item>
         <item name="android:navigationBarColor">@color/panel_solid</item>
         <item name="android:windowBackground">@color/bg_paper</item>
-        <!-- 浅色底需要深色状态栏图标（API 23+） -->
         <item name="android:windowLightStatusBar">true</item>
-        <!-- windowLightNavigationBar 是 API 27+，放在 values-v27/themes.xml 里 -->
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

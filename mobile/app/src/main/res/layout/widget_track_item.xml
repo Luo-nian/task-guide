@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 小部件列表项：暖色浅色（对齐 v4.6） -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="#33FFFFFF">
+    android:background="#66EDE3CC">
 
     <TextView
         android:id="@+id/item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
+        android:textColor="#FF3A2E1A"
         android:textSize="14sp"
         android:textStyle="bold"
         android:maxLines="1"
@@ -22,7 +23,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:textColor="#C9A227"
+        android:textColor="#FF9A7B1A"
         android:textSize="12sp"
         android:maxLines="1"
         android:ellipsize="end" />

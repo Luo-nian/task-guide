@@ -12,9 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -47,7 +46,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class TabItem(val route: String, val label: String, val icon: ImageVector)
+/** icon 传的是矢量 drawable 资源 id（不是 emoji / Unicode 符号） */
+private data class TabItem(val route: String, val label: String, val icon: Int)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,20 +56,24 @@ fun MainApp() {
     val vm: TaskViewModel = viewModel()
 
     val tabs = listOf(
-        TabItem("today", "今天", Icons.Filled.Today),
-        TabItem("track", "追踪", Icons.Filled.TrackChanges),
-        TabItem("habit", "习惯", Icons.Filled.Loop),
-        TabItem("archive", "归档", Icons.Filled.Archive),
-        TabItem("settings", "设置", Icons.Filled.Settings)
+        TabItem("today", "今天", R.drawable.ic_today),
+        TabItem("track", "追踪", R.drawable.ic_track),
+        TabItem("habit", "习惯", R.drawable.ic_habit),
+        TabItem("archive", "归档", R.drawable.ic_archive),
+        TabItem("settings", "设置", R.drawable.ic_settings)
     )
 
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
     Scaffold(
+        containerColor = Color.Transparent,   // 透出主题里的暖光渐变
         bottomBar = {
             if (currentRoute in tabs.map { it.route }) {
-                NavigationBar(containerColor = TGColors.InkLight) {
+                NavigationBar(
+                    containerColor = TGColors.PanelSolid,
+                    tonalElevation = 3.dp
+                ) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
@@ -82,13 +86,21 @@ fun MainApp() {
                                     }
                                 }
                             },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = {
+                                TGIcon(
+                                    drawable = tab.icon,
+                                    contentDescription = tab.label,
+                                    tint = if (currentRoute == tab.route) TGColors.GoldDeep else TGColors.InkMute,
+                                    size = 20.dp
+                                )
+                            },
                             label = { Text(tab.label) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = TGColors.GoldLight,
-                                selectedTextColor = TGColors.GoldLight,
-                                unselectedIconColor = TGColors.Fog,
-                                unselectedTextColor = TGColors.Fog
+                                selectedIconColor = TGColors.GoldDeep,
+                                selectedTextColor = TGColors.GoldDeep,
+                                unselectedIconColor = TGColors.InkMute,
+                                unselectedTextColor = TGColors.InkMute,
+                                indicatorColor = TGColors.Selected
                             )
                         )
                     }
