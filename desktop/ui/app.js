@@ -33,7 +33,8 @@ let settings = {
   count_default: 1,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   night_notify: true,              // 22:00 未完成弹窗
-  ai_api_key: '',                  // DeepSeek API key（AI 拆解用，可留空走本地模板）
+  ai_api_key: '',                  // DeepSeek API key（留空则永远走本地模板）
+  ai_cloud_enabled: false,         // 云端 AI 拆解总开关（默认关，开启后按次计费，且会弹确认）
   pairing: null
 };
 let selectedUuid = null;
@@ -183,6 +184,7 @@ function applySettingsToUi() {
   document.getElementById('setNightNotify').checked = settings.night_notify;
   document.getElementById('setProgressStyle').value = settings.progress_style;
   document.getElementById('setAiKey').value = settings.ai_api_key || '';
+  document.getElementById('setAiCloudEnabled').checked = !!settings.ai_cloud_enabled;
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
   // 进度条样式 tab 高亮
   document.querySelectorAll('.style-tab').forEach(t => {
@@ -201,7 +203,8 @@ async function persistSettingsServer() {
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
       night_notify: settings.night_notify ? '1' : '0',
-      ai_api_key: settings.ai_api_key || ''
+      ai_api_key: settings.ai_api_key || '',
+      ai_cloud_enabled: settings.ai_cloud_enabled ? '1' : '0'
     };
     for (const [k, v] of Object.entries(map)) {
       await call('set_setting', { key: k, value: String(v) });
@@ -667,9 +670,23 @@ window.addStep = async function(taskUuid) {
   render();
 };
 
-// AI 拆解：有 API key 走云端（preview-server 转发 DeepSeek），没有就用本地模板兜底
+// AI 拆解：有 API key 且开启云端开关走云端（preview-server 转发 DeepSeek），
+// 否则用本地模板兜底（0 成本、不调用 API）。云端需要双重确认避免误触扣费。
 window.aiBreakdown = async function(taskUuid, title) {
   const btn = event && event.target;
+  const hasKey = !!(settings.ai_api_key || '').trim();
+  const cloudEnabled = !!settings.ai_cloud_enabled;   // 默认关，开启后才走云端
+  const willUseCloud = hasKey && cloudEnabled;
+
+  if (willUseCloud) {
+    const ok = confirm(
+      '将调用 DeepSeek 云端 API（按次计费，约 0.0002 元/次）\n\n' +
+      '任务：' + title + '\n\n' +
+      '继续？\n（点"取消"可继续使用本地免费模板）'
+    );
+    if (!ok) return;
+  }
+
   if (btn) { btn.textContent = '拆解中…'; btn.style.opacity = '0.6'; }
   try {
     const r = await call('ai_breakdown', { title });
@@ -680,13 +697,11 @@ window.aiBreakdown = async function(taskUuid, title) {
     }
     openDetail(taskUuid);
     render();
-    // 让用户知道实际走了哪条链路：填了 Key 却走本地模板 = 云端调用失败，
-    // 这种情况要明说，否则用户会一直以为在用 AI
+    // 让用户知道实际走了哪条链路：填了 Key 却走本地模板 = 云端调用失败或开关未开
     if (btn) {
       const usedCloud = r.source === 'cloud';
-      const hasKey = !!(settings.ai_api_key || '').trim();
       btn.innerHTML = svgIcon(usedCloud ? 'sparkle' : 'ai', 13, 1.9) + ' 已拆 ' + steps.length + ' 步'
-        + (usedCloud ? ' · 云端' : (hasKey ? ' · 云端失败，用模板' : ' · 本地模板'));
+        + (usedCloud ? ' · 云端' : (hasKey ? ' · 模板' : ' · 本地模板'));
       btn.style.opacity = '';
       setTimeout(() => { btn.innerHTML = svgIcon('ai',13,1.9) + ' AI 拆解'; }, 2600);
     }
@@ -817,6 +832,7 @@ bindSetting('setDailyRefresh', 'daily_refresh');
 bindSetting('setNightNotify', 'night_notify');
 bindSetting('setProgressStyle', 'progress_style');
 bindSetting('setAiKey', 'ai_api_key', v => String(v).trim());
+bindSetting('setAiCloudEnabled', 'ai_cloud_enabled');
 
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();

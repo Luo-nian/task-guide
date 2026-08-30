@@ -1,6 +1,7 @@
 package com.taskbar.app
 
 import android.app.Application
+import android.util.Log
 import androidx.room.Room
 import com.taskbar.app.data.db.AppDatabase
 import com.taskbar.app.data.model.Setting
@@ -11,6 +12,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 
 class TaskBarApp : Application() {
 
@@ -22,21 +26,54 @@ class TaskBarApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        installCrashHandler()
 
-        val db = Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
-            .fallbackToDestructiveMigration()
-            .build()
-        repo = TaskRepository(db)
+        try {
+            val db = Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
+                .fallbackToDestructiveMigration()
+                .build()
+            repo = TaskRepository(db)
+        } catch (e: Exception) {
+            Log.e("TaskBarApp", "Room 初始化失败", e)
+            throw e  // 数据库初始化失败必须崩（无法恢复）
+        }
 
         // 首次安装初始化默认设置
         appScope.launch {
-            initDefaultSettings()
-            // 重新调度所有未完成提醒
-            ReminderScheduler.rescheduleAll(repo, this@TaskBarApp)
+            runCatching { initDefaultSettings() }
+            runCatching { ReminderScheduler.rescheduleAll(repo, this@TaskBarApp) }
         }
 
-        // 启动同步前台服务（Ktor 服务器常驻）
-        SyncService.start(this)
+        // 启动同步前台服务（容错：失败不影响 app 启动）
+        appScope.launch {
+            runCatching { SyncService.start(this@TaskBarApp) }
+                .onFailure { Log.e("TaskBarApp", "SyncService 启动失败", it) }
+        }
+    }
+
+    /**
+     * 全局未捕获异常处理：写文件 + 继续走系统默认处理（弹 ANR/崩溃）
+     * 下次问题排查时可通过 adb pull /data/data/com.taskbar.app/files/crash.log 拉日志
+     */
+    private fun installCrashHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val logFile = File(filesDir, "crash.log")
+                val sw = StringWriter()
+                throwable.printStackTrace(PrintWriter(sw))
+                logFile.appendText(
+                    """
+                    ===
+                    TIME: ${java.util.Date()}
+                    THREAD: ${thread.name}
+                    ${sw.toString()}
+
+                    """.trimIndent()
+                )
+            } catch (_: Exception) { /* 写日志失败就忽略 */ }
+            previous?.uncaughtException(thread, throwable)
+        }
     }
 
     private suspend fun initDefaultSettings() {

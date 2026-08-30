@@ -314,8 +314,15 @@
             <input type="password" id="setAiKey" placeholder="sk-…（留空用本地模板）" />
           </div>
           <div class="setting-row">
+            <label>启用云端拆解</label>
+            <label class="switch"><input type="checkbox" id="setAiCloudEnabled"><span></span></label>
+          </div>
+          <div class="setting-row">
             <label>说明</label>
-            <span class="hint">填写后在详情页点"AI 拆解"自动拆步骤<br>单次约 0.0002 元，留空也能拆（内置模板）</span>
+            <span class="hint">
+              <b>默认关闭</b>，开启后点"AI 拆解"会弹确认提示（防止误触扣费）<br>
+              单次约 0.0002 元；关闭时一律走本地模板（0 成本）
+            </span>
           </div>
         </div>
 

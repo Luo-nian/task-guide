@@ -3,7 +3,10 @@ package com.taskbar.app.server
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.taskbar.app.BuildConfig
 import com.taskbar.app.TaskBarApp
@@ -35,7 +38,21 @@ class SyncService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, NotificationHelper.buildServiceNotification(this))
+        // Android 14 (API 34) 要求 startForeground 必须传 foregroundServiceType，
+        // 否则 MissingForegroundServiceTypeException 杀整个 application。
+        try {
+            val notif = NotificationHelper.buildServiceNotification(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIF_ID, notif,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+        } catch (e: Exception) {
+            Log.e("SyncService", "startForeground failed", e)
+        }
         if (server == null) startServer()
         return START_STICKY
     }
