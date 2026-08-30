@@ -5,11 +5,11 @@
 //     22:00 未完成提醒改为后端 tick + 按日去重（原前端 setInterval 会漏触发）
 #![allow(dead_code)]
 
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{Manager, WindowEvent};
+use tauri::WindowEvent;
 use chrono::{Datelike, Local, TimeZone, Timelike};
 
 mod sync;
@@ -370,7 +370,7 @@ fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
         params![day_start, day_end], |r| r.get(0)
     ).unwrap_or(0);
 
-    let mut total = pending + finished + count_total;
+    let total = pending + finished + count_total;
     let mut done = finished + count_done;
     let mut over = 0;
     if done > total { over = done - total; done = total; }
@@ -554,7 +554,7 @@ fn advance_step(
 ) {
     let now = chrono::Local::now().timestamp_millis();
     let want_done = status.as_deref().map(|s| s != "todo").unwrap_or(true);
-    let task_uuid = {
+    let _task_uuid = {
         let db = state.db.lock().unwrap();
         // 前端会传 taskUuid，用它可以少一次查询；不传时回落到按 step 反查
         let t_uuid: String = match &task_uuid {

@@ -84,11 +84,11 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
         match entity {
             "task" => conn.query_row(
                 "SELECT * FROM tasks WHERE uuid=?1", params![uuid],
-                |r| Ok(serde_json::to_string(&crate::row_to_task(r)).unwrap_or_default())
+                |r| crate::row_to_task(r).map(|t| serde_json::to_string(&t).unwrap_or_default())
             ).ok(),
             "step" => conn.query_row(
                 "SELECT * FROM steps WHERE uuid=?1", params![uuid],
-                |r| Ok(serde_json::to_string(&crate::row_to_step(r)).unwrap_or_default())
+                |r| crate::row_to_step(r).map(|s| serde_json::to_string(&s).unwrap_or_default())
             ).ok(),
             _ => None,
         }
@@ -120,7 +120,7 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                 log::info!("WS 已连接: {}", ws_url);
                 use tungstenite::Message;
                 loop {
-                    match socket.read_message() {
+                    match socket.read() {
                         Ok(Message::Text(txt)) => {
                             if let Ok(op) = serde_json::from_str::<ChangeOp>(&txt) {
                                 apply_change(&db, &op);
