@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -45,13 +46,13 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     Scaffold(
         containerColor = Color.Transparent,
         floatingActionButton = {
+            // 克制 FAB：金底 + 墨色加号（去掉黑底，保留金色点缀）
             FloatingActionButton(
                 onClick = { navController.navigate("add") },
-                // 黑金 FAB：黑底 + 金色加号 + 金色边框
-                containerColor = TGColors.Black,
-                contentColor = TGColors.Gold
+                containerColor = TGColors.Gold,
+                contentColor = TGColors.Black
             ) {
-                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Gold, size = 24.dp)
+                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
             }
         }
     ) { padding ->
@@ -730,30 +731,30 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     Spacer(Modifier.width(10.dp))
                     Text(
                         "任务栏",
-                        color = TGColors.Black,
+                        color = TGColors.Ink,
                         fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.weight(1f))
-                    // 黑金积分 pill
+                    // 积分 pill：米底深金字（克制，不抢眼）
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(TGColors.Black)
+                            .background(TGColors.BgPaperDeep)
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.Gold, size = 14.dp)
+                        TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.GoldDeep, size = 14.dp)
                         Spacer(Modifier.width(4.dp))
-                        Text("$points", color = TGColors.Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("$points", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                     Spacer(Modifier.width(8.dp))
                     PressIcon(onClick = { navController.navigate("history") }) {
-                        TGIcon(R.drawable.ic_archive, contentDescription = "历史任务", tint = TGColors.Black, size = 22.dp)
+                        TGIcon(R.drawable.ic_archive, contentDescription = "历史任务", tint = TGColors.InkSoft, size = 22.dp)
                     }
                     Spacer(Modifier.width(4.dp))
                     PressIcon(onClick = { navController.navigate("all") }) {
-                        TGIcon(R.drawable.ic_list, contentDescription = "所有任务", tint = TGColors.Black, size = 22.dp)
+                        TGIcon(R.drawable.ic_list, contentDescription = "所有任务", tint = TGColors.InkSoft, size = 22.dp)
                     }
                 }
             }
@@ -771,63 +772,69 @@ private fun barWithTitle(title: String, navController: NavController) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
-            TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Black, size = 22.dp)
+            TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
         }
         Spacer(Modifier.width(4.dp))
-        Text(title, color = TGColors.Black, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
-/** 人物边框头像（圆形金边 + 人形剪影，黑金风格），点开进入我的 */
+/** 人物边框头像（克制：圆形卡色底 + 金边 + 墨色人形），点开进入我的 */
 @Composable
 fun AvatarFrame(onClick: () -> Unit) {
     PressIcon(onClick = onClick) {
         Box(
             Modifier
-                .size(36.dp)
+                .size(34.dp)
                 .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(TGColors.Black)
+                .background(TGColors.Card)
                 .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
             contentAlignment = Alignment.Center
         ) {
             TGIcon(
                 drawable = R.drawable.ic_avatar,
                 contentDescription = "我的",
-                tint = TGColors.Gold,
-                size = 22.dp
+                tint = TGColors.Ink,
+                size = 20.dp
             )
         }
     }
 }
 
-/** 底部中央"追踪"大按钮（黑金招牌），点开进入追踪页 */
+/** 底部中央"追踪"大按钮（金色实底 + 深褐字 + 阴影——一眼看出是可点按钮）
+ *  历史：黑底太黑看不清 → 卡色金边又太素 → 现在金色实底高对比 */
 @Composable
 fun CenterTrackingButton(navController: NavController) {
     Box(
-        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        Modifier.fillMaxWidth().padding(bottom = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         PressIcon(onClick = { navController.navigate("track") }) {
             Row(
                 Modifier
-                    .height(52.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
-                    .background(TGColors.Black)
-                    .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
-                    .padding(horizontal = 28.dp, vertical = 0.dp),
+                    .height(50.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(25.dp))
+                    .background(TGColors.Gold)
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
+                        ambientColor = TGColors.Gold.copy(alpha = 0.35f),
+                        spotColor = TGColors.Gold.copy(alpha = 0.35f)
+                    )
+                    .padding(horizontal = 26.dp, vertical = 0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TGIcon(
                     drawable = R.drawable.ic_track,
                     contentDescription = "追踪",
-                    tint = TGColors.Gold,
-                    size = 22.dp
+                    tint = TGColors.Ink,
+                    size = 20.dp
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     "追踪",
-                    color = TGColors.Gold,
-                    fontSize = 16.sp,
+                    color = TGColors.Ink,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
