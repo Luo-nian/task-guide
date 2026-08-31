@@ -33,6 +33,8 @@ pub struct Task {
     pub done_at: Option<i64>,
     pub delayed_count: i64,
     pub reward_points: i64,
+    #[serde(default)]
+    pub reminder_strength: Option<String>,  // 每任务提醒强度：standard|repeat|alarm；null=跟随默认
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted: i64,
@@ -101,6 +103,10 @@ fn migrate(conn: &Connection) {
     if !has("done_count") {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN done_count INTEGER NOT NULL DEFAULT 0;");
         log::info!("[migrate] tasks 新增列 done_count");
+    }
+    if !has("reminder_strength") {
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL;");
+        log::info!("[migrate] tasks 新增列 reminder_strength");
     }
 }
 
@@ -212,6 +218,7 @@ pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
         done_at: r.get("done_at")?,
         delayed_count: r.get("delayed_count")?,
         reward_points: r.get("reward_points")?,
+        reminder_strength: r.get("reminder_strength").ok(),
         created_at: r.get("created_at")?,
         updated_at: r.get("updated_at")?,
         deleted: r.get("deleted")?,

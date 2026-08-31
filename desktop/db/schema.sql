@@ -1,7 +1,8 @@
 -- ============================================================
--- 任务指南 TaskGuide —— 统一数据库 Schema v2.0
+-- 任务指南 TaskGuide —— 统一数据库 Schema v2.2
 -- v2: 新增任务积分系统（reward_points / total_points）
 -- v2.1: 新增次数任务列（count / done_count），手机端与桌面端共用
+-- v2.2: 新增每任务提醒强度列（reminder_strength，null=跟随设置默认）
 -- 双端（Android / Tauri）共用此结构，保证同步一致
 -- SQLite 方言
 -- ============================================================
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     count         INTEGER NOT NULL DEFAULT 1,          -- 次数任务：需要完成的总次数
     done_count    INTEGER NOT NULL DEFAULT 0,          -- 次数任务：已完成的次数
     reward_points INTEGER NOT NULL DEFAULT 10,         -- 完成本任务获得的积分（原神奖励区）
+    reminder_strength TEXT DEFAULT NULL,               -- 每任务提醒强度：standard|repeat|alarm，null=跟随默认
     created_at    INTEGER NOT NULL,                    -- 创建时间
     updated_at    INTEGER NOT NULL,                    -- 最后修改时间（同步冲突判断）
     deleted       INTEGER NOT NULL DEFAULT 0           -- 软删除 0/1（同步用）
