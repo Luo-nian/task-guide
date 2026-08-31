@@ -27,6 +27,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 个人交付：release 复用 debug 签名，保证 assembleRelease 产物可直接装机（未上 Play 商店）
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
