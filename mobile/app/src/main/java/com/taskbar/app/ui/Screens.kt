@@ -1,5 +1,10 @@
 package com.taskbar.app.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -157,21 +162,36 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: 
         ?: steps.firstOrNull { it.status != StepStatus.DONE }
     val currentStepIndex = currentStep?.let { steps.indexOf(it) }
 
+    // 追踪中动态光效：金色边框呼吸（原神光晕感）
+    val glow = if (tracking) {
+        val inf = rememberInfiniteTransition(label = "trackGlow")
+        val a by inf.animateFloat(
+            initialValue = 0.4f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(animation = tween(1100), repeatMode = RepeatMode.Reverse),
+            label = "glow"
+        )
+        a
+    } else 1f
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
-            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(12.dp))
+            .border(
+                width = if (tracking) 1.5.dp else 1.dp,
+                color = if (tracking) TGColors.Gold.copy(alpha = 0.45f + 0.45f * glow) else TGColors.BorderSoft,
+                shape = RoundedCornerShape(12.dp)
+            )
             .combinedClickable(onClick = onClick, onLongClick = onEdit)
     ) {
         Row(
             Modifier.padding(12.dp, 12.dp, 6.dp, 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧菱形标识：紫=追踪中 / 朱砂=高优先级 / 深金=中 / 灰=低
+            // 左侧菱形标识：追踪中带呼吸光晕
             val diamondColor = when {
-                tracking -> TGColors.Violet
+                tracking -> TGColors.Violet.copy(alpha = 0.7f + 0.3f * glow)
                 task.priority == "high" -> TGColors.Crimson
                 task.priority == "low" -> TGColors.InkFaint
                 else -> TGColors.Gold

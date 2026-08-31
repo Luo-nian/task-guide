@@ -208,7 +208,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     val n = limitText.toIntOrNull() ?: 3
                     vm.setTrackLimit(n.coerceIn(1, 10))
                 }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) {
-                    Text("保存", color = Color.White)
+                    Text("保存", color = Color(0xFF16120C))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("当前: $trackLimit", color = TGColors.InkMute, fontSize = 13.sp)

@@ -8,40 +8,40 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  /* === 暖色浅色主题 === */
-  --bg-paper:        #F5EFE0;          /* 主背景 米色 */
-  --bg-paper-deep:   #EDE3CC;          /* 深一档米色 */
-  --panel:           rgba(252, 247, 235, 0.88);  /* 面板半透米色 */
-  --panel-solid:     #FAF5E6;          /* 面板实色 */
-  --bar:             rgba(237, 226, 200, 0.55);   /* 任务条 */
-  --bar-hover:       rgba(228, 213, 175, 0.78);   /* 任务条 hover */
-  --card:            #FFFBEF;          /* 卡片白米色 */
-  --selected:        #F4E6B9;          /* 选中状态 */
+  /* === 黑金主题 v4.9（深墨底 + 金线 + 米白字，与手机端同步） === */
+  --bg-paper:        #16120C;          /* 主背景 墨黑褐 */
+  --bg-paper-deep:   #201A12;          /* 深一档 深棕 */
+  --panel:           rgba(30, 24, 16, 0.88);       /* 面板半透深棕 */
+  --panel-solid:     #221B12;          /* 面板实色 */
+  --bar:             rgba(42, 34, 22, 0.55);       /* 任务条 */
+  --bar-hover:       rgba(58, 46, 31, 0.78);       /* 任务条 hover */
+  --card:            #241D14;          /* 卡片 深褐 */
+  --selected:        #3A2E1A;          /* 选中状态 */
 
-  /* === 文字 === */
-  --ink:             #3A2E1A;          /* 主文字 深褐 */
-  --ink-soft:        #6B5D3E;          /* 副文字 */
-  --ink-mute:        #9C8B6A;          /* 三级文字 */
-  --ink-faint:       #C2B58E;          /* 四级文字/分隔 */
+  /* === 文字（米白/浅金系） === */
+  --ink:             #F5EFE0;          /* 主文字 米白 */
+  --ink-soft:        #C9B98F;          /* 副文字 浅金灰 */
+  --ink-mute:        #6B5D3E;          /* 三级文字 */
+  --ink-faint:       #4A3F2A;          /* 四级/分隔（深底暗化） */
 
-  /* === 装饰色 === */
-  --gold:            #C9A227;          /* 主金 */
+  /* === 装饰色（金线 + 玉青 + 朱砂） === */
+  --gold:            #D4AF37;          /* 主金（深底上更亮） */
   --gold-light:      #E6C77A;          /* 浅金 */
-  --gold-deep:       #9A7B1A;          /* 深金 */
+  --gold-deep:       #B8902A;          /* 深金 */
   --orange:          #D88A3F;          /* 暖橘 */
-  --jade:            #4A8B6F;          /* 玉青 完成 */
-  --crimson:         #B85638;          /* 朱砂 紧急 */
-  --azure:           #4F86B5;          /* 蓝 追踪 */
-  --violet:          #8A6BC9;          /* 紫 涟漪光晕 */
-  --border-soft:     rgba(201, 162, 39, 0.22);
-  --border-mid:      rgba(154, 123, 26, 0.35);
-  --border-strong:   rgba(154, 123, 26, 0.55);
+  --jade:            #6FBC9F;          /* 玉青 完成（深底调亮） */
+  --crimson:         #D1644A;          /* 朱砂 紧急 */
+  --azure:           #7FA8CC;          /* 蓝 追踪（深底调亮） */
+  --violet:          #B49BE0;          /* 紫 涟漪光晕（深底调亮） */
+  --border-soft:     rgba(212, 175, 55, 0.27);
+  --border-mid:      rgba(212, 175, 55, 0.47);
+  --border-strong:   rgba(212, 175, 55, 0.70);
 
-  --glow-gold:       rgba(201, 162, 39, 0.32);
-  --glow-azure:      rgba(79, 134, 181, 0.45);
-  --glow-violet:     rgba(138, 107, 201, 0.45);
-  --shadow-card:     0 2px 8px rgba(110, 80, 30, 0.10), 0 0 0 1px rgba(201, 162, 39, 0.08);
-  --shadow-hover:    0 6px 18px rgba(110, 80, 30, 0.16), 0 0 0 1px rgba(201, 162, 39, 0.18);
+  --glow-gold:       rgba(212, 175, 55, 0.42);
+  --glow-azure:      rgba(127, 168, 204, 0.50);
+  --glow-violet:     rgba(180, 155, 224, 0.50);
+  --shadow-card:     0 2px 12px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(212, 175, 55, 0.10);
+  --shadow-hover:    0 6px 20px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(212, 175, 55, 0.22);
 }
 
 html, body {
