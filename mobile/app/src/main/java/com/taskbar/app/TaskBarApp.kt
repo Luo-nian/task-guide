@@ -80,7 +80,7 @@ class TaskBarApp : Application() {
     private suspend fun initDefaultSettings() {
         val defaults = listOf(
             "track_limit" to "3",
-            "reminder_strength" to "standard",
+            "reminder_strength" to "notify",
             "auto_start" to "1",
             "delay_options" to "custom",
             "theme" to "frosted",

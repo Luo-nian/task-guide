@@ -405,16 +405,19 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                     Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
                     DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
 
-                    // 提醒强度
                     Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
+                    Text("跟随全局设置，或单独选择通知栏/振动/响铃", color = TGColors.InkMute, fontSize = 11.sp)
+                    Spacer(Modifier.height(4.dp))
                     Column {
-                        listOf<String?>(null, ReminderStrength.STANDARD, ReminderStrength.REPEAT, ReminderStrength.ALARM).forEach { v ->
+                        listOf<String?>(null, ReminderStrength.NOTIFY, ReminderStrength.VIBRATE, ReminderStrength.RING).forEach { v ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { reminderStrength = v }) {
                                 RadioButton(selected = reminderStrength == v, onClick = { reminderStrength = v })
                                 Text(
-                                    if (v == null) "跟随默认设置" else ReminderStrength.label(v),
+                                    ReminderStrength.label(v),
                                     color = if (v == null) TGColors.InkMute else TGColors.Ink,
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(end = 8.dp)
                                 )
                             }
                         }

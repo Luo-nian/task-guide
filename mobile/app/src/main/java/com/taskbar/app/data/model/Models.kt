@@ -42,22 +42,44 @@ data class Task(
     @ColumnInfo(name = "reminder_strength") val reminderStrength: String? = null
 )
 
-// ==================== 提醒强度常量 ====================
+// ==================== 提醒方式（直观三档：通知栏/振动/响铃，可自定义参数） ====================
 object ReminderStrength {
-    const val STANDARD = "standard"   // 普通通知（响一声）
-    const val REPEAT = "repeat"       // 5 分钟重复（最多 3 次）
-    const val ALARM = "alarm"         // 闹钟式（全屏+震动）
+    /** 跟随全局默认（per-task 选择这个则用设置抽屉的全局值） */
+    const val INHERIT = ""
+
+    /** 通知栏弹窗：顶部横幅 + 默认提示音，最轻 */
+    const val NOTIFY = "notify"
+
+    /** 振动提醒：自定义周期持续振动（参数：settings reminder_vibrate_pattern） */
+    const val VIBRATE = "vibrate"
+
+    /** 响铃提醒：播放选定铃声（参数：settings reminder_ring_uri） */
+    const val RING = "ring"
+
+    /** 旧值兼容映射（DB 里可能存 standard/repeat/alarm） */
+    fun migrateLegacy(s: String?): String = when (s) {
+        null, "" -> ""
+        "standard" -> NOTIFY           // 普通通知 → 通知栏弹窗
+        "repeat"   -> VIBRATE          // 5 分钟重复 → 振动
+        "alarm"    -> RING             // 闹钟式强提醒 → 响铃
+        else -> s
+    }
 
     /** 给 UI 显示的"人话" */
-    fun label(v: String?): String = when (v) {
-        REPEAT -> "重复提醒（每 5 分钟，最多 3 次）"
-        ALARM -> "闹钟式强提醒（全屏+长震）"
-        else -> "普通通知（响一声）"
+    fun label(v: String?): String = when (migrateLegacy(v)) {
+        INHERIT -> "跟随默认设置"
+        NOTIFY  -> "通知栏弹窗（顶部横幅 + 提示音）"
+        VIBRATE -> "振动提醒（按自定义周期持续震动）"
+        RING    -> "响铃提醒（播放自定义铃声）"
+        else    -> v ?: ""
     }
-    fun shortLabel(v: String?): String = when (v) {
-        REPEAT -> "重复"
-        ALARM -> "闹钟"
-        else -> "普通"
+
+    fun shortLabel(v: String?): String = when (migrateLegacy(v)) {
+        INHERIT -> "默认"
+        NOTIFY  -> "通知"
+        VIBRATE -> "振动"
+        RING    -> "响铃"
+        else    -> v ?: ""
     }
 }
 

@@ -54,7 +54,7 @@ object ReminderScheduler {
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
     suspend fun rescheduleAll(repo: com.taskbar.app.data.repo.TaskRepository, context: Context) {
         val now = System.currentTimeMillis()
-        val defaultStrength = repo.getSetting("reminder_strength", "standard")
+        val defaultStrength = repo.getSetting("reminder_strength", "notify")
         val tasks = repo.observeMainList().first()
         tasks.forEach { t ->
             if (t.dueAt != null && t.trackStatus != com.taskbar.app.data.model.TrackStatus.DONE) {
@@ -84,7 +84,7 @@ class ReminderWorker(
 
     override suspend fun doWork(): Result {
         val uuid = inputData.getString(ReminderScheduler.KEY_UUID) ?: return Result.success()
-        val strength = inputData.getString("strength") ?: "standard"
+        val strength = inputData.getString("strength") ?: "notify"
         val repeatCount = inputData.getInt(ReminderScheduler.KEY_REPEAT, 0)
 
         val app = applicationContext as TaskBarApp
@@ -131,7 +131,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
                     app.repo.delayTask(uuid, 1)
                     val t = app.repo.observeTask(uuid).first()
                     t?.let {
-                        val strength = app.repo.getSetting("reminder_strength", "standard")
+                        val strength = app.repo.getSetting("reminder_strength", "notify")
                         ReminderScheduler.schedule(context, uuid, it.dueAt!!, strength)
                     }
                     cancelNotification(context, uuid)
