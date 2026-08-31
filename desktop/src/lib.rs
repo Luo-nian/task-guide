@@ -617,6 +617,34 @@ fn advance_step(
 #[tauri::command]
 fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json::Value {
     let now = chrono::Local::now().timestamp_millis();
+    // 习惯任务：完成 = 今日打卡（写 habit_logs）+ 加分，任务保持不归档（与手机端一致）
+    {
+        let db = state.db.lock().unwrap();
+        let is_habit: bool = db.query_row(
+            "SELECT type='habit' FROM tasks WHERE uuid=?1", params![&task_uuid], |r| r.get(0)
+        ).unwrap_or(false);
+        if is_habit {
+            let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let already: i64 = db.query_row(
+                "SELECT COUNT(*) FROM habit_logs WHERE task_uuid=?1 AND check_date=?2",
+                params![&task_uuid, &date], |r| r.get(0)
+            ).unwrap_or(0);
+            if already == 0 {
+                db.execute("INSERT INTO habit_logs(task_uuid,check_date,created_at) VALUES(?1,?2,?3)",
+                    params![&task_uuid, &date, now]).ok();
+                let rp: i64 = db.query_row(
+                    "SELECT reward_points FROM tasks WHERE uuid=?1", params![&task_uuid], |r| r.get(0)
+                ).unwrap_or(5);
+                db.execute(
+                    "INSERT INTO settings(key,value) VALUES('total_points',?1) \
+                     ON CONFLICT(key) DO UPDATE SET value=printf('%d', CAST(value AS INTEGER) + ?2)",
+                    params![rp.to_string(), rp]
+                ).ok();
+            }
+            sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+            return serde_json::json!({ "status": "ok", "partial": false, "habit": true });
+        }
+    }
     // 次数任务（count>1）：先累加 done_count，满额才算真正完成并结算积分
     let info: (i64, i64, i64) = {
         let db = state.db.lock().unwrap();
