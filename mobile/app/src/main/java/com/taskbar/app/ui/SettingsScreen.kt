@@ -102,6 +102,28 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
+        // 配对状态（桌面端 mDNS 自动发现后点配对即记录在此）
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("配对", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            var pairedDevice by remember { mutableStateOf("") }
+            LaunchedEffect(Unit) { pairedDevice = vm.getSetting("paired_device", "") }
+            if (pairedDevice.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("已配对：$pairedDevice", color = TGColors.Jade, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        vm.setSetting("paired_device", "")
+                        pairedDevice = ""
+                    }) { Text("解除配对", color = TGColors.Crimson) }
+                }
+            } else {
+                Text("未配对", color = TGColors.InkMute, fontSize = 13.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("电脑端在设置里点「扫描设备」即可自动发现本机并配对，无需手动输地址", color = TGColors.InkMute, fontSize = 11.sp)
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 服务器地址（给电脑端连接用）
         TGCard(Modifier.fillMaxWidth()) {
             Text("同步服务器", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)

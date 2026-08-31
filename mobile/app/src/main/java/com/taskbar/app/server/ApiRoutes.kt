@@ -11,6 +11,7 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -24,6 +25,9 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 val appJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -35,6 +39,30 @@ fun Application.configureServer() {
     routing {
         get("/api/ping") {
             call.respondText { """{"status":"ok","device":"taskguide-mobile","version":"1.0.0"}""" }
+        }
+
+        // 配对状态：手机端记录已配对的电脑
+        get("/api/pair/status") {
+            val app = TaskBarApp.instance
+            val device = app.repo.getSetting("paired_device", "")
+            call.respondText { """{"paired":${if (device.isEmpty()) "false" else "true"},"device":"$device"}""" }
+        }
+
+        // 电脑端发起配对：记录配对设备名（桌面端名字）
+        post("/api/pair") {
+            val body = call.receiveText()
+            val name = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                .parseToJsonElement(body).jsonObject["deviceName"]?.jsonPrimitive?.contentOrNull ?: "电脑"
+            val app = TaskBarApp.instance
+            app.repo.setSetting("paired_device", name)
+            call.respondText { """{"status":"ok","paired":true,"device":"$name"}""" }
+        }
+
+        // 解除配对（手机端主动断开）
+        post("/api/pair/clear") {
+            val app = TaskBarApp.instance
+            app.repo.setSetting("paired_device", "")
+            call.respondText { """{"status":"ok","paired":false}""" }
         }
 
         // 全量同步（首次连接）

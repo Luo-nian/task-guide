@@ -20,6 +20,11 @@ class MdnsRegistrar(private val context: Context) {
                 serviceName = "TaskGuide"
                 serviceType = "_taskguide._tcp."
                 this.port = port
+                // 附加设备标识，桌面端配对时可区分设备
+                try {
+                    setAttribute("deviceId", deviceId())
+                    setAttribute("deviceName", deviceName())
+                } catch (_: Exception) {}
             }
             listener = object : NsdManager.RegistrationListener {
                 override fun onServiceRegistered(s: NsdServiceInfo?) {}
@@ -29,6 +34,18 @@ class MdnsRegistrar(private val context: Context) {
             }
             nsdManager?.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (_: Exception) { /* 多播锁可能失败，静默 */ }
+    }
+
+    private fun deviceId(): String {
+        val aid = android.provider.Settings.Secure.getString(
+            context.contentResolver, android.provider.Settings.Secure.ANDROID_ID
+        )
+        return aid ?: "unknown"
+    }
+
+    private fun deviceName(): String {
+        val name = android.os.Build.MODEL ?: "Android"
+        return name.replace(" ", "-")
     }
 
     fun unregister() {

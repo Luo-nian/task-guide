@@ -846,7 +846,45 @@ document.getElementById('setPairBtn').addEventListener('click', async () => {
     settings.pairing = { url: full, deviceId: '' };
     saveSettings();
     persistSettingsServer();
+    document.getElementById('setPairingStatus').textContent = '已配对：' + full;
   } catch (e) { alert('连接失败：' + e.message); }
+});
+
+// mDNS 自动发现手机
+document.getElementById('setScanBtn').addEventListener('click', async () => {
+  const wrap = document.getElementById('setDeviceListWrap');
+  const box = document.getElementById('setDeviceList');
+  wrap.style.display = '';
+  box.innerHTML = '正在扫描…';
+  let list = [];
+  try { list = await call('discover_devices', { timeoutMs: 3000 }); } catch (e) { box.innerHTML = '扫描失败：' + e.message; return; }
+  if (!list.length) { box.innerHTML = '未发现手机端服务。<br>请确认手机「任务栏」已打开同步（设置-同步服务器），且与电脑在同一 WiFi。'; return; }
+  box.innerHTML = '';
+  list.forEach(d => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.gap = '6px';
+    const name = document.createElement('span');
+    name.textContent = d.name.split('.').slice(0, 2).join('.') + '  ' + d.addr + ':' + d.port;
+    name.style.flex = '1';
+    const btn = document.createElement('button');
+    btn.className = 'small-btn primary';
+    btn.textContent = '配对';
+    btn.onclick = async () => {
+      try {
+        await call('connect_server', { url: d.url });
+        settings.pairing = { url: d.url, deviceId: '' };
+        saveSettings();
+        persistSettingsServer();
+        box.innerHTML = '✓ 已配对：' + d.url;
+        document.getElementById('setPairingStatus').textContent = '已配对：' + d.url;
+      } catch (e) { alert('配对失败：' + e.message); }
+    };
+    row.appendChild(name);
+    row.appendChild(btn);
+    box.appendChild(row);
+  });
 });
 document.getElementById('setUnpair').addEventListener('click', async () => {
   settings.pairing = null;

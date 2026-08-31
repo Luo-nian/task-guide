@@ -827,6 +827,43 @@ fn load_pairing(state: tauri::State<AppState>) -> Option<String> {
     if url.is_empty() { None } else { Some(url) }
 }
 
+// =============== mDNS 自动发现手机（_taskguide._tcp.local.） ===============
+#[tauri::command]
+fn discover_devices(timeout_ms: u64) -> Vec<serde_json::Value> {
+    use mdns_sd::{ServiceDaemon, ServiceEvent};
+    let mut out: Vec<serde_json::Value> = Vec::new();
+    let Ok(daemon) = ServiceDaemon::new() else { return out };
+    let Ok(receiver) = daemon.browse("_taskguide._tcp.local.") else {
+        let _ = daemon.shutdown();
+        return out;
+    };
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_millis(timeout_ms.clamp(1000, 8000));
+    while std::time::Instant::now() < deadline {
+        match receiver.recv_timeout(std::time::Duration::from_millis(300)) {
+            Ok(ServiceEvent::ServiceResolved(info)) => {
+                let addr = info.get_addresses().iter()
+                    .find(|a| a.is_ipv4())
+                    .map(|a| a.to_string()).unwrap_or_default();
+                let port = info.get_port();
+                let name = info.get_fullname();
+                if !addr.is_empty() {
+                    out.push(serde_json::json!({
+                        "name": name,
+                        "addr": addr,
+                        "port": port,
+                        "url": format!("http://{}:{}", addr, port)
+                    }));
+                }
+            }
+            Ok(_) => {}
+            Err(_) => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    }
+    let _ = daemon.shutdown();
+    out
+}
+
 #[tauri::command]
 fn set_window_size(window: tauri::Window, w: f64, h: f64) {
     use tauri::PhysicalSize;
@@ -988,7 +1025,8 @@ pub fn run() {
             advance_step, add_step, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             set_display_mode, set_window_size,
             connect_server, disconnect_server, get_server_url,
-            set_setting, get_setting, save_pairing, load_pairing
+            set_setting, get_setting, save_pairing, load_pairing,
+            discover_devices
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

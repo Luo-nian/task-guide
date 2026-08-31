@@ -358,7 +358,15 @@
             <button class="small-btn danger" id="setUnpair">解除配对</button>
           </div>
           <div class="setting-row">
-            <label>配对服务器</label>
+            <label>自动发现（同一 WiFi）</label>
+            <button class="small-btn primary" id="setScanBtn">扫描设备</button>
+            <span class="hint">扫描手机端「任务栏」服务</span>
+          </div>
+          <div class="setting-row" id="setDeviceListWrap" style="display:none;">
+            <div id="setDeviceList" style="flex:1;font-size:12px;line-height:1.8;"></div>
+          </div>
+          <div class="setting-row">
+            <label>手动配对</label>
             <input type="text" id="setPairInput" placeholder="手机IP:端口" />
             <button class="small-btn primary" id="setPairBtn">连接</button>
           </div>
