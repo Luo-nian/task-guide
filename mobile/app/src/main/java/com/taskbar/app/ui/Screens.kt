@@ -466,10 +466,27 @@ private fun TrackStepLine(seq: Int, step: Step, vm: TaskViewModel) {
             }
         }
         if (isDone) {
-            Text("✓", color = TGColors.Jade, fontSize = 14.sp, modifier = Modifier.padding(end = 8.dp))
+            // 已完成：实心绿圆 + 白勾（一眼看出是完成态，不是按钮）
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(TGColors.Jade),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("✓", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
         } else {
+            // 未完成：空心圆环 + 勾（明显是"可点击完成"的按钮）
             PressIcon(onClick = { vm.advanceStep(step.uuid) }, modifier = Modifier.size(32.dp)) {
-                TGIcon(R.drawable.ic_check, contentDescription = "完成", tint = if (isDoing) TGColors.Gold else TGColors.Jade, size = 18.dp)
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .border(1.5.dp, if (isDoing) TGColors.Gold else TGColors.Jade, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TGIcon(R.drawable.ic_check, contentDescription = "完成", tint = if (isDoing) TGColors.Gold else TGColors.Jade, size = 14.dp)
+                }
             }
         }
     }
@@ -522,9 +539,28 @@ fun StepRow(step: Step, vm: TaskViewModel, seq: Int? = null) {
                 Text("${step.attrLabel}: ${step.attrValue}", color = TGColors.GoldDeep, fontSize = 11.sp)
             }
         }
-        if (!isDone) {
+        if (isDone) {
+            // 已完成：实心绿圆 + 白勾（与追踪卡一致）
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(TGColors.Jade),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            // 未完成：空心圆环 + 勾（可点击完成）
             PressIcon(onClick = { vm.advanceStep(step.uuid) }, modifier = Modifier.size(36.dp)) {
-                TGIcon(R.drawable.ic_check, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .border(1.5.dp, if (isDoing) TGColors.Gold else TGColors.Jade, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TGIcon(R.drawable.ic_check, contentDescription = "完成", tint = if (isDoing) TGColors.Gold else TGColors.Jade, size = 15.dp)
+                }
             }
         }
     }
