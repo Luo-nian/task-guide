@@ -114,6 +114,17 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         repo.checkHabit(taskUuid, date)
     }
 
+    /** 打卡并返回是否真打卡（false=今天已打过） */
+    suspend fun checkHabitAndReturn(taskUuid: String, date: String): Boolean =
+        repo.checkHabit(taskUuid, date)
+
+    /** 进入页面时初始化 checkedToday 用 */
+    suspend fun repoIsCheckedToday(taskUuid: String, date: String): Boolean =
+        repo.isHabitCheckedToday(taskUuid, date)
+
+    fun observeHabitStreak(taskUuid: String) = repo.observeHabitStreak(taskUuid)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     suspend fun habitStreak(taskUuid: String) = repo.habitStreak(taskUuid)
 
     // ===== 设置 =====

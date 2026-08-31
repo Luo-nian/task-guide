@@ -135,6 +135,10 @@ interface HabitLogDao {
     @Query("SELECT EXISTS(SELECT 1 FROM habit_logs WHERE task_uuid = :taskUuid AND check_date = :date)")
     suspend fun isChecked(taskUuid: String, date: String): Boolean
 
+    /** 习惯打卡日期 Flow（供 streak 实时刷新） */
+    @Query("SELECT check_date FROM habit_logs WHERE task_uuid = :taskUuid ORDER BY check_date DESC")
+    fun observeCheckDatesByTask(taskUuid: String): Flow<List<String>>
+
     @Query("SELECT * FROM habit_logs WHERE created_at > :since")
     suspend fun getChangedSince(since: Long): List<HabitLog>
 

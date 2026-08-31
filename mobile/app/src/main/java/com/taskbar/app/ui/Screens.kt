@@ -1,5 +1,6 @@
 package com.taskbar.app.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,7 @@ import com.taskbar.app.data.model.StepStatus
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackStatus
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -166,9 +169,17 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit) {
 fun TrackScreen(vm: TaskViewModel, navController: NavController) {
     val tracking by vm.tracking.collectAsState()
     var selectedUuid by remember { mutableStateOf<String?>(null) }
-    // 默认选第一个
-    val currentUuid = selectedUuid ?: tracking.firstOrNull()?.uuid
-    val steps by vm.steps(currentUuid ?: "").collectAsState()
+    // 用 remember 缓存有效 uuid：selectedUuid 变化或 tracking 列表头部变化时才重算
+    // 这样 steps Flow 不会因为无意义的重组而重建（修频闪）
+    val effectiveUuid = remember(tracking, selectedUuid) {
+        selectedUuid ?: tracking.firstOrNull()?.uuid
+    }
+    // 用 produceState + effectiveUuid 作为 key：uuid 真变才重启 collect
+    val steps by produceState(initialValue = emptyList<com.taskbar.app.data.model.Step>(), effectiveUuid) {
+        if (effectiveUuid != null) {
+            vm.steps(effectiveUuid).collect { value = it }
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(
@@ -183,7 +194,7 @@ fun TrackScreen(vm: TaskViewModel, navController: NavController) {
             // 左边：追踪任务横向列表（手机竖屏改为顶部横滚）
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tracking, key = { it.uuid }) { task ->
-                    val selected = task.uuid == currentUuid
+                    val selected = task.uuid == effectiveUuid
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(10.dp))
@@ -202,7 +213,7 @@ fun TrackScreen(vm: TaskViewModel, navController: NavController) {
             }
 
             Spacer(Modifier.height(12.dp))
-            val current = tracking.firstOrNull { it.uuid == currentUuid }
+            val current = tracking.firstOrNull { it.uuid == effectiveUuid }
             if (current != null) {
                 // 任务标题 + 进度
                 val doneCount = steps.count { it.status == StepStatus.DONE }
@@ -280,7 +291,8 @@ fun StepRow(step: Step, vm: TaskViewModel) {
 @Composable
 fun HabitScreen(vm: TaskViewModel) {
     val habits by vm.habits.collectAsState()
-    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    val ctx = LocalContext.current
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("习惯打卡", color = TGColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp, 12.dp))
@@ -289,8 +301,14 @@ fun HabitScreen(vm: TaskViewModel) {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(habits, key = { it.uuid }) { habit ->
-                    var streak by remember(habit.uuid) { mutableStateOf(0) }
-                    LaunchedEffect(habit.uuid) { streak = vm.habitStreak(habit.uuid) }
+                    val streak by vm.observeHabitStreak(habit.uuid).collectAsState()
+                    val scope = rememberCoroutineScope()
+                    var checkedToday by remember(habit.uuid) { mutableStateOf(false) }
+                    LaunchedEffect(habit.uuid) {
+                        // 每次打卡后 habit_logs 变化，streak 自动重算；
+                        // checkedToday 也要重新检测（如果用户跨天进来需要刷新）
+                        checkedToday = vm.repoIsCheckedToday(habit.uuid, today)
+                    }
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -302,12 +320,35 @@ fun HabitScreen(vm: TaskViewModel) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(habit.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            Text("连续 $streak 天", color = TGColors.GoldDeep, fontSize = 12.sp)
+                            Text(
+                                if (checkedToday) "今日已打卡 · 连续 $streak 天" else "连续 $streak 天",
+                                color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
+                                fontSize = 12.sp
+                            )
                         }
                         Button(
-                            onClick = { vm.checkHabit(habit.uuid, today) },
-                            colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)
-                        ) { Text("打卡", color = androidx.compose.ui.graphics.Color.White) }
+                            enabled = !checkedToday,
+                            onClick = {
+                                scope.launch {
+                                    val ok = vm.checkHabitAndReturn(habit.uuid, today)
+                                    if (ok) {
+                                        checkedToday = true
+                                        Toast.makeText(ctx, "已打卡 ✓", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(ctx, "今天已打过卡了", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (checkedToday) TGColors.BgPaperDeep else TGColors.Jade,
+                                disabledContainerColor = TGColors.BgPaperDeep
+                            )
+                        ) {
+                            Text(
+                                if (checkedToday) "已打卡" else "打卡",
+                                color = if (checkedToday) TGColors.InkMute else androidx.compose.ui.graphics.Color.White
+                            )
+                        }
                     }
                 }
             }

@@ -134,12 +134,33 @@ class TaskRepository(private val db: AppDatabase) {
         emit(ChangeOp("upsert", "task", uuid))
     }
 
-    /** 从归档恢复（取消完成） */
+    /** 从归档恢复（取消完成）—— 同步扣回完成任务时奖励的积分 */
     suspend fun restoreTask(uuid: String) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
         taskDao.upsert(task.copy(trackStatus = TrackStatus.PENDING, done = 0, doneAt = null, updatedAt = t))
+        // 扣回积分（防刷分：完成→恢复→完成 来回刷）
+        val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
+        val restored = (current - task.rewardPoints).coerceAtLeast(0)
+        settingsDao.set(com.taskbar.app.data.model.Setting("total_points", restored.toString()))
         emit(ChangeOp("upsert", "task", uuid))
+    }
+
+    /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新） */
+    fun observeHabitStreak(taskUuid: String): Flow<Int> {
+        return habitDao.observeCheckDatesByTask(taskUuid).map { dates ->
+            if (dates.isEmpty()) return@map 0
+            val today = java.time.LocalDate.now()
+            var streak = 0
+            var cursor = today
+            // dates 已经是 DESC 排序
+            for (dateStr in dates) {
+                val d = try { java.time.LocalDate.parse(dateStr) } catch (_: Exception) { continue }
+                if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
+                else if (d.isBefore(cursor)) break
+            }
+            streak
+        }
     }
 
     // ==================== 步骤推进 ====================
@@ -225,6 +246,10 @@ class TaskRepository(private val db: AppDatabase) {
         emit(ChangeOp("upsert", "habit", log.taskUuid))
         return true
     }
+
+    /** 同步查询某天是否已打卡（用于 UI 进入时初始化状态） */
+    suspend fun isHabitCheckedToday(taskUuid: String, date: String): Boolean =
+        habitDao.isChecked(taskUuid, date)
 
     suspend fun habitStreak(taskUuid: String): Int {
         val logs = habitDao.getByTask(taskUuid).map { it.checkDate }.sortedDescending()
