@@ -1,10 +1,5 @@
 package com.taskbar.app.ui
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,55 +47,15 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate("add") },
-                containerColor = TGColors.Gold,
-                contentColor = TGColors.Ink
+                // 黑金 FAB：黑底 + 金色加号 + 金色边框
+                containerColor = TGColors.Black,
+                contentColor = TGColors.Gold
             ) {
-                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Ink, size = 24.dp)
+                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Gold, size = 24.dp)
             }
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            // 顶栏：历史任务入口 + 标题 + 积分 + 所有任务入口
-            val points by vm.totalPoints.collectAsState()
-            Row(
-                Modifier.fillMaxWidth().padding(8.dp, 12.dp, 12.dp, 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 左上角：历史任务
-                PressIcon(onClick = { navController.navigate("history") }) {
-                    TGIcon(R.drawable.ic_archive, contentDescription = "历史任务", tint = TGColors.InkSoft, size = 22.dp)
-                }
-                Spacer(Modifier.width(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    TGIcon(R.drawable.ic_today, contentDescription = null, tint = TGColors.GoldDeep, size = 18.dp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "任务栏",
-                        color = TGColors.Ink,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Row(
-                    Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(TGColors.Selected)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.GoldDeep, size = 14.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("$points", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-                Spacer(Modifier.width(6.dp))
-                // 右上角：所有任务
-                PressIcon(onClick = { navController.navigate("all") }) {
-                    TGIcon(R.drawable.ic_list, contentDescription = "所有任务", tint = TGColors.InkSoft, size = 22.dp)
-                }
-            }
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
@@ -162,16 +117,9 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: 
         ?: steps.firstOrNull { it.status != StepStatus.DONE }
     val currentStepIndex = currentStep?.let { steps.indexOf(it) }
 
-    // 追踪中动态光效：金色边框呼吸（原神光晕感）
-    val glow = if (tracking) {
-        val inf = rememberInfiniteTransition(label = "trackGlow")
-        val a by inf.animateFloat(
-            initialValue = 0.4f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(animation = tween(1100), repeatMode = RepeatMode.Reverse),
-            label = "glow"
-        )
-        a
-    } else 1f
+    // 追踪中卡片：金色边框静态标记（动画去掉，性能优先：滑动卡顿主因之一）
+    val trackingBorderWidth = if (tracking) 1.5.dp else 1.dp
+    val trackingBorderColor = if (tracking) TGColors.Gold else TGColors.BorderSoft
 
     Column(
         modifier = Modifier
@@ -179,8 +127,8 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: 
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
             .border(
-                width = if (tracking) 1.5.dp else 1.dp,
-                color = if (tracking) TGColors.Gold.copy(alpha = 0.45f + 0.45f * glow) else TGColors.BorderSoft,
+                width = trackingBorderWidth,
+                color = trackingBorderColor,
                 shape = RoundedCornerShape(12.dp)
             )
             .combinedClickable(onClick = onClick, onLongClick = onEdit)
@@ -189,9 +137,9 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: 
             Modifier.padding(12.dp, 12.dp, 6.dp, 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧菱形标识：追踪中带呼吸光晕
+            // 左侧菱形标识：追踪中紫色（静态，避免重组）
             val diamondColor = when {
-                tracking -> TGColors.Violet.copy(alpha = 0.7f + 0.3f * glow)
+                tracking -> TGColors.Violet
                 task.priority == "high" -> TGColors.Crimson
                 task.priority == "low" -> TGColors.InkFaint
                 else -> TGColors.Gold
@@ -762,5 +710,127 @@ private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
             task.doneAt?.let { Text("完成于 ${dateFmt.format(Date(it))}", color = TGColors.InkMute, fontSize = 11.sp) }
         }
         TextButton(onClick = { vm.restoreTask(task.uuid) }) { Text("恢复", color = TGColors.GoldDeep) }
+    }
+}
+
+
+// ==================== 顶部栏（合并主页/我的/追踪的标题栏）+ 人物边框头像（我的入口） ====================
+@Composable
+fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavController) {
+    Surface(color = TGColors.PanelSolid, tonalElevation = 2.dp, shadowElevation = 2.dp) {
+        when (currentRoute) {
+            "home" -> {
+                val points by vm.totalPoints.collectAsState()
+                Row(
+                    Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 人物边框头像 → 我的
+                    AvatarFrame(onClick = { navController.navigate("profile") })
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "任务栏",
+                        color = TGColors.Black,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.weight(1f))
+                    // 黑金积分 pill
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(TGColors.Black)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.Gold, size = 14.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("$points", color = TGColors.Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    PressIcon(onClick = { navController.navigate("history") }) {
+                        TGIcon(R.drawable.ic_archive, contentDescription = "历史任务", tint = TGColors.Black, size = 22.dp)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    PressIcon(onClick = { navController.navigate("all") }) {
+                        TGIcon(R.drawable.ic_list, contentDescription = "所有任务", tint = TGColors.Black, size = 22.dp)
+                    }
+                }
+            }
+            "profile" -> barWithTitle("我的", navController)
+            "track" -> barWithTitle("追踪中", navController)
+            else -> barWithTitle("任务栏", navController)
+        }
+    }
+}
+
+@Composable
+private fun barWithTitle(title: String, navController: NavController) {
+    Row(
+        Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
+            TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Black, size = 22.dp)
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(title, color = TGColors.Black, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** 人物边框头像（圆形金边 + 人形剪影，黑金风格），点开进入我的 */
+@Composable
+fun AvatarFrame(onClick: () -> Unit) {
+    PressIcon(onClick = onClick) {
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(TGColors.Black)
+                .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            TGIcon(
+                drawable = R.drawable.ic_avatar,
+                contentDescription = "我的",
+                tint = TGColors.Gold,
+                size = 22.dp
+            )
+        }
+    }
+}
+
+/** 底部中央"追踪"大按钮（黑金招牌），点开进入追踪页 */
+@Composable
+fun CenterTrackingButton(navController: NavController) {
+    Box(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        PressIcon(onClick = { navController.navigate("track") }) {
+            Row(
+                Modifier
+                    .height(52.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                    .background(TGColors.Black)
+                    .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                    .padding(horizontal = 28.dp, vertical = 0.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TGIcon(
+                    drawable = R.drawable.ic_track,
+                    contentDescription = "追踪",
+                    tint = TGColors.Gold,
+                    size = 22.dp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "追踪",
+                    color = TGColors.Gold,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }

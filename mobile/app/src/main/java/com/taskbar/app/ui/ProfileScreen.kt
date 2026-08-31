@@ -1,6 +1,7 @@
 package com.taskbar.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,19 +43,25 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
-        // 等级卡（对齐桌面端等级体系）
-        TGCard(Modifier.fillMaxWidth()) {
+        // 等级卡 黑金招牌：墨黑底 + 金色等级名 + 金边
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(TGColors.Black)
+                .border(1.5.dp, TGColors.Gold, RoundedCornerShape(14.dp))
+                .padding(14.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Lv.${level.lv} ${level.name}", color = TGColors.GoldDeep, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(level.title, color = TGColors.InkMute, fontSize = 12.sp)
+                    Text("Lv.${level.lv} ${level.name}", color = TGColors.Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(level.title, color = TGColors.GoldLight.copy(alpha = 0.8f), fontSize = 12.sp)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$points / ${level.max}", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("$points / ${level.max}", color = TGColors.GoldLight, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     if (level.toNext > 0) {
-                        Text("距 ${nextLevelName(level.lv)} 还差 ${level.toNext} 分", color = TGColors.InkMute, fontSize = 11.sp)
+                        Text("距 ${nextLevelName(level.lv)} 还差 ${level.toNext} 分", color = TGColors.GoldLight.copy(alpha = 0.7f), fontSize = 11.sp)
                     } else {
-                        Text("已是最高等级", color = TGColors.GoldDeep, fontSize = 11.sp)
+                        Text("已是最高等级", color = TGColors.Gold, fontSize = 11.sp)
                     }
                 }
             }
@@ -63,10 +70,10 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 progress = { level.progress },
                 modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                 color = TGColors.Gold,
-                trackColor = TGColors.BgPaperDeep
+                trackColor = TGColors.GoldLight.copy(alpha = 0.2f)
             )
             Spacer(Modifier.height(4.dp))
-            Text("完成任务可获得积分，积分升级等级", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("完成任务可获得积分，积分升级等级", color = TGColors.GoldLight.copy(alpha = 0.6f), fontSize = 11.sp)
         }
 
         Spacer(Modifier.height(10.dp))

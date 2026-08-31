@@ -66,54 +66,25 @@ fun MainApp() {
     val navController = rememberNavController()
     val vm: TaskViewModel = viewModel()
 
-    val tabs = listOf(
-        TabItem("profile", "我的", R.drawable.ic_settings),
-        TabItem("home", "主页", R.drawable.ic_today),
-        TabItem("track", "追踪", R.drawable.ic_track)
-    )
+    // 顶层 tab：home（主页）、profile（我的，用 AppTopBar 里的 AvatarFrame）。
+    // 追踪从底部中央"追踪"大按钮进入，不放在 tab 里。
+    val topTabs = listOf("home", "profile")
 
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
     Scaffold(
-        containerColor = Color.Transparent,   // 透出主题里的暖光渐变
+        containerColor = Color.Transparent,
+        topBar = {
+            // 顶部 tab 栏 + 标题栏：home/profile 显示完整顶栏，track 显示简单标题
+            if (currentRoute in topTabs || currentRoute == "track") {
+                AppTopBar(currentRoute, vm, navController)
+            }
+        },
         bottomBar = {
-            if (currentRoute in tabs.map { it.route }) {
-                NavigationBar(
-                    containerColor = TGColors.PanelSolid,
-                    tonalElevation = 3.dp
-                ) {
-                    tabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                if (currentRoute != tab.route) {
-                                    navController.navigate(tab.route) {
-                                        popUpTo("home") { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = {
-                                TGIcon(
-                                    drawable = tab.icon,
-                                    contentDescription = tab.label,
-                                    tint = if (currentRoute == tab.route) TGColors.GoldDeep else TGColors.InkMute,
-                                    size = 20.dp
-                                )
-                            },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = TGColors.GoldDeep,
-                                selectedTextColor = TGColors.GoldDeep,
-                                unselectedIconColor = TGColors.InkMute,
-                                unselectedTextColor = TGColors.InkMute,
-                                indicatorColor = TGColors.Selected
-                            )
-                        )
-                    }
-                }
+            // 底部中央"追踪"大按钮（home 和 profile 可见）
+            if (currentRoute in topTabs) {
+                CenterTrackingButton(navController)
             }
         }
     ) { padding ->

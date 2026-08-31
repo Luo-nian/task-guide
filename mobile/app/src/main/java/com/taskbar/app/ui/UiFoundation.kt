@@ -65,48 +65,52 @@ fun PressIcon(
     ) { content() }
 }
 
-// ==================== 配色 v4.9 黑金主题（深墨底 + 金线 + 米白字，与桌面端同步） ====================
+// ==================== 配色（暖色浅色底 + 黑金元素点缀，与桌面端同步） ====================
 // 色值与 desktop/ui/style.css 的 :root 变量一一对应，改配色时两边一起改
 object TGColors {
-    // ---- 背景（深墨系） ----
-    val BgPaper     = Color(0xFF16120C)   // 主背景 墨黑褐（--bg-paper）
-    val BgPaperDeep = Color(0xFF201A12)   // 深一档 深棕（--bg-paper-deep）
-    val Panel       = Color(0xFF1E1810)   // 面板 深棕（--panel 的实色近似）
-    val PanelSolid  = Color(0xFF221B12)   // 面板实色（--panel-solid）
-    val Card        = Color(0xFF241D14)   // 卡片 深褐（--card）
-    val Bar         = Color(0xFF2A2216)   // 任务条 深棕（--bar 的实色近似）
-    val BarHover    = Color(0xFF3A2E1F)   // 任务条按下（--bar-hover）
-    val Selected    = Color(0xFF3A2E1A)   // 选中（--selected，金边对比）
+    // ---- 背景（浅色米系） ----
+    val BgPaper     = Color(0xFFF5EFE0)   // 主背景 米色（--bg-paper）
+    val BgPaperDeep = Color(0xFFEDE3CC)   // 深一档米色（--bg-paper-deep）
+    val Panel       = Color(0xFFFCF7EB)   // 面板（--panel 的实色近似）
+    val PanelSolid  = Color(0xFFFAF5E6)   // 面板实色（--panel-solid）
+    val Card        = Color(0xFFFFFBEF)   // 卡片白米色（--card）
+    val Bar         = Color(0xFFEDE2C8)   // 任务条（--bar 的实色近似）
+    val BarHover    = Color(0xFFE4D5AF)   // 任务条按下（--bar-hover）
+    val Selected    = Color(0xFFF4E6B9)   // 选中（--selected）
 
-    // ---- 文字（米白/浅金系） ----
-    val Ink         = Color(0xFFF5EFE0)   // 主文字 米白（--ink）
-    val InkSoft     = Color(0xFFC9B98F)   // 副文字 浅金灰（--ink-soft）
+    // ---- 文字（深褐系） ----
+    val Ink         = Color(0xFF3A2E1A)   // 主文字 深褐（--ink）
+    val InkSoft     = Color(0xFF6B5D3E)   // 副文字（--ink-soft）
     val InkMute     = Color(0xFF9C8B6A)   // 三级文字（--ink-mute）
-    val InkFaint    = Color(0xFF6B5D3E)   // 四级/分隔（--ink-faint）
+    val InkFaint    = Color(0xFFC2B58E)   // 四级/分隔（--ink-faint）
 
-    // ---- 装饰色（金线 + 玉青 + 朱砂） ----
-    val Gold        = Color(0xFFD4AF37)   // 主金：图标/描边（--gold）
+    // ---- 黑金元素（在浅色底上做黑+金的高级点缀） ----
+    val Black       = Color(0xFF16120C)   // 墨黑（黑金面板/文字）
+    val BlackSoft   = Color(0xFF2A2318)   // 黑灰（黑金卡片底）
+    val Gold        = Color(0xFFC9A227)   // 主金：图标/描边（--gold）
     val GoldLight   = Color(0xFFE6C77A)   // 浅金：填充底（--gold-light）
-    val GoldDeep    = Color(0xFFB8902A)   // 深金：浅底上的可读金文字（--gold-deep）
-    val Orange      = Color(0xFFD88A3F)   // 暖橘（--orange）
-    val Jade        = Color(0xFF6FBC9F)   // 玉青 完成（--jade，深底调亮）
-    val Crimson     = Color(0xFFD1644A)   // 朱砂 紧急/高优先级（--crimson）
-    val Azure       = Color(0xFF7FA8CC)   // 蓝 追踪/重复（--azure，深底调亮）
-    val Violet      = Color(0xFFB49BE0)   // 紫 涟漪/目标（--violet，深底调亮）
+    val GoldDeep    = Color(0xFF9A7B1A)   // 深金：浅底上的可读金文字（--gold-deep）
 
-    // ---- 边框（金色半透，深底可见） ----
-    val BorderSoft   = Color(0x44D4AF37)   // 金色 27% 透明
-    val BorderMid    = Color(0x77D4AF37)   // 金色 47% 透明
-    val BorderStrong = Color(0xB3D4AF37)   // 金色 70% 透明
+    // ---- 装饰色 ----
+    val Orange      = Color(0xFFD88A3F)   // 暖橘（--orange）
+    val Jade        = Color(0xFF4A8B6F)   // 玉青 完成（--jade）
+    val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级（--crimson）
+    val Azure       = Color(0xFF4F86B5)   // 蓝 追踪/重复（--azure）
+    val Violet      = Color(0xFF8A6BC9)   // 紫 涟漪/目标（--violet）
+
+    // ---- 边框（含 alpha，对应 --border-soft / mid / strong）----
+    val BorderSoft   = Color(0x38C9A227)
+    val BorderMid    = Color(0x599A7B1A)
+    val BorderStrong = Color(0x8C9A7B1A)
 }
 
 private val TGColorScheme = lightColorScheme(
     primary = TGColors.Gold,
-    onPrimary = TGColors.BgPaper,        // 金底用墨黑字（深底上的可读）
+    onPrimary = TGColors.Black,          // 金底用墨黑字（黑金招牌）
     primaryContainer = TGColors.Selected,
     onPrimaryContainer = TGColors.Ink,
     secondary = TGColors.Jade,
-    onSecondary = TGColors.BgPaper,       // 玉青底用墨黑字
+    onSecondary = Color.White,           // 玉青底用白字（习惯按钮）
     secondaryContainer = TGColors.Selected,
     onSecondaryContainer = TGColors.Ink,
     background = TGColors.BgPaper,
@@ -117,15 +121,15 @@ private val TGColorScheme = lightColorScheme(
     onSurfaceVariant = TGColors.InkSoft,
     outline = TGColors.BorderMid,
     error = TGColors.Crimson,
-    onError = TGColors.BgPaper
+    onError = Color.White
 )
 
 /** 顶部暖光渐变（对应桌面端 body::before） */
 private val TGBackgroundBrush = Brush.verticalGradient(
     listOf(
-        Color(0xFF1E1810),
-        Color(0xFF16120C),
-        Color(0xFF120E08)
+        Color(0xFFFAF0D8),
+        Color(0xFFF5EFE0),
+        Color(0xFFEFE1B8)
     )
 )
 
