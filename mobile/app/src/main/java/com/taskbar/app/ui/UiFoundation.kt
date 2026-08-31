@@ -1,22 +1,69 @@
 package com.taskbar.app.ui
 
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskbar.app.data.model.Priority
+
+// ==================== 全局 Toast（防抖 + 单例覆盖，杜绝连点刷屏/截断） ====================
+object ToastHelper {
+    private var lastMsg: String = ""
+    private var lastAt: Long = 0
+    private var toast: Toast? = null
+
+    /** 同一内容 2.5s 内只提示一次；新提示会顶掉旧提示（防排队堆积） */
+    fun show(ctx: Context, msg: String, duration: Int = Toast.LENGTH_SHORT) {
+        val now = System.currentTimeMillis()
+        if (msg == lastMsg && now - lastAt < 2500) return
+        lastMsg = msg
+        lastAt = now
+        toast?.cancel()
+        toast = Toast.makeText(ctx.applicationContext, msg, duration).apply { show() }
+    }
+}
+
+/**
+ * 带按压缩放反馈的 IconButton（按下缩小 0.84，松开回弹）。
+ * 所有图标按钮统一用它，保证"按下有反馈"。
+ */
+@Composable
+fun PressIcon(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, tween(100))
+    IconButton(
+        onClick = onClick,
+        interactionSource = interaction,
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+    ) { content() }
+}
 
 // ==================== 配色（对齐桌面端 v4.6：暖色浅色 · 米底 + 深褐字 + 金线 + 玉青） ====================
 // 色值与 desktop/ui/style.css 的 :root 变量一一对应，改配色时两边一起改

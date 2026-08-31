@@ -77,15 +77,16 @@ class TaskRepository(private val db: AppDatabase) {
         dueAt: Long? = null,
         repeatRule: String? = null,
         deadline: Long? = null,
-        rewardPoints: Int = 10,
         reminderStrength: String? = null
     ): Task {
         val t = now()
+        // 积分按类型+优先级规则计算（RewardRules）
         val task = Task(
             uuid = newUuid(), type = type, title = title, desc = desc,
             category = category, priority = priority, dueAt = dueAt,
             repeatRule = repeatRule, deadline = deadline,
-            trackStatus = TrackStatus.PENDING, rewardPoints = rewardPoints,
+            trackStatus = TrackStatus.PENDING,
+            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(type, priority),
             reminderStrength = reminderStrength,
             createdAt = t, updatedAt = t
         )
@@ -95,9 +96,13 @@ class TaskRepository(private val db: AppDatabase) {
     }
 
     suspend fun updateTask(task: Task) {
-        val updated = task.copy(updatedAt = now())
-        taskDao.upsert(updated)
-        emit(ChangeOp("upsert", "task", updated.uuid))
+        // 编辑时同步按当前类型/优先级重算积分，保证规则一致
+        val recalculated = task.copy(
+            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(task.type, task.priority),
+            updatedAt = now()
+        )
+        taskDao.upsert(recalculated)
+        emit(ChangeOp("upsert", "task", recalculated.uuid))
     }
 
     suspend fun deleteTask(uuid: String) {
@@ -239,12 +244,27 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
-    suspend fun addStep(taskUuid: String, title: String, attrLabel: String = "", attrValue: String = ""): Step {
+    /**
+     * 添加步骤。insertAt=null 追加到末尾；insertAt>=0 插入到该位置
+     * （0=新第 1 步，原第 1 步顺延为第 2 步，依次后移）
+     */
+    suspend fun addStep(
+        taskUuid: String,
+        title: String,
+        attrLabel: String = "",
+        attrValue: String = "",
+        insertAt: Int? = null
+    ): Step {
         val t = now()
-        val order = stepDao.countByTask(taskUuid)
+        val count = stepDao.countByTask(taskUuid)
+        val pos = insertAt?.coerceIn(0, count) ?: count
+        // 把 pos 及之后的步骤整体后移一位
+        if (pos < count) {
+            stepDao.shiftSortOrder(taskUuid, pos, 1, t)
+        }
         val step = Step(
             uuid = newUuid(), taskUuid = taskUuid, title = title,
-            attrLabel = attrLabel, attrValue = attrValue, sortOrder = order,
+            attrLabel = attrLabel, attrValue = attrValue, sortOrder = pos,
             createdAt = t, updatedAt = t
         )
         stepDao.upsert(step)
@@ -321,6 +341,18 @@ class TaskRepository(private val db: AppDatabase) {
 
     suspend fun getSetting(key: String, default: String = ""): String =
         settingsDao.get(key) ?: default
+
+    /** 用户自定义分类列表（逗号分隔存 settings；学习/生活/锻炼为内置预设，不入此列表） */
+    suspend fun getCustomCategories(): List<String> =
+        settingsDao.get("category_list")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+    suspend fun addCustomCategory(name: String) {
+        val name2 = name.trim()
+        if (name2.isEmpty()) return
+        val cur = getCustomCategories()
+        if (name2 in cur) return
+        settingsDao.set(com.taskbar.app.data.model.Setting("category_list", (cur + name2).joinToString(",")))
+    }
 
     /** 观察设置值变化（Flow） */
     fun observeSetting(key: String): Flow<String?> = settingsDao.observe(key)

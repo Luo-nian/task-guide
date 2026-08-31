@@ -1,10 +1,12 @@
 package com.taskbar.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -165,22 +167,30 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
 
     if (showAddStepDialog) {
         AddStepDialog(
+            currentCount = steps.size,
             onDismiss = { showAddStepDialog = false },
-            onConfirm = { title, label, value ->
-                if (title.isNotBlank()) vm.addStep(uuid, title.trim(), label.trim(), value.trim())
+            onConfirm = { title, label, value, insertAt ->
+                if (title.isNotBlank()) vm.addStep(uuid, title.trim(), label.trim(), value.trim(), insertAt)
                 showAddStepDialog = false
             }
         )
     }
 }
 
-/** 添加步骤弹窗：步骤名 + 可选属性/值，确认后一次性添加 */
+/** 添加步骤弹窗：步骤名 + 可选属性/值 + 插入位置（默认最后），确认后一次性添加 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddStepDialog(onDismiss: () -> Unit, onConfirm: (String, String, String) -> Unit) {
+fun AddStepDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String, Int?) -> Unit,
+    currentCount: Int = 0,
+    titleText: String = "添加步骤"
+) {
     var title by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var value by remember { mutableStateOf("") }
+    // 插入位置：null = 追加到最后；0..count-1 = 插入到第 N 步之前
+    var insertAt by remember { mutableStateOf<Int?>(null) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         // 弹窗打开自动聚焦步骤名输入框
@@ -188,7 +198,7 @@ private fun AddStepDialog(onDismiss: () -> Unit, onConfirm: (String, String, Str
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加步骤", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+        title = { Text(titleText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 OutlinedTextField(
@@ -198,6 +208,29 @@ private fun AddStepDialog(onDismiss: () -> Unit, onConfirm: (String, String, Str
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     singleLine = true
                 )
+                Spacer(Modifier.height(8.dp))
+                // 插入位置选择
+                Text("插入位置", color = TGColors.InkSoft, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // 最后（默认）
+                    FilterChip(
+                        selected = insertAt == null,
+                        onClick = { insertAt = null },
+                        label = { Text("最后") }
+                    )
+                    // 每个现有位置前插入：第1步..第count步
+                    (0 until currentCount).forEach { i ->
+                        FilterChip(
+                            selected = insertAt == i,
+                            onClick = { insertAt = i },
+                            label = { Text("第${i + 1}步前") }
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 Text("属性与值是选填的，比如「距离 5km」「用时 30分钟」，不用可以留空", color = TGColors.InkMute, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
@@ -218,7 +251,7 @@ private fun AddStepDialog(onDismiss: () -> Unit, onConfirm: (String, String, Str
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (title.isNotBlank()) onConfirm(title, label, value) }) {
+            TextButton(onClick = { if (title.isNotBlank()) onConfirm(title, label, value, insertAt) }) {
                 Text("确认添加", color = TGColors.GoldDeep, fontWeight = FontWeight.Medium)
             }
         },
@@ -288,7 +321,19 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
         }
     }
 
-    val categoryPresets = listOf("学习", "生活", "锻炼")
+    val presetCategories = listOf("学习", "生活", "锻炼")
+    var customCategories by remember { mutableStateOf(listOf<String>()) }
+    var showAddCategory by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // 读用户自定义分类（持久化在 settings）
+        customCategories = vm.getCustomCategories()
+    }
+    // 展示用分类全集：预设 + 自定义 + 当前选中（防止历史自定义分类不显示）
+    val allCategories = remember(customCategories, category) {
+        (presetCategories + customCategories +
+            if (category.isNotBlank() && category !in presetCategories && category !in customCategories) listOf(category) else emptyList()
+        ).distinct()
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -308,98 +353,154 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
             )
         }
     ) { p ->
-        Column(Modifier.padding(p).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(title, { title = it }, label = { Text("标题 *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(desc, { desc = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        // 用 LazyColumn 让整页可滚动（修复内容超屏后"保存"按钮看不到的问题）
+        LazyColumn(
+            Modifier.padding(p).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 32.dp)
+        ) {
+            item {
+                OutlinedTextField(title, { title = it }, label = { Text("标题 *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(desc, { desc = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-            // 类型
-            Text("类型", color = TGColors.InkSoft, fontSize = 13.sp)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(listOf(TaskType.ONCE to "单次", TaskType.REPEAT to "重复", TaskType.NOTE to "速记", TaskType.HABIT to "习惯", TaskType.GOAL to "目标")) { (v, l) ->
-                    FilterChip(selected = type == v, onClick = { type = v }, label = { Text(l) })
+                // 类型
+                Text("类型", color = TGColors.InkSoft, fontSize = 13.sp)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(listOf(TaskType.ONCE to "单次", TaskType.REPEAT to "重复", TaskType.NOTE to "速记", TaskType.HABIT to "习惯", TaskType.GOAL to "目标")) { (v, l) ->
+                        FilterChip(selected = type == v, onClick = { type = v }, label = { Text(l) })
+                    }
                 }
-            }
 
-            // 优先级
-            Text("优先级", color = TGColors.InkSoft, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(Priority.HIGH to "高", Priority.MEDIUM to "中", Priority.LOW to "低").forEach { (v, l) ->
-                    FilterChip(selected = priority == v, onClick = { priority = v }, label = { Text(l) })
+                // 优先级
+                Text("优先级", color = TGColors.InkSoft, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(Priority.HIGH to "高", Priority.MEDIUM to "中", Priority.LOW to "低").forEach { (v, l) ->
+                        FilterChip(selected = priority == v, onClick = { priority = v }, label = { Text(l) })
+                    }
                 }
-            }
 
-            // 分类（预设 + 自定义）
-            Text("分类", color = TGColors.InkSoft, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                categoryPresets.forEach { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c) })
+                // 分类（预设 + 自定义持久化 + 分类+）
+                Text("分类", color = TGColors.InkSoft, fontSize = 13.sp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                ) {
+                    allCategories.forEach { c ->
+                        FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c) })
+                    }
+                    AssistChip(onClick = { showAddCategory = true }, label = { Text("分类+") })
                 }
-            }
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("自定义分类") },
-                placeholder = { Text("如：副业、家庭、副业...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                if (category.isBlank()) {
+                    Text("点击分类或「分类+」新建自己的分类", color = TGColors.InkMute, fontSize = 11.sp)
+                }
 
-            // 习惯类型：显示周期设置
-            if (type == TaskType.HABIT) {
-                HabitCycleEditor(rule = habitRule, onChange = { habitRule = it })
-            }
+                // 习惯类型：显示周期设置
+                if (type == TaskType.HABIT) {
+                    HabitCycleEditor(rule = habitRule, onChange = { habitRule = it })
+                }
 
-            // 提醒时间（非速记/非习惯）
-            if (type != TaskType.NOTE && type != TaskType.HABIT) {
-                Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
-                DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
+                // 提醒时间（非速记/非习惯）
+                if (type != TaskType.NOTE && type != TaskType.HABIT) {
+                    Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
+                    DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
 
-                // 提醒强度
-                Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
-                Column {
-                    listOf<String?>(null, ReminderStrength.STANDARD, ReminderStrength.REPEAT, ReminderStrength.ALARM).forEach { v ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { reminderStrength = v }) {
-                            RadioButton(selected = reminderStrength == v, onClick = { reminderStrength = v })
-                            Text(
-                                if (v == null) "跟随默认设置" else ReminderStrength.label(v),
-                                color = if (v == null) TGColors.InkMute else TGColors.Ink,
-                                fontSize = 14.sp
-                            )
+                    // 提醒强度
+                    Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
+                    Column {
+                        listOf<String?>(null, ReminderStrength.STANDARD, ReminderStrength.REPEAT, ReminderStrength.ALARM).forEach { v ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { reminderStrength = v }) {
+                                RadioButton(selected = reminderStrength == v, onClick = { reminderStrength = v })
+                                Text(
+                                    if (v == null) "跟随默认设置" else ReminderStrength.label(v),
+                                    color = if (v == null) TGColors.InkMute else TGColors.Ink,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
                     }
                 }
+
+                Spacer(Modifier.height(8.dp))
+                // 完成积分预览
+                Text(
+                    "完成任务可得 ${com.taskbar.app.data.model.RewardRules.forTask(type, priority)} 积分",
+                    color = TGColors.GoldDeep,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (title.isBlank()) return@Button
+                        // 习惯类型的 dueAt 不使用（习惯没 dueAt 概念），周期走 repeatRule
+                        val finalDue = if (type == TaskType.HABIT) null else dueAt
+                        val finalRepeat = when (type) {
+                            TaskType.HABIT -> habitRule
+                            TaskType.REPEAT -> "daily"
+                            else -> null
+                        }
+                        val deadline = if (type == TaskType.GOAL) System.currentTimeMillis() + 30L * 86_400_000L else null
+
+                        if (editing != null) {
+                            vm.updateTask(editing!!.copy(
+                                title = title.trim(), desc = desc, type = type,
+                                priority = priority, category = category, dueAt = finalDue,
+                                repeatRule = finalRepeat, deadline = deadline,
+                                reminderStrength = reminderStrength
+                            ))
+                        } else {
+                            vm.createTask(type, title.trim(), desc, category, priority, finalDue, finalRepeat, deadline, reminderStrength = reminderStrength)
+                        }
+                        navController.popBackStack()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)
+                ) { Text("保存", color = TGColors.Ink) }
             }
-
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    if (title.isBlank()) return@Button
-                    // 习惯类型的 dueAt 不使用（习惯没 dueAt 概念），周期走 repeatRule
-                    val finalDue = if (type == TaskType.HABIT) null else dueAt
-                    val finalRepeat = when (type) {
-                        TaskType.HABIT -> habitRule
-                        TaskType.REPEAT -> "daily"
-                        else -> null
-                    }
-                    val deadline = if (type == TaskType.GOAL) System.currentTimeMillis() + 30L * 86_400_000L else null
-
-                    if (editing != null) {
-                        vm.updateTask(editing!!.copy(
-                            title = title.trim(), desc = desc, type = type,
-                            priority = priority, category = category, dueAt = finalDue,
-                            repeatRule = finalRepeat, deadline = deadline,
-                            reminderStrength = reminderStrength
-                        ))
-                    } else {
-                        vm.createTask(type, title.trim(), desc, category, priority, finalDue, finalRepeat, deadline, reminderStrength = reminderStrength)
-                    }
-                    navController.popBackStack()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)
-            ) { Text("保存", color = TGColors.Ink) }
         }
     }
+
+    if (showAddCategory) {
+        AddCategoryDialog(
+            onDismiss = { showAddCategory = false },
+            onConfirm = { name ->
+                val n = name.trim()
+                if (n.isNotEmpty()) {
+                    vm.addCustomCategory(n)
+                    customCategories = (customCategories + n).distinct()
+                    category = n
+                }
+                showAddCategory = false
+            }
+        )
+    }
+}
+
+/** 新建分类弹窗：命名后存入设置，下次新建任务可选 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("新建分类") },
+        text = {
+            OutlinedTextField(
+                value = name, onValueChange = { name = it },
+                label = { Text("分类名 *") },
+                placeholder = { Text("如：副业、家庭") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+            )
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(name) }) { Text("添加", color = TGColors.GoldDeep) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }
 
 // ==================== 提醒时间编辑器（日期 + 时间 + 清除） ====================

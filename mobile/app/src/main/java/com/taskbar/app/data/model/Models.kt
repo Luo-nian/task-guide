@@ -96,6 +96,28 @@ object Levels {
     }
 }
 
+// ==================== 积分规则（按任务类型 + 优先级） ====================
+object RewardRules {
+    /** 类型基础分：单次 8 / 重复 10 / 习惯 5 / 速记 2 / 目标 15 */
+    fun base(type: String): Int = when (type) {
+        TaskType.REPEAT -> 10
+        TaskType.GOAL -> 15
+        TaskType.HABIT -> 5
+        TaskType.NOTE -> 2
+        else -> 8   // ONCE
+    }
+
+    /** 优先级加成：高 +7 / 中 +4 / 低 +1 */
+    fun bonus(priority: String): Int = when (priority) {
+        Priority.HIGH -> 7
+        Priority.LOW -> 1
+        else -> 4    // MEDIUM
+    }
+
+    /** 完成任务可得积分 = 类型基础分 + 优先级加成 */
+    fun forTask(type: String, priority: String): Int = base(type) + bonus(priority)
+}
+
 // ==================== 法定节假日（中国，内置表；用于提醒顺延） ====================
 object ChineseHolidays {
     // 2026/2027 法定节假日（含调休补班的周末也算工作日，这里只存"放假"日期）

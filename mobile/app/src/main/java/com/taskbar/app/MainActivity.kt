@@ -67,11 +67,9 @@ fun MainApp() {
     val vm: TaskViewModel = viewModel()
 
     val tabs = listOf(
-        TabItem("today", "今天", R.drawable.ic_today),
-        TabItem("track", "追踪", R.drawable.ic_track),
-        TabItem("habit", "习惯", R.drawable.ic_habit),
-        TabItem("archive", "归档", R.drawable.ic_archive),
-        TabItem("profile", "我的", R.drawable.ic_settings)
+        TabItem("profile", "我的", R.drawable.ic_settings),
+        TabItem("home", "主页", R.drawable.ic_today),
+        TabItem("track", "追踪", R.drawable.ic_track)
     )
 
     val backStack by navController.currentBackStackEntryAsState()
@@ -91,7 +89,7 @@ fun MainApp() {
                             onClick = {
                                 if (currentRoute != tab.route) {
                                     navController.navigate(tab.route) {
-                                        popUpTo("today") { saveState = true }
+                                        popUpTo("home") { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
@@ -121,15 +119,16 @@ fun MainApp() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = "today",
+            startDestination = "home",
             modifier = Modifier.padding(padding)
         ) {
-            composable("today") { TaskListScreen(vm, navController) }
-            composable("track") { TrackScreen(vm, navController) }
+            composable("home") { TaskListScreen(vm, navController) }
+            composable("track") { TrackScreen(vm) }
             composable("habit") { HabitScreen(vm) }
-            composable("archive") { ArchiveScreen(vm, navController) }
             composable("profile") { ProfileScreen(vm, navController) }
             composable("settings") { SettingsScreen(vm, navController) }
+            composable("all") { AllTasksScreen(vm, navController) }
+            composable("history") { HistoryScreen(vm, navController) }
             composable(
                 "detail/{uuid}",
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })

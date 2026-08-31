@@ -70,6 +70,17 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         }
 
         Spacer(Modifier.height(10.dp))
+        // 习惯打卡入口
+        TGCard(Modifier.fillMaxWidth().clickable { navController.navigate("habit") }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TGIcon(R.drawable.ic_habit, contentDescription = null, tint = TGColors.Jade, size = 20.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("习惯打卡", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("›", color = TGColors.InkMute, fontSize = 20.sp)
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 设置入口（点击进入子页面）
         TGCard(Modifier.fillMaxWidth().clickable { navController.navigate("settings") }) {
             Row(verticalAlignment = Alignment.CenterVertically) {

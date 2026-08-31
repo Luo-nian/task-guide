@@ -59,18 +59,20 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(6.dp))
-        // 提醒强度
+        // 提醒强度（带人话说明，让用户知道每个档位到底是什么提示）
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒强度", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(8.dp))
-            listOf("standard" to "标准通知", "repeat" to "重复提醒(5分钟)", "alarm" to "闹钟式强提醒").forEach { (v, l) ->
+            Spacer(Modifier.height(4.dp))
+            Text("电脑端和手机端共用一个默认强度，任务详情里可单独覆盖", color = TGColors.InkMute, fontSize = 11.sp)
+            Spacer(Modifier.height(6.dp))
+            listOf("standard" to "普通通知（响一声）", "repeat" to "重复提醒（每 5 分钟，最多 3 次）", "alarm" to "闹钟式强提醒（全屏+长震）").forEach { (v, l) ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     RadioButton(
                         selected = strength == v,
                         onClick = { strength = v; vm.setSetting("reminder_strength", v) },
                         colors = RadioButtonDefaults.colors(selectedColor = TGColors.Gold)
                     )
-                    Text(l, color = TGColors.Ink, fontSize = 14.sp)
+                    Text(l, color = TGColors.Ink, fontSize = 13.sp)
                 }
             }
         }
@@ -117,7 +119,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             Button(onClick = {
                 scope.launch {
                     val msg = withContext(Dispatchers.IO) { exportJson(ctx) }
-                    Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                    ToastHelper.show(ctx, msg, Toast.LENGTH_LONG)
                 }
             }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)) {
                 Text("导出 JSON 备份", color = Color.White)

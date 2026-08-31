@@ -139,6 +139,10 @@ interface StepDao {
     @Query("UPDATE steps SET status = :status, done_at = :doneAt, updated_at = :now WHERE uuid = :uuid")
     suspend fun updateStatus(uuid: String, status: String, doneAt: Long?, now: Long)
 
+    /** 插入步骤时：把 sort_order >= from 的步骤整体后移 delta（不碰软删除的） */
+    @Query("UPDATE steps SET sort_order = sort_order + :delta, updated_at = :now WHERE task_uuid = :taskUuid AND sort_order >= :from AND deleted = 0")
+    suspend fun shiftSortOrder(taskUuid: String, from: Int, delta: Int, now: Long)
+
     @Query("UPDATE steps SET deleted = 1, updated_at = :now WHERE uuid = :uuid")
     suspend fun softDelete(uuid: String, now: Long)
 

@@ -89,9 +89,9 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ===== 步骤操作 =====
-    fun addStep(taskUuid: String, title: String, attrLabel: String, attrValue: String) =
+    fun addStep(taskUuid: String, title: String, attrLabel: String, attrValue: String, insertAt: Int? = null) =
         viewModelScope.launch {
-            repo.addStep(taskUuid, title, attrLabel, attrValue)
+            repo.addStep(taskUuid, title, attrLabel, attrValue, insertAt)
             refreshWidget()
         }
 
@@ -144,6 +144,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun setTrackLimit(limit: Int) = viewModelScope.launch { repo.setTrackLimit(limit) }
     fun setSetting(key: String, value: String) = viewModelScope.launch { repo.setSetting(key, value) }
     suspend fun getSetting(key: String, default: String = ""): String = repo.getSetting(key, default)
+
+    // ===== 分类 =====
+    suspend fun getCustomCategories(): List<String> = repo.getCustomCategories()
+    fun addCustomCategory(name: String) = viewModelScope.launch { repo.addCustomCategory(name) }
 
     private fun refreshWidget() {
         TrackWidgetProvider.refreshAll(ctx)
