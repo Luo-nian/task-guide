@@ -32,9 +32,11 @@ import java.util.Locale
 fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: String) {
     val taskState by vm.observeTaskFlow(uuid).collectAsStateWithLifecycle(initialValue = null)
     val steps by vm.steps(uuid).collectAsStateWithLifecycle(initialValue = emptyList())
-    val task = taskState ?: run {
-        EmptyState("加载中…", Modifier.fillMaxSize()); return
+    if (taskState == null) {
+        EmptyState("加载中…", Modifier.fillMaxSize())
+        return
     }
+    val task = taskState!!
 
     var showDelayDialog by remember { mutableStateOf(false) }
     var newStepTitle by remember { mutableStateOf("") }

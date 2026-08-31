@@ -59,6 +59,13 @@ class SyncService : Service() {
 
     private fun startServer() {
         val port = BuildConfig.SERVER_PORT
+        // 端口预检：被占用直接跳过服务器启动。
+        // 否则 Ktor CIO 引擎内部的 acceptJob 协程 bind 失败时异常逃逸外层
+        // try/catch（发生在引擎自己的协程里），直接崩掉整个 app。
+        if (!isPortAvailable(port)) {
+            Log.e("SyncService", "端口 $port 被占用，跳过服务器启动")
+            return
+        }
         mdns = MdnsRegistrar(this).also { it.register(port) }
         serverJob = scope.launch {
             try {
@@ -71,6 +78,18 @@ class SyncService : Service() {
                 // 端口被占用等异常，记录但不崩
                 e.printStackTrace()
             }
+        }
+    }
+
+    private fun isPortAvailable(port: Int): Boolean {
+        return try {
+            java.net.ServerSocket().use {
+                it.reuseAddress = true
+                it.bind(java.net.InetSocketAddress("0.0.0.0", port))
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
