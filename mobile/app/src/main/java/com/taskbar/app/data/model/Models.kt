@@ -81,6 +81,16 @@ object ReminderStrength {
         RING    -> "响铃"
         else    -> v ?: ""
     }
+
+    /**
+     * 未受理升级：当前档升到下一档（notify→vibrate→ring）。
+     * ring 已是最高档返回 null（不再升级）；旧 repeat 值走 vibrate 档升级。
+     */
+    fun escalateNext(s: String?): String? = when (migrateLegacy(s)) {
+        NOTIFY  -> VIBRATE
+        VIBRATE -> RING
+        else    -> null
+    }
 }
 
 // ==================== 等级体系（与桌面端 preview-server.js / Rust 端口径一致） ====================

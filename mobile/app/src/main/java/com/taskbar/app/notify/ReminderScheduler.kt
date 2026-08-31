@@ -54,7 +54,9 @@ object ReminderScheduler {
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
     suspend fun rescheduleAll(repo: com.taskbar.app.data.repo.TaskRepository, context: Context) {
         val now = System.currentTimeMillis()
-        val defaultStrength = repo.getSetting("reminder_strength", "notify")
+        // 全局默认提醒方式存 SharedPreferences（与 SettingsScreen/NotificationHelper 一致）
+        val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+            .getString("reminder_strength", "notify") ?: "notify"
         val tasks = repo.observeMainList().first()
         tasks.forEach { t ->
             if (t.dueAt != null && t.trackStatus != com.taskbar.app.data.model.TrackStatus.DONE) {
@@ -95,7 +97,7 @@ class ReminderWorker(
 
         NotificationHelper.showReminder(applicationContext, uuid, t.title, strength)
 
-        // repeat 模式：5 分钟后再提醒一次，最多 MAX_REPEAT 次
+        // repeat 模式（旧版兼容）：5 分钟后再提醒一次，最多 MAX_REPEAT 次
         if (strength == "repeat" && repeatCount < ReminderScheduler.MAX_REPEAT) {
             val data = workDataOf(
                 ReminderScheduler.KEY_UUID to uuid,
@@ -108,6 +110,27 @@ class ReminderWorker(
                 .addTag(ReminderScheduler.tagFor(uuid))
                 .build()
             WorkManager.getInstance(applicationContext).enqueue(req)
+        }
+
+        // 未受理升级：N 分钟后若还没处理，升到更强档（notify→vibrate→ring）
+        val prefs = applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+        val escalateOn = prefs.getBoolean("reminder_escalate_enabled", true)
+        if (escalateOn && strength != "repeat") {   // 旧 repeat 已有独立链式，不叠加升级
+            val minutes = prefs.getInt("reminder_escalate_minutes", 5)
+            val next = com.taskbar.app.data.model.ReminderStrength.escalateNext(strength)
+            if (next != null) {
+                val data = workDataOf(
+                    ReminderScheduler.KEY_UUID to uuid,
+                    "strength" to next,
+                    ReminderScheduler.KEY_REPEAT to 0
+                )
+                val req = OneTimeWorkRequestBuilder<ReminderWorker>()
+                    .setInitialDelay(minutes.toLong(), TimeUnit.MINUTES)
+                    .setInputData(data)
+                    .addTag(ReminderScheduler.tagFor(uuid))
+                    .build()
+                WorkManager.getInstance(applicationContext).enqueue(req)
+            }
         }
         return Result.success()
     }
@@ -131,7 +154,10 @@ class ReminderActionReceiver : BroadcastReceiver() {
                     app.repo.delayTask(uuid, 1)
                     val t = app.repo.observeTask(uuid).first()
                     t?.let {
-                        val strength = app.repo.getSetting("reminder_strength", "notify")
+                        // 保留原任务的 per-task 强度；未设置才用全局默认（prefs）
+                        val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+                            .getString("reminder_strength", "notify") ?: "notify"
+                        val strength = it.reminderStrength ?: defaultStrength
                         ReminderScheduler.schedule(context, uuid, it.dueAt!!, strength)
                     }
                     cancelNotification(context, uuid)
