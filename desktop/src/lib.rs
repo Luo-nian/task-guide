@@ -15,8 +15,11 @@ use chrono::{Datelike, Local, TimeZone, Timelike};
 mod sync;
 
 // =============== 数据结构 ===============
+// 协议说明：手机端（Kotlin kotlinx）Task/Step 序列化为 camelCase；桌面端收数据必须 camelCase。
+// 桌面端 -> 前端 app.js 的 API 响应按 app.js 读取习惯用 snake_case（与 preview-server mock 一致）。
+// 故 serialize/deserialize 分别指定，避免两端任一方向字段名错位。
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
 pub struct Task {
     pub uuid: String,
     #[serde(rename = "type")]
@@ -41,7 +44,7 @@ pub struct Task {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all(serialize = "snake_case", deserialize = "camelCase"))]
 pub struct Step {
     pub uuid: String,
     pub task_uuid: String,

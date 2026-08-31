@@ -24,6 +24,7 @@ struct FullSyncPayload {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]  // 手机端 HabitLog 序列化为 camelCase（taskUuid/checkDate/createdAt）
 struct HabitLog {
     task_uuid: String,
     check_date: String,
