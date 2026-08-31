@@ -39,11 +39,30 @@ class TaskRepository(private val db: AppDatabase) {
 
     // ==================== 观察 ====================
     fun observeMainList(): Flow<List<Task>> = taskDao.observeMainList()
+    /** 主列表（不含未来任务）：未来任务由 FutureTasksSection 独占显示，避免重复 */
+    fun observeMainListToday(): Flow<List<Task>> {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        c.set(java.util.Calendar.MINUTE, 59)
+        c.set(java.util.Calendar.SECOND, 59)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        return taskDao.observeMainListToday(c.timeInMillis)
+    }
     fun observeTracking(): Flow<List<Task>> = taskDao.observeTracking()
     fun observeArchive(): Flow<List<Task>> = taskDao.observeArchive()
     fun observeHabits(): Flow<List<Task>> = taskDao.observeHabits()
     fun observeTask(uuid: String): Flow<Task?> = taskDao.observeByUuid(uuid)
     fun observeSteps(taskUuid: String): Flow<List<Step>> = stepDao.observeByTask(taskUuid)
+
+    /** 未来任务：今天 23:59:59 之后的未完成任务 */
+    fun observeFutureTasks(): Flow<List<Task>> {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        c.set(java.util.Calendar.MINUTE, 59)
+        c.set(java.util.Calendar.SECOND, 59)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        return taskDao.observeFutureTasks(c.timeInMillis)
+    }
 
     suspend fun getTrackCards(): List<TrackCardItem> =
         taskDao.getTracking().map { TrackCardItem(it, stepDao.getCurrentStep(it.uuid)) }
@@ -58,7 +77,8 @@ class TaskRepository(private val db: AppDatabase) {
         dueAt: Long? = null,
         repeatRule: String? = null,
         deadline: Long? = null,
-        rewardPoints: Int = 10
+        rewardPoints: Int = 10,
+        reminderStrength: String? = null
     ): Task {
         val t = now()
         val task = Task(
@@ -66,6 +86,7 @@ class TaskRepository(private val db: AppDatabase) {
             category = category, priority = priority, dueAt = dueAt,
             repeatRule = repeatRule, deadline = deadline,
             trackStatus = TrackStatus.PENDING, rewardPoints = rewardPoints,
+            reminderStrength = reminderStrength,
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
@@ -90,19 +111,14 @@ class TaskRepository(private val db: AppDatabase) {
     // ==================== 追踪状态机 ====================
     /**
      * 开始追踪：
-     * 1. 若已达上限，把最早的追踪中任务转回 pending
+     * 1. 若已达上限 → 返回 false（不挤掉旧任务，由 UI 提示用户先取消别的追踪或调高上限）
      * 2. 当前任务转 tracking
      * 3. 第一个 todo 步骤转 doing（若有步骤）
      */
     suspend fun startTracking(uuid: String): Boolean {
         val limit = getTrackLimit()
         val current = taskDao.countTracking()
-        if (current >= limit) {
-            // 收回最早的追踪中任务
-            val oldest = taskDao.getTracking().minByOrNull { it.updatedAt } ?: return false
-            taskDao.updateTrackStatus(oldest.uuid, TrackStatus.PENDING, now())
-            emit(ChangeOp("upsert", "task", oldest.uuid))
-        }
+        if (current >= limit) return false
         val t = now()
         taskDao.updateTrackStatus(uuid, TrackStatus.TRACKING, t)
         // 第一个 todo 步骤转 doing
@@ -119,14 +135,26 @@ class TaskRepository(private val db: AppDatabase) {
         emit(ChangeOp("upsert", "task", uuid))
     }
 
-    /** 直接完成任务（无步骤或一键完成），累加积分 */
+    /** 直接完成任务（无步骤或一键完成），累加积分。
+     *  habit 走"今日打卡 + 加积分"逻辑，不归档任务（明天继续在今日栏）。 */
     suspend fun completeTask(uuid: String) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
-        taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
-        // 积分奖励：total_points += reward_points
+        if (task.type == TaskType.HABIT) {
+            // 习惯：今日已打卡则不再处理；写 habit_log + 加积分，任务保持非 done
+            val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(t))
+            if (habitDao.isChecked(uuid, date)) return
+            habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
+            emit(ChangeOp("upsert", "habit", uuid))
+        } else {
+            // 普通任务：归档 + 加积分
+            if (task.trackStatus == TrackStatus.DONE) return
+            taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
+        }
+        // 积分奖励
         val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
         settingsDao.set(com.taskbar.app.data.model.Setting("total_points", (current + task.rewardPoints).toString()))
+        // 步骤全 done（习惯/普通都一样）
         stepDao.getByTask(uuid).filter { it.status != StepStatus.DONE }.forEach {
             stepDao.updateStatus(it.uuid, StepStatus.DONE, t, t)
             emit(ChangeOp("upsert", "step", it.uuid))
@@ -166,7 +194,7 @@ class TaskRepository(private val db: AppDatabase) {
     // ==================== 步骤推进 ====================
     /**
      * 推进当前步骤：当前 doing 步骤 → done，下一个 todo → doing
-     * 若全部完成 → 任务自动完成
+     * 若全部完成 → 自动完成任务（归档 + 加积分 + 取消追踪）
      */
     suspend fun advanceStep(stepUuid: String) {
         val step = stepDao.getByUuid(stepUuid) ?: return
@@ -176,12 +204,26 @@ class TaskRepository(private val db: AppDatabase) {
 
         // 找下一个未完成步骤
         val next = stepDao.getFirstUndone(step.taskUuid)
-        if (next == null) {
-            // 全部完成 → 任务完成
-            completeTask(step.taskUuid)
-        } else {
+        if (next != null) {
             stepDao.updateStatus(next.uuid, StepStatus.DOING, null, t)
             emit(ChangeOp("upsert", "step", next.uuid))
+        } else {
+            // 所有步骤都完成了 → 自动完成任务（completeTask 内部会归档 + 加积分 + 步骤补 done）
+            completeTask(step.taskUuid)
+        }
+    }
+
+    /** 按任务 UUID 推进：自动找 DOING 步骤；没有则找第一个 TODO；全 done 时兜底自动完成任务 */
+    suspend fun advanceStepByTask(taskUuid: String) {
+        val step = stepDao.getCurrentStep(taskUuid) ?: stepDao.getFirstUndone(taskUuid)
+        if (step != null) {
+            advanceStep(step.uuid)
+            return
+        }
+        // 步骤全 done：若任务还没归档，自动完成（兜底，防止遗留半完成状态）
+        val task = taskDao.getByUuid(taskUuid) ?: return
+        if (task.trackStatus != TrackStatus.DONE && task.type != TaskType.HABIT) {
+            completeTask(taskUuid)
         }
     }
 

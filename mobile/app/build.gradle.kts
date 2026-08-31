@@ -93,4 +93,7 @@ dependencies {
 
     // ===== NSD（mDNS 服务发现，Android 自带 android.net.nsd） =====
     // 无需额外依赖
+
+    // ===== 单元测试（JVM 纯逻辑：等级/节假日等） =====
+    testImplementation("junit:junit:4.13.2")
 }

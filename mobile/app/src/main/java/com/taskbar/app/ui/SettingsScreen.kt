@@ -2,10 +2,12 @@ package com.taskbar.app.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -14,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.taskbar.app.BuildConfig
 import com.taskbar.app.R
 import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.Levels
 import com.taskbar.app.server.SyncService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,8 +24,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
 
+/** 下一级等级名（用于"距 XX 还差 N 分"） */
+private fun nextLevelName(currentLv: Int): String = when (currentLv) {
+    1 -> "风华游侠"
+    2 -> "破浪骑士"
+    3 -> "群星行者"
+    4 -> "传奇勇者"
+    else -> "下一级"
+}
+
 @Composable
-fun SettingsScreen(vm: TaskViewModel) {
+fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavController) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val trackLimit by vm.trackLimit.collectAsState()
@@ -34,28 +46,19 @@ fun SettingsScreen(vm: TaskViewModel) {
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Text("设置", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp, 12.dp))
-
-        // 我的积分
-        val points by vm.totalPoints.collectAsState()
-        TGCard(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.GoldDeep, size = 16.dp)
-                    Spacer(Modifier.width(5.dp))
-                    Text("我的积分", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TGIcon(R.drawable.ic_coin, contentDescription = null, tint = TGColors.GoldDeep, size = 18.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("$points", color = TGColors.GoldDeep, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
+        // 顶部：返回 + 标题
+        Row(
+            Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
+                TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
-            Spacer(Modifier.height(4.dp))
-            Text("完成任务可获得积分，完成后自动累加", color = TGColors.InkMute, fontSize = 11.sp)
+            Spacer(Modifier.width(4.dp))
+            Text("设置", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         // 提醒强度
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒强度", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)

@@ -1,12 +1,16 @@
 package com.taskbar.app.data.db
 
+import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.taskbar.app.data.model.HabitLog
 import com.taskbar.app.data.model.Setting
 import com.taskbar.app.data.model.Step
@@ -42,6 +46,19 @@ interface TaskDao {
     """)
     fun observeMainList(): Flow<List<Task>>
 
+    /** 主列表（不含未来任务）：未来任务（due_at > dayEnd）由 FutureTasksSection 独占显示，
+     *  避免主区和折叠区重复。dayEnd 通常是今天 23:59:59。 */
+    @Query("""
+        SELECT * FROM tasks
+        WHERE track_status != 'done' AND deleted = 0
+          AND (due_at IS NULL OR due_at <= :dayEnd)
+        ORDER BY
+            CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END,
+            CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+            due_at IS NULL, due_at ASC
+    """)
+    fun observeMainListToday(dayEnd: Long): Flow<List<Task>>
+
     @Query("SELECT * FROM tasks WHERE track_status = 'tracking' AND deleted = 0 ORDER BY updated_at DESC")
     fun observeTracking(): Flow<List<Task>>
 
@@ -56,6 +73,15 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE type = 'habit' AND deleted = 0 ORDER BY due_at ASC")
     fun observeHabits(): Flow<List<Task>>
+
+    /** 未来任务（due_at 在明天之后，未完成，非习惯），按提醒时间升序 */
+    @Query("""
+        SELECT * FROM tasks
+        WHERE track_status != 'done' AND deleted = 0
+          AND due_at IS NOT NULL AND due_at > :dayEnd AND type != 'habit'
+        ORDER BY due_at ASC
+    """)
+    fun observeFutureTasks(dayEnd: Long): Flow<List<Task>>
 
     /** 即将到点的提醒（due_at <= now 且未完成） */
     @Query("SELECT * FROM tasks WHERE due_at IS NOT NULL AND due_at <= :now AND track_status != 'done' AND deleted = 0")
@@ -175,7 +201,7 @@ interface SyncMetaDao {
 // ==================== Database ====================
 @Database(
     entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -187,5 +213,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "taskguide.db"
+
+        /** v2 → v3：加每任务提醒强度字段 */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL")
+            }
+        }
     }
 }

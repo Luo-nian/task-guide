@@ -54,12 +54,20 @@ object ReminderScheduler {
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
     suspend fun rescheduleAll(repo: com.taskbar.app.data.repo.TaskRepository, context: Context) {
         val now = System.currentTimeMillis()
-        val strength = repo.getSetting("reminder_strength", "standard")
+        val defaultStrength = repo.getSetting("reminder_strength", "standard")
         val tasks = repo.observeMainList().first()
         tasks.forEach { t ->
-            if (t.dueAt != null && t.trackStatus != TrackStatus.DONE) {
-                if (t.dueAt > now) {
-                    schedule(context, t.uuid, t.dueAt, strength)
+            if (t.dueAt != null && t.trackStatus != com.taskbar.app.data.model.TrackStatus.DONE) {
+                // per-task 强度覆盖全局默认
+                val strength = t.reminderStrength ?: defaultStrength
+                var due = t.dueAt
+                // 习惯/重复任务：到期日撞上法定节假日 → 顺延到下一个工作日 9 点（节假日休息）
+                if ((t.type == com.taskbar.app.data.model.TaskType.HABIT || t.type == com.taskbar.app.data.model.TaskType.REPEAT)
+                    && com.taskbar.app.data.model.ChineseHolidays.isHoliday(due)) {
+                    due = com.taskbar.app.data.model.ChineseHolidays.nextWorkday(due)
+                }
+                if (due > now) {
+                    schedule(context, t.uuid, due, strength)
                 } else {
                     // 已过期未完成 → 立即提醒（未完成警告）
                     NotificationHelper.showReminder(context, t.uuid, t.title, strength)

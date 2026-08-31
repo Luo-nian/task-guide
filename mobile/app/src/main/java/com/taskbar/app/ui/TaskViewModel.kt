@@ -19,7 +19,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     private val repo: TaskRepository = (app as TaskBarApp).repo
     private val ctx = app.applicationContext
 
-    val mainList: StateFlow<List<Task>> = repo.observeMainList()
+    val mainList: StateFlow<List<Task>> = repo.observeMainListToday()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val tracking: StateFlow<List<Task>> = repo.observeTracking()
@@ -29,6 +29,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val habits: StateFlow<List<Task>> = repo.observeHabits()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 未来任务（明天及以后到期） */
+    val futureTasks: StateFlow<List<Task>> = repo.observeFutureTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val trackLimit: StateFlow<Int> = repo.observeTrackLimit()
@@ -45,9 +49,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     // ===== 任务操作 =====
     fun createTask(
         type: String, title: String, desc: String, category: String,
-        priority: String, dueAt: Long?, repeatRule: String?, deadline: Long?
+        priority: String, dueAt: Long?, repeatRule: String?, deadline: Long?,
+        reminderStrength: String? = null
     ) = viewModelScope.launch {
-        repo.createTask(type, title, desc, category, priority, dueAt, repeatRule, deadline)
+        repo.createTask(type, title, desc, category, priority, dueAt, repeatRule, deadline, reminderStrength = reminderStrength)
         refreshWidget()
     }
 
@@ -61,8 +66,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
-    fun startTracking(uuid: String) = viewModelScope.launch {
-        repo.startTracking(uuid)
+    /** 开始追踪；已达上限返回 false（UI 据此弹提示） */
+    fun startTracking(uuid: String, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        val ok = repo.startTracking(uuid)
+        onResult(ok)
         refreshWidget()
     }
 
@@ -90,6 +97,12 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     fun advanceStep(stepUuid: String) = viewModelScope.launch {
         repo.advanceStep(stepUuid)
+        refreshWidget()
+    }
+
+    /** 按任务 UUID 推进（自动找当前 doing 或第一个 todo 步骤）；步骤全 done 时 no-op */
+    fun advanceStepByTask(taskUuid: String) = viewModelScope.launch {
+        repo.advanceStepByTask(taskUuid)
         refreshWidget()
     }
 

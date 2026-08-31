@@ -37,8 +37,134 @@ data class Task(
     @ColumnInfo(name = "reward_points") val rewardPoints: Int = 10,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
-    @ColumnInfo(name = "deleted") val deleted: Int = 0
+    @ColumnInfo(name = "deleted") val deleted: Int = 0,
+    /** 提醒强度：null=跟随设置默认；standard=普通；repeat=5分钟重复3次；alarm=闹钟式 */
+    @ColumnInfo(name = "reminder_strength") val reminderStrength: String? = null
 )
+
+// ==================== 提醒强度常量 ====================
+object ReminderStrength {
+    const val STANDARD = "standard"   // 普通通知（响一声）
+    const val REPEAT = "repeat"       // 5 分钟重复（最多 3 次）
+    const val ALARM = "alarm"         // 闹钟式（全屏+震动）
+
+    /** 给 UI 显示的"人话" */
+    fun label(v: String?): String = when (v) {
+        REPEAT -> "重复提醒（每 5 分钟，最多 3 次）"
+        ALARM -> "闹钟式强提醒（全屏+长震）"
+        else -> "普通通知（响一声）"
+    }
+    fun shortLabel(v: String?): String = when (v) {
+        REPEAT -> "重复"
+        ALARM -> "闹钟"
+        else -> "普通"
+    }
+}
+
+// ==================== 等级体系（与桌面端 preview-server.js / Rust 端口径一致） ====================
+data class LevelInfo(
+    val lv: Int,
+    val name: String,
+    val title: String,
+    val min: Int,
+    val max: Int,
+    /** 0f~1f 本级进度 */
+    val progress: Float,
+    /** 距离下一级还差多少分 */
+    val toNext: Int
+)
+
+object Levels {
+    private val LEVELS = listOf(
+        LevelInfo(1, "历练学徒", "敢开始，就已经赢了一半", 0, 20, 0f, 0),
+        LevelInfo(2, "风华游侠", "汗水从不会辜负你", 20, 60, 0f, 0),
+        LevelInfo(3, "破浪骑士", "风浪越大，越显本色", 60, 120, 0f, 0),
+        LevelInfo(4, "群星行者", "你走过的每一步都算数", 120, 200, 0f, 0),
+        LevelInfo(5, "传奇勇者", "你就是自己的传说", 200, 999, 0f, 0)
+    )
+
+    /** 按积分算当前等级。
+     *  进度条 = 总积分在本级上限中的占比（30 分时 Lv2 上限 60 → 50%），与 UI 的 "30 / 60" 文本一致。 */
+    fun of(points: Int): LevelInfo {
+        var cur = LEVELS[0]
+        for (lv in LEVELS) if (points >= lv.min) cur = lv
+        val isMax = cur == LEVELS.last()
+        val p = (points.toFloat() / cur.max).coerceIn(0f, 1f)
+        // 最高级没有"下一级"，toNext=0（UI 显示"已是最高等级"）
+        val toNext = if (isMax) 0 else (cur.max - points).coerceAtLeast(0)
+        return cur.copy(progress = p, toNext = toNext)
+    }
+}
+
+// ==================== 法定节假日（中国，内置表；用于提醒顺延） ====================
+object ChineseHolidays {
+    // 2026/2027 法定节假日（含调休补班的周末也算工作日，这里只存"放假"日期）
+    // 格式：yyyy-MM-dd
+    val HOLIDAYS_2026 = setOf(
+        // 元旦：1/1-1/3
+        "2026-01-01", "2026-01-02", "2026-01-03",
+        // 春节：2/15-2/21（除夕 2/15）
+        "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21",
+        // 清明节：4/4-4/6
+        "2026-04-04", "2026-04-05", "2026-04-06",
+        // 劳动节：5/1-5/5
+        "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+        // 端午节：6/19-6/21
+        "2026-06-19", "2026-06-20", "2026-06-21",
+        // 中秋节：9/25-9/27
+        "2026-09-25", "2026-09-26", "2026-09-27",
+        // 国庆节：10/1-10/7
+        "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
+    )
+
+    val HOLIDAYS_2027 = setOf(
+        // 元旦
+        "2027-01-01", "2027-01-02", "2027-01-03",
+        // 春节（预计 2/6-2/12，实际以官方公告为准）
+        "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-02-10", "2027-02-11", "2027-02-12",
+        // 清明节
+        "2027-04-04", "2027-04-05", "2027-04-06",
+        // 劳动节
+        "2027-05-01", "2027-05-02", "2027-05-03",
+        // 端午节
+        "2027-06-09", "2027-06-10", "2027-06-11",
+        // 中秋节
+        "2027-09-15", "2027-09-16", "2027-09-17",
+        // 国庆节
+        "2027-10-01", "2027-10-02", "2027-10-03", "2027-10-04", "2027-10-05", "2027-10-06", "2027-10-07"
+    )
+
+    private val ALL = HOLIDAYS_2026 + HOLIDAYS_2027
+
+    fun isHoliday(dateStr: String): Boolean = dateStr in ALL
+
+    fun isHoliday(ts: Long): Boolean {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return isHoliday(fmt.format(java.util.Date(ts)))
+    }
+
+    /** 从某个时间点起，找到下一个工作日（当天是周末/节假日则顺延），并置为该日 9:00 */
+    fun nextWorkday(fromTs: Long): Long {
+        val c = java.util.Calendar.getInstance()
+        c.timeInMillis = fromTs
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        repeat(14) {
+            // 跳过周六/周日和法定节假日
+            val dow = c.get(java.util.Calendar.DAY_OF_WEEK)
+            val isWeekend = dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY
+            if (!isWeekend && !isHoliday(fmt.format(c.time))) {
+                c.set(java.util.Calendar.HOUR_OF_DAY, 9)
+                c.set(java.util.Calendar.MINUTE, 0)
+                c.set(java.util.Calendar.SECOND, 0)
+                c.set(java.util.Calendar.MILLISECOND, 0)
+                return c.timeInMillis
+            }
+            c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        // 兜底：14 天内都没工作日（不太可能），返回原始时间
+        return fromTs
+    }
+}
 
 // ==================== 步骤实体 ====================
 @Entity(

@@ -71,7 +71,7 @@ fun MainApp() {
         TabItem("track", "追踪", R.drawable.ic_track),
         TabItem("habit", "习惯", R.drawable.ic_habit),
         TabItem("archive", "归档", R.drawable.ic_archive),
-        TabItem("settings", "设置", R.drawable.ic_settings)
+        TabItem("profile", "我的", R.drawable.ic_settings)
     )
 
     val backStack by navController.currentBackStackEntryAsState()
@@ -127,8 +127,9 @@ fun MainApp() {
             composable("today") { TaskListScreen(vm, navController) }
             composable("track") { TrackScreen(vm, navController) }
             composable("habit") { HabitScreen(vm) }
-            composable("archive") { ArchiveScreen(vm) }
-            composable("settings") { SettingsScreen(vm) }
+            composable("archive") { ArchiveScreen(vm, navController) }
+            composable("profile") { ProfileScreen(vm, navController) }
+            composable("settings") { SettingsScreen(vm, navController) }
             composable(
                 "detail/{uuid}",
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })
