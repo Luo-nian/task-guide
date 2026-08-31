@@ -688,18 +688,38 @@ fn add_task(
     let deadline = deadline_ms.map(|d| now + d);
     // 次数任务：前端传 count（如「喝水 8 次」），默认 1
     let cnt = count.unwrap_or(1).max(1);
+    // 积分规则与手机端 RewardRules 对齐：类型基础分 + 优先级加成
+    let rp = reward_points_for(&typ, &prio);
     {
         let db = state.db.lock().unwrap();
         // 限时任务同时写 deadline 与 due_at：前端渲染读 due_at，跨端同步用 deadline，
         // 只写一列会导致「今日到期」判定与详情页显示对不上
         db.execute(
-            "INSERT INTO tasks (uuid,type,title,category,priority,due_at,deadline,count,done_count,track_status,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?6,?7,0,'pending',?8,?8)",
-            params![&uuid, &typ, &title, &cat, &prio, &deadline, cnt, now]
+            "INSERT INTO tasks (uuid,type,title,category,priority,due_at,deadline,count,done_count,track_status,reward_points,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?6,?7,0,'pending',?9,?8,?8)",
+            params![&uuid, &typ, &title, &cat, &prio, &deadline, cnt, now, rp]
         ).ok();
     }
     sync::push_change(&state.db, &state.server_url, "task", &uuid);
     serde_json::json!({ "uuid": uuid, "status": "ok" })
+}
+
+/** 积分规则（与手机端 com.taskbar.app.data.model.RewardRules 对齐）：
+ *  类型基础分 once8/repeat10/habit5/note2/goal15 + 优先级加成 high7/medium4/low1 */
+fn reward_points_for(task_type: &str, priority: &str) -> i64 {
+    let base = match task_type {
+        "repeat" => 10,
+        "goal" => 15,
+        "habit" => 5,
+        "note" => 2,
+        _ => 8, // once
+    };
+    let bonus = match priority {
+        "high" => 7,
+        "low" => 1,
+        _ => 4, // medium
+    };
+    base + bonus
 }
 
 #[tauri::command]

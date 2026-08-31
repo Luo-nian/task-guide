@@ -402,6 +402,8 @@ async function handleApi(cmd, q, req, res) {
     case 'load_pairing': return ok(res, mockState.pairings['default'] || null);
     case 'set_display_mode': return ok(res, { status:'ok' });
     case 'set_window_size': return ok(res, { status:'ok' });
+    // preview 模式没有真实手机可发现，返回空列表（真机走 Tauri 后端 discover_devices）
+    case 'discover_devices': return ok(res, []);
 
     default: res.writeHead(404); return res.end('{"error":"unknown"}');
   }
