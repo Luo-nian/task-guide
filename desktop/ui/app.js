@@ -553,7 +553,7 @@ window.openDetail = async function(uuid) {
     <span class="chip cat-${catOf(t)}">${CAT_LABEL[catOf(t)] || ''}</span>
     <span class="chip prio-${(t.priority||'m').charAt(0)}">${PRIO_LABEL[t.priority] || ''}</span>
     ${isTrk ? '<span class="chip tracking">追踪中</span>' : ''}
-    ${t.count ? `<span class="chip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
+    ${t.count > 1 ? `<span class="chip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
   `;
 
   body.innerHTML = `
@@ -577,7 +577,7 @@ window.openDetail = async function(uuid) {
         </div>`).join('')}
       <div class="goal-tools">
         <div class="goal-add" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
-        <div class="goal-ai" onclick="aiBreakdown('${t.uuid}','${esc(t.title)}')">${svgIcon('ai',13,1.9)} AI 拆解</div>
+        <div class="goal-ai" onclick="aiBreakdown('${t.uuid}')">${svgIcon('ai',13,1.9)} AI 拆解</div>
       </div>
     </div>
 
@@ -672,8 +672,11 @@ window.addStep = async function(taskUuid) {
 
 // AI 拆解：有 API key 且开启云端开关走云端（preview-server 转发 DeepSeek），
 // 否则用本地模板兜底（0 成本、不调用 API）。云端需要双重确认避免误触扣费。
-window.aiBreakdown = async function(taskUuid, title) {
+// title 不通过 onclick 内嵌传参（单引号会破坏 JS 字符串），函数内按 uuid 从 tasks 查。
+window.aiBreakdown = async function(taskUuid) {
   const btn = event && event.target;
+  const t = tasks.find(x => x.uuid === taskUuid);
+  const title = (t && t.title) || '';
   const hasKey = !!(settings.ai_api_key || '').trim();
   const cloudEnabled = !!settings.ai_cloud_enabled;   // 默认关，开启后才走云端
   const willUseCloud = hasKey && cloudEnabled;
