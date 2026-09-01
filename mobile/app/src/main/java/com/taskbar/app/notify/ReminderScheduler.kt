@@ -112,16 +112,21 @@ class ReminderWorker(
             WorkManager.getInstance(applicationContext).enqueue(req)
         }
 
-        // 未受理升级：N 分钟后若还没处理，升到更强档（notify→vibrate→ring）
+        // 未受理升级：N 分钟后若还没处理，按最高档升一级（notify→vibrate→beep→ring）
         val prefs = applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
         val escalateOn = prefs.getBoolean("reminder_escalate_enabled", true)
         if (escalateOn && strength != "repeat") {   // 旧 repeat 已有独立链式，不叠加升级
             val minutes = prefs.getInt("reminder_escalate_minutes", 5)
-            val next = com.taskbar.app.data.model.ReminderStrength.escalateNext(strength)
+            val (channels, scope) = com.taskbar.app.data.model.ReminderStrength.parseConfig(strength)
+            val next = com.taskbar.app.data.model.ReminderStrength.escalateNext(channels)
             if (next != null) {
+                // 升级到更高一档（保留原有通道 + 追加更高档，只升一级）
+                val upgraded = com.taskbar.app.data.model.ReminderStrength.serializeConfig(
+                    (channels + next).distinct(), scope
+                )
                 val data = workDataOf(
                     ReminderScheduler.KEY_UUID to uuid,
-                    "strength" to next,
+                    "strength" to upgraded,
                     ReminderScheduler.KEY_REPEAT to 0
                 )
                 val req = OneTimeWorkRequestBuilder<ReminderWorker>()
@@ -163,6 +168,19 @@ class ReminderActionReceiver : BroadcastReceiver() {
                     cancelNotification(context, uuid)
                 }
             }
+            ACTION_DELAY_5M -> {
+                ioScope.launch {
+                    app.repo.delayTask(uuid, 5L * 60_000L)
+                    val t = app.repo.observeTask(uuid).first()
+                    t?.let {
+                        val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+                            .getString("reminder_strength", "notify") ?: "notify"
+                        val strength = it.reminderStrength ?: defaultStrength
+                        ReminderScheduler.schedule(context, uuid, it.dueAt!!, strength)
+                    }
+                    cancelNotification(context, uuid)
+                }
+            }
         }
     }
 
@@ -174,6 +192,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_DONE = "com.taskbar.app.ACTION_DONE"
         const val ACTION_DELAY = "com.taskbar.app.ACTION_DELAY"
+        const val ACTION_DELAY_5M = "com.taskbar.app.ACTION_DELAY_5M"
     }
 }
 

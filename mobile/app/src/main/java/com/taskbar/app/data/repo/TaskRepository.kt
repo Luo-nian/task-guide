@@ -39,6 +39,11 @@ class TaskRepository(private val db: AppDatabase) {
 
     // ==================== 观察 ====================
     fun observeMainList(): Flow<List<Task>> = taskDao.observeMainList()
+
+    suspend fun getTask(uuid: String): Task? = taskDao.getByUuid(uuid)
+
+    suspend fun getTotalPoints(): Int =
+        settingsDao.get("total_points")?.toIntOrNull() ?: 0
     /** 主列表（不含未来任务）：未来任务由 FutureTasksSection 独占显示，避免重复 */
     fun observeMainListToday(): Flow<List<Task>> {
         val c = java.util.Calendar.getInstance()
@@ -77,7 +82,8 @@ class TaskRepository(private val db: AppDatabase) {
         dueAt: Long? = null,
         repeatRule: String? = null,
         deadline: Long? = null,
-        reminderStrength: String? = null
+        reminderStrength: String? = null,
+        target: Int = 1
     ): Task {
         val t = now()
         // 积分按类型+优先级规则计算（RewardRules）
@@ -88,6 +94,7 @@ class TaskRepository(private val db: AppDatabase) {
             trackStatus = TrackStatus.PENDING,
             rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(type, priority),
             reminderStrength = reminderStrength,
+            progress = 0, target = if (type == com.taskbar.app.data.model.TaskType.MILESTONE) target.coerceAtLeast(1) else 1,
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
@@ -141,7 +148,8 @@ class TaskRepository(private val db: AppDatabase) {
     }
 
     /** 直接完成任务（无步骤或一键完成），累加积分。
-     *  habit 走"今日打卡 + 加积分"逻辑，不归档任务（明天继续在今日栏）。 */
+     *  habit 走"今日打卡 + 加积分"逻辑，不归档任务（明天继续在今日栏）。
+     *  milestone 走"进度+1"逻辑，达到 target 才归档；未达到继续留在主页。 */
     suspend fun completeTask(uuid: String) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
@@ -151,6 +159,15 @@ class TaskRepository(private val db: AppDatabase) {
             if (habitDao.isChecked(uuid, date)) return
             habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
             emit(ChangeOp("upsert", "habit", uuid))
+        } else if (task.type == TaskType.MILESTONE) {
+            // 里程碑：进度 +1；达到目标次数才归档（大任务，可多次推进）
+            val newProgress = task.progress + 1
+            if (newProgress >= task.target) {
+                taskDao.upsert(task.copy(progress = newProgress, trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
+            } else {
+                taskDao.upsert(task.copy(progress = newProgress, updatedAt = t))
+            }
+            emit(ChangeOp("upsert", "task", uuid))
         } else {
             // 普通任务：归档 + 加积分
             if (task.trackStatus == TrackStatus.DONE) return
@@ -290,13 +307,38 @@ class TaskRepository(private val db: AppDatabase) {
         return done to total
     }
 
-    // ==================== 延迟任务（自定义天数） ====================
-    suspend fun delayTask(uuid: String, days: Int) {
+    // ==================== 延迟任务（任意量级：分钟/小时/天/月） ====================
+    suspend fun delayTask(uuid: String, delayMillis: Long) {
         val task = taskDao.getByUuid(uuid) ?: return
         if (task.dueAt == null) return
         val t = now()
-        val newDue = task.dueAt + days * 86_400_000L
+        val newDue = task.dueAt + delayMillis
         taskDao.upsert(task.copy(dueAt = newDue, delayedCount = task.delayedCount + 1, updatedAt = t))
+        emit(ChangeOp("upsert", "task", uuid))
+    }
+
+    // ==================== 仓库置顶/置底（把任务在今天/未来之间移动） ====================
+
+    /** 置顶：把仓库（未来/非今天）任务移到主页——due_at 改为现在，主页今天可见 */
+    suspend fun pinToHome(uuid: String) {
+        val task = taskDao.getByUuid(uuid) ?: return
+        if (task.trackStatus == TrackStatus.DONE) return
+        val t = now()
+        taskDao.upsert(task.copy(dueAt = t, updatedAt = t))
+        emit(ChangeOp("upsert", "task", uuid))
+    }
+
+    /** 置底：把通过置顶挪到主页的任务移回仓库——due_at 改为明天 9 点（非今天） */
+    suspend fun unpinToRepo(uuid: String) {
+        val task = taskDao.getByUuid(uuid) ?: return
+        if (task.trackStatus == TrackStatus.DONE) return
+        val c = java.util.Calendar.getInstance()
+        c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        c.set(java.util.Calendar.HOUR_OF_DAY, 9)
+        c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        taskDao.upsert(task.copy(dueAt = c.timeInMillis, updatedAt = now()))
         emit(ChangeOp("upsert", "task", uuid))
     }
 
@@ -328,6 +370,13 @@ class TaskRepository(private val db: AppDatabase) {
         return streak
     }
 
+    /** 所有习惯里最长的连续坚持天数（"我的"页展示用） */
+    suspend fun maxHabitStreak(): Int {
+        val habits = taskDao.getAllHabits()
+        if (habits.isEmpty()) return 0
+        return habits.maxOf { habitStreak(it.uuid) }
+    }
+
     // ==================== 设置 ====================
     suspend fun getTrackLimit(): Int =
         settingsDao.get("track_limit")?.toIntOrNull() ?: DEFAULT_TRACK_LIMIT
@@ -352,6 +401,13 @@ class TaskRepository(private val db: AppDatabase) {
         val cur = getCustomCategories()
         if (name2 in cur) return
         settingsDao.set(com.taskbar.app.data.model.Setting("category_list", (cur + name2).joinToString(",")))
+    }
+
+    /** 删除自定义分类（从 settings category_list 移除） */
+    suspend fun removeCustomCategory(name: String) {
+        val cur = getCustomCategories()
+        if (name !in cur) return
+        settingsDao.set(com.taskbar.app.data.model.Setting("category_list", (cur - name).joinToString(",")))
     }
 
     /** 观察设置值变化（Flow） */

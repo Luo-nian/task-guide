@@ -47,11 +47,12 @@ interface TaskDao {
     fun observeMainList(): Flow<List<Task>>
 
     /** 主列表（不含未来任务）：未来任务（due_at > dayEnd）由 FutureTasksSection 独占显示，
-     *  避免主区和折叠区重复。dayEnd 通常是今天 23:59:59。 */
+     *  避免主区和折叠区重复。dayEnd 通常是今天 23:59:59。
+     *  注意：追踪中的任务不受日期限制——追踪了=今天要做，无论 due_at 都显示在主页 */
     @Query("""
         SELECT * FROM tasks
         WHERE track_status != 'done' AND deleted = 0
-          AND (due_at IS NULL OR due_at <= :dayEnd)
+          AND (track_status = 'tracking' OR due_at IS NULL OR due_at <= :dayEnd)
         ORDER BY
             CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END,
             CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
@@ -73,6 +74,9 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE type = 'habit' AND deleted = 0 ORDER BY due_at ASC")
     fun observeHabits(): Flow<List<Task>>
+
+    @Query("SELECT * FROM tasks WHERE type = 'habit' AND deleted = 0")
+    suspend fun getAllHabits(): List<Task>
 
     /** 未来任务（due_at 在明天之后，未完成，非习惯），按提醒时间升序 */
     @Query("""
@@ -205,7 +209,7 @@ interface SyncMetaDao {
 // ==================== Database ====================
 @Database(
     entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -222,6 +226,14 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL")
+            }
+        }
+
+        /** v3 → v4：加里程碑任务进度字段（progress 当前进度 / target 目标次数） */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE tasks ADD COLUMN target INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

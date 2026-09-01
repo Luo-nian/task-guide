@@ -24,6 +24,7 @@ object NotificationHelper {
 
     const val CHANNEL_NOTIFY = "ch_notify"      // 通知栏弹窗
     const val CHANNEL_VIBRATE = "ch_vibrate"    // 振动
+    const val CHANNEL_BEEP = "ch_beep"          // 提示音
     const val CHANNEL_RING = "ch_ring"          // 响铃
     const val CHANNEL_SERVICE = "ch_service"    // 同步前台服务
 
@@ -54,7 +55,18 @@ object NotificationHelper {
                 setSound(null, null)  // 振动档不应响铃
             })
         }
-        // 3. 响铃提醒（自定义铃声 + 振动）
+        // 3. 提示音（系统默认通知音，不振动）
+        if (nm.getNotificationChannel(CHANNEL_BEEP) == null) {
+            nm.createNotificationChannel(NotificationChannel(
+                CHANNEL_BEEP, "提示音提醒", NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "播放系统默认提示音"
+                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            })
+        }
+        // 4. 响铃提醒（自定义铃声 + 振动）
         if (nm.getNotificationChannel(CHANNEL_RING) == null) {
             nm.createNotificationChannel(NotificationChannel(
                 CHANNEL_RING, "响铃提醒", NotificationManager.IMPORTANCE_HIGH
@@ -68,7 +80,7 @@ object NotificationHelper {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             })
         }
-        // 4. 同步前台服务通道
+        // 5. 同步前台服务通道
         if (nm.getNotificationChannel(CHANNEL_SERVICE) == null) {
             nm.createNotificationChannel(NotificationChannel(
                 CHANNEL_SERVICE, "同步服务", NotificationManager.IMPORTANCE_LOW
@@ -98,11 +110,13 @@ object NotificationHelper {
         return runCatching { Uri.parse(s) }.getOrNull()
     }
 
-    /** 根据 strength 选 channel，并返回是否设置完整（全屏/锁屏可见） */
+    /** 根据提醒配置选 channel（多通道时取最高档），并返回是否全屏/锁屏可见 */
     private fun channelFor(strength: String): Pair<String, Boolean> {
-        return when (ReminderStrength.migrateLegacy(strength)) {
+        val (channels, _) = ReminderStrength.parseConfig(strength)
+        return when (ReminderStrength.highest(channels)) {
             ReminderStrength.NOTIFY -> CHANNEL_NOTIFY to false
             ReminderStrength.VIBRATE -> CHANNEL_VIBRATE to true
+            ReminderStrength.BEEP -> CHANNEL_BEEP to false
             ReminderStrength.RING -> CHANNEL_RING to true
             else -> CHANNEL_NOTIFY to false
         }
@@ -144,6 +158,15 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val delay5mIntent = PendingIntent.getBroadcast(
+            context, taskUuid.hashCode() + 3,
+            Intent(context, ReminderActionReceiver::class.java).apply {
+                action = ReminderActionReceiver.ACTION_DELAY_5M
+                putExtra("task_uuid", taskUuid)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
@@ -151,6 +174,7 @@ object NotificationHelper {
             .setContentIntent(openIntent)
             .setAutoCancel(true)
             .addAction(0, "完成", doneIntent)
+            .addAction(0, "5分钟", delay5mIntent)
             .addAction(0, "延迟1天", delayIntent)
             .setPriority(if (withFullScreen) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_DEFAULT)
 
@@ -162,6 +186,21 @@ object NotificationHelper {
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(taskUuid.hashCode(), builder.build())
+    }
+
+    /** 演示提醒效果（设置页"演示"键用）：立即发一条对应通道的测试通知 */
+    fun demoReminder(context: Context, strength: String) {
+        ensureChannels(context)
+        val (channel, _) = channelFor(strength)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val label = ReminderStrength.label(strength).removePrefix("通知栏弹窗（").removePrefix("振动提醒（")
+            .removePrefix("提示音（").removePrefix("响铃提醒（").removeSuffix("）")
+        val builder = NotificationCompat.Builder(context, channel)
+            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setContentTitle("提醒效果演示")
+            .setContentText("这是「$label」的效果，完成任务后可到设置里调整")
+            .setAutoCancel(true)
+        nm.notify(99999, builder.build())
     }
 
     /** 前台服务常驻通知 */

@@ -6,9 +6,16 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.ColumnInfo
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 // ==================== 枚举常量 ====================
-object TaskType { const val ONCE = "once"; const val REPEAT = "repeat"; const val NOTE = "note"; const val HABIT = "habit"; const val GOAL = "goal" }
+object TaskType {
+    const val ONCE = "once"; const val REPEAT = "repeat"; const val NOTE = "note"
+    const val HABIT = "habit"; const val GOAL = "goal"
+    /** 里程碑：可多次推进的大任务，达到目标次数才真正完成归档（如"坚持跑步 10 次"） */
+    const val MILESTONE = "milestone"
+}
 object Priority { const val HIGH = "high"; const val MEDIUM = "medium"; const val LOW = "low" }
 object TrackStatus { const val PENDING = "pending"; const val TRACKING = "tracking"; const val DONE = "done" }
 object StepStatus { const val TODO = "todo"; const val DOING = "doing"; const val DONE = "done" }
@@ -39,22 +46,38 @@ data class Task(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "deleted") val deleted: Int = 0,
     /** 提醒强度：null=跟随设置默认；standard=普通；repeat=5分钟重复3次；alarm=闹钟式 */
-    @ColumnInfo(name = "reminder_strength") val reminderStrength: String? = null
+    @ColumnInfo(name = "reminder_strength") val reminderStrength: String? = null,
+    /** 里程碑任务当前进度（完成 N 次推进） */
+    @ColumnInfo(name = "progress") val progress: Int = 0,
+    /** 里程碑任务目标次数（progress >= target 才算真正完成） */
+    @ColumnInfo(name = "target") val target: Int = 1
 )
 
-// ==================== 提醒方式（直观三档：通知栏/振动/响铃，可自定义参数） ====================
+// ==================== 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 未受理升级） ====================
 object ReminderStrength {
-    /** 跟随全局默认（per-task 选择这个则用设置抽屉的全局值） */
+    /** 跟随全局默认（旧值兼容：per-task 为空串时用设置里的全局值） */
     const val INHERIT = ""
 
     /** 通知栏弹窗：顶部横幅 + 默认提示音，最轻 */
     const val NOTIFY = "notify"
 
-    /** 振动提醒：自定义周期持续振动（参数：settings reminder_vibrate_pattern） */
+    /** 振动提醒：自定义周期持续振动 */
     const val VIBRATE = "vibrate"
 
-    /** 响铃提醒：播放选定铃声（参数：settings reminder_ring_uri） */
+    /** 提示音：系统默认通知音（不振动） */
+    const val BEEP = "beep"
+
+    /** 响铃提醒：播放自定义铃声 + 振动 */
     const val RING = "ring"
+
+    // ---- 提醒范围（端选择，单选） ----
+    const val SCOPE_NONE = "none"      // 不提醒
+    const val SCOPE_MOBILE = "mobile"  // 仅手机端
+    const val SCOPE_PC = "pc"          // 仅电脑端
+    const val SCOPE_BOTH = "both"      // 双端提醒
+
+    /** 通道从轻到重（决定最高档/升级顺序） */
+    val CHANNEL_ORDER = listOf(NOTIFY, VIBRATE, BEEP, RING)
 
     /** 旧值兼容映射（DB 里可能存 standard/repeat/alarm） */
     fun migrateLegacy(s: String?): String = when (s) {
@@ -65,11 +88,51 @@ object ReminderStrength {
         else -> s
     }
 
+    /**
+     * 解析提醒配置 → (channels 列表, scope)。
+     * 兼容：null/空 → (空, mobile)；旧单值 notify/vibrate/ring → (单元素, mobile)；
+     * 新格式 {"ch":"notify,vibrate","scope":"both"} → 多通道+端选择
+     */
+    fun parseConfig(s: String?): Pair<List<String>, String> {
+        val raw = migrateLegacy(s)
+        if (raw.isEmpty()) return emptyList<String>() to SCOPE_MOBILE
+        if (raw.startsWith("{")) {
+            return try {
+                val obj = kotlinx.serialization.json.Json.parseToJsonElement(raw).jsonObject
+                val ch = obj["ch"]?.jsonPrimitive?.content?.split(",")
+                    ?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList<String>()
+                val scope = obj["scope"]?.jsonPrimitive?.content ?: SCOPE_MOBILE
+                ch to scope
+            } catch (_: Exception) {
+                emptyList<String>() to SCOPE_MOBILE
+            }
+        }
+        // 旧单值
+        return listOf(raw) to SCOPE_MOBILE
+    }
+
+    /** 序列化多通道 + 端选择为存储字符串 */
+    fun serializeConfig(channels: List<String>, scope: String): String {
+        val ch = channels.distinct().joinToString(",")
+        return "{\"ch\":\"$ch\",\"scope\":\"$scope\"}"
+    }
+
+    /** 多选通道中的最高档（实际通知按最高档发） */
+    fun highest(channels: List<String>): String? = CHANNEL_ORDER.lastOrNull { it in channels }
+
+    /** 未受理升级：按当前最高档升一级（ring 已是最高返回 null） */
+    fun escalateNext(channels: List<String>): String? {
+        val h = highest(channels) ?: return VIBRATE
+        val idx = CHANNEL_ORDER.indexOf(h)
+        return if (idx < CHANNEL_ORDER.lastIndex) CHANNEL_ORDER[idx + 1] else null
+    }
+
     /** 给 UI 显示的"人话" */
     fun label(v: String?): String = when (migrateLegacy(v)) {
         INHERIT -> "跟随默认设置"
         NOTIFY  -> "通知栏弹窗（顶部横幅 + 提示音）"
         VIBRATE -> "振动提醒（按自定义周期持续震动）"
+        BEEP    -> "提示音（系统默认提示音）"
         RING    -> "响铃提醒（播放自定义铃声）"
         else    -> v ?: ""
     }
@@ -78,18 +141,9 @@ object ReminderStrength {
         INHERIT -> "默认"
         NOTIFY  -> "通知"
         VIBRATE -> "振动"
+        BEEP    -> "提示音"
         RING    -> "响铃"
         else    -> v ?: ""
-    }
-
-    /**
-     * 未受理升级：当前档升到下一档（notify→vibrate→ring）。
-     * ring 已是最高档返回 null（不再升级）；旧 repeat 值走 vibrate 档升级。
-     */
-    fun escalateNext(s: String?): String? = when (migrateLegacy(s)) {
-        NOTIFY  -> VIBRATE
-        VIBRATE -> RING
-        else    -> null
     }
 }
 
@@ -130,10 +184,11 @@ object Levels {
 
 // ==================== 积分规则（按任务类型 + 优先级） ====================
 object RewardRules {
-    /** 类型基础分：单次 8 / 重复 10 / 习惯 5 / 速记 2 / 目标 15 */
+    /** 类型基础分：单次 8 / 重复 10 / 习惯 5 / 速记 2 / 目标 15 / 里程碑 20 */
     fun base(type: String): Int = when (type) {
         TaskType.REPEAT -> 10
         TaskType.GOAL -> 15
+        TaskType.MILESTONE -> 20
         TaskType.HABIT -> 5
         TaskType.NOTE -> 2
         else -> 8   // ONCE
