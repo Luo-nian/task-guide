@@ -14,3 +14,19 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 构建产物（可再生缓存，不进仓库）
+target/
+build/
+.gradle/
+.kotlin/
+local.properties
+*.apk
+*.aab
+*.exe
+*.dll
+node_modules/
+
+# 数据文件
+*.db-wal
+*.db-shm
