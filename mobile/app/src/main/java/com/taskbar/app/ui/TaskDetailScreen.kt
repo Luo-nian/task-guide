@@ -63,6 +63,8 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
         return
     }
     val task = taskState!!
+    val ctx = LocalContext.current
+    val trackLimit by vm.trackLimit.collectAsState()
 
     var showDelayDialog by remember { mutableStateOf(false) }
     var showAddStepDialog by remember { mutableStateOf(false) }
@@ -104,7 +106,9 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                 val isTracking = task.trackStatus == TrackStatus.TRACKING
                 Button(
                     onClick = {
-                        if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid)
+                        if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid) { ok ->
+                            if (!ok) ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
+                        }
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
