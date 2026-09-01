@@ -77,7 +77,6 @@ private val DONE_QUOTES = listOf(
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val tasks by vm.mainList.collectAsState()
-    val ctx = LocalContext.current
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     Scaffold(
@@ -692,7 +691,7 @@ private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
     if (showJsonImport) {
         JsonImportDialog(
             onDismiss = { showJsonImport = false },
-            onApply = { jsonTitle, steps2 ->
+            onApply = { _, steps2 ->
                 if (steps2.isNotEmpty()) {
                     steps2.forEach { (t, l, v) ->
                         if (t.isNotBlank()) vm.addStep(task.uuid, t.trim(), l.trim(), v.trim())

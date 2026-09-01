@@ -860,7 +860,6 @@ private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
     val dfDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dfTime = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-    var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // 手动输入日期（yyyy-MM-dd），带校验：格式错 → 提示 + 红框呼吸 + 只还原写错字段
