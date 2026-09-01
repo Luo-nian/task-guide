@@ -808,7 +808,7 @@ fun JsonImportDialog(
 }
 
 /** 解析步骤 JSON：{"title":?, "steps":[{"title","attr_label","attr_value"}]} */
-private fun parseStepsJson(raw: String): Pair<String?, List<Triple<String, String, String>>> {
+internal fun parseStepsJson(raw: String): Pair<String?, List<Triple<String, String, String>>> {
     val raw2 = raw.trim()
     if (raw2.isEmpty()) return null to emptyList()
     return try {
@@ -817,7 +817,7 @@ private fun parseStepsJson(raw: String): Pair<String?, List<Triple<String, Strin
         val arr = obj["steps"]?.jsonArray ?: return title to emptyList()
         val steps = arr.mapNotNull { el ->
             val o = el.jsonObject
-            val t = o["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val t = o["title"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             Triple(
                 t,
                 o["attr_label"]?.jsonPrimitive?.contentOrNull ?: "",
