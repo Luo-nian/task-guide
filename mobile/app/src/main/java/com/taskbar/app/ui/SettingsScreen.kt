@@ -5,8 +5,14 @@ import android.media.RingtoneManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -99,7 +105,12 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())  // 整页可滚（修复底部 5/10/30 chip 被裁切）
+            .padding(12.dp)
+    ) {
         // 顶部：返回 + 标题
         Row(
             Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
@@ -113,9 +124,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(6.dp))
-        // 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 演示键）
+        // 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 演示键）——全局默认
         TGCard(Modifier.fillMaxWidth()) {
-            Text("提醒方式", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text("提醒方式（默认）", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp))
             Text("可多选组合，如「通知栏+铃声」；任务到点按最高档提醒", color = TGColors.InkMute, fontSize = 11.sp)
             Spacer(Modifier.height(6.dp))
@@ -141,21 +152,26 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 }
             }
 
-            // 端选择（单选：不提醒/仅手机/仅电脑/双端）
+            // 端选择（单选：不提醒/仅手机/仅电脑/双端）——分两行排，防挤压
             Spacer(Modifier.height(6.dp))
             HorizontalDivider(color = TGColors.BorderSoft)
             Spacer(Modifier.height(8.dp))
             Text("提醒范围", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(
-                    ReminderStrength.SCOPE_NONE to "不提醒",
-                    ReminderStrength.SCOPE_MOBILE to "仅手机端",
-                    ReminderStrength.SCOPE_PC to "仅电脑端",
-                    ReminderStrength.SCOPE_BOTH to "双端提醒"
-                ).forEach { (v, l) ->
-                    FilterChip(selected = reminderScope == v, onClick = { saveScope(v) }, label = { Text(l) })
+            val scopeOptions = listOf(
+                ReminderStrength.SCOPE_NONE to "不提醒",
+                ReminderStrength.SCOPE_MOBILE to "仅手机端",
+                ReminderStrength.SCOPE_PC to "仅电脑端",
+                ReminderStrength.SCOPE_BOTH to "双端提醒"
+            )
+            // 每行两个，分两行（避免一行挤成竖排）
+            scopeOptions.chunked(2).forEach { rowOpts ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rowOpts.forEach { (v, l) ->
+                        FilterChip(selected = reminderScope == v, onClick = { saveScope(v) }, label = { Text(l) })
+                    }
                 }
+                Spacer(Modifier.height(4.dp))
             }
             if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
                 Spacer(Modifier.height(4.dp))
@@ -228,10 +244,25 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
             Text("提醒发出后 X 分钟你没处理，就按最高档升一级（如通知→振动）", color = TGColors.InkMute, fontSize = 11.sp)
             if (escalateOn) {
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 10, 30).forEach { m ->
-                        FilterChip(selected = escalateMinutes == m, onClick = { saveEscalate(true, m) }, label = { Text("$m 分钟") })
+                        // 自定义 chip（固定内边距，不被挤压变小）
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(if (escalateMinutes == m) TGColors.Selected else TGColors.BgPaperDeep)
+                                .border(1.dp, if (escalateMinutes == m) TGColors.Gold else TGColors.BorderSoft, RoundedCornerShape(18.dp))
+                                .clickable { saveEscalate(true, m) }
+                                .padding(horizontal = 16.dp, vertical = 9.dp)
+                        ) {
+                            Text(
+                                "$m 分钟",
+                                color = if (escalateMinutes == m) TGColors.GoldDeep else TGColors.Ink,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

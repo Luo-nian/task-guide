@@ -578,17 +578,21 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                             Text(l, color = TGColors.Ink, fontSize = 13.sp)
                         }
                     }
-                    // 端选择（单选）
+                    // 端选择（单选）——每行两个，分两行防挤压
                     Spacer(Modifier.height(4.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
-                            ReminderStrength.SCOPE_NONE to "不提醒",
-                            ReminderStrength.SCOPE_MOBILE to "仅手机",
-                            ReminderStrength.SCOPE_PC to "仅电脑",
-                            ReminderStrength.SCOPE_BOTH to "双端"
-                        ).forEach { (v, l) ->
-                            FilterChip(selected = reminderScope == v, onClick = { reminderScope = v }, label = { Text(l) })
+                    val scopeOpts = listOf(
+                        ReminderStrength.SCOPE_NONE to "不提醒",
+                        ReminderStrength.SCOPE_MOBILE to "仅手机",
+                        ReminderStrength.SCOPE_PC to "仅电脑",
+                        ReminderStrength.SCOPE_BOTH to "双端"
+                    )
+                    scopeOpts.chunked(2).forEach { rowOpts ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            rowOpts.forEach { (v, l) ->
+                                FilterChip(selected = reminderScope == v, onClick = { reminderScope = v }, label = { Text(l) })
+                            }
                         }
+                        Spacer(Modifier.height(4.dp))
                     }
                     if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
                         Spacer(Modifier.height(4.dp))
@@ -901,7 +905,7 @@ private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
         val parts = s.split("-")
         if (parts.size != 3) {
             dateError = true
-            ToastHelper.show(ctx, "您输入的日期格式不对，请重新输入（如 2026-09-01）")
+            ToastHelper.show(ctx, "您输入的日期格式不对，请重新输入")
             dateInput = dfDate.format(Date())
             return
         }
@@ -943,8 +947,8 @@ private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
                 dateInput = it.filter { c -> c.isDigit() || c == '-' }.take(10)
                 if (it.length >= 10) applyDateInput(it)
             },
-            label = { Text("日期 yyyy-MM-dd") },
-            placeholder = { Text("如 2026-09-01") },
+            label = { Text("日期") },
+            placeholder = { Text("选择日期") },
             isError = dateError,
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
@@ -963,7 +967,7 @@ private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
         }
     }
     if (dateError) {
-        Text("您输入的日期格式不对，请重新输入（如 2026-09-01）", color = TGColors.Crimson, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+        Text("您输入的日期格式不对，请重新输入", color = TGColors.Crimson, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
     }
 
     if (showTimePicker) {
