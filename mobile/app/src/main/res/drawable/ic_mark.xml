@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 任务追踪标记（原神风：四角星/任务点，追踪任务语义） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- 四角星主体 -->
+    <path
+        android:pathData="M24,4 L28.5,19.5 L44,24 L28.5,28.5 L24,44 L19.5,28.5 L4,24 L19.5,19.5 Z"
+        android:fillColor="#FFFFFFFF" />
+    <!-- 中心圆点（光心） -->
+    <path
+        android:pathData="M24,19 A5,5 0 1,0 24,29 A5,5 0 1,0 24,19 Z"
+        android:fillColor="#FF4F86B5" />
+</vector>

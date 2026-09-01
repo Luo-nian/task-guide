@@ -83,23 +83,33 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     Scaffold(
         containerColor = Color.Transparent,
         floatingActionButton = {
-            // 克制 FAB：金底 + 墨色加号（去掉黑底，保留金色点缀）
-            FloatingActionButton(
-                onClick = { navController.navigate("add") },
-                containerColor = TGColors.Gold,
-                contentColor = TGColors.Black
-            ) {
-                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
+            // 两个 FAB 共存：底部居中 = 追踪键（追踪/定位），底部右 = 添加
+            val trackingCount by vm.tracking.collectAsState()
+            Box(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                // 追踪键（居中）
+                Box(Modifier.align(Alignment.BottomCenter)) {
+                    CenterTrackingButton(navController, trackingCount.size)
+                }
+                // 添加 FAB（居右）
+                FloatingActionButton(
+                    onClick = { navController.navigate("add") },
+                    containerColor = TGColors.Gold,
+                    contentColor = TGColors.Black,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                ) {
+                    TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
+                }
             }
         }
     ) { padding ->
+        // 全局 NavHost 已 padding(bottom 80dp) 让出追踪键，此处不再加
         Column(Modifier.padding(padding)) {
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
                 // 追踪置顶逻辑：当次在主页点追踪 → 不立即置顶（任务原位+金框+追踪键涟漪）；
                 // 退出主页（切子界面/重启）再回来 → 追踪任务才置顶显示
-                var showPinSection by rememberSaveable { mutableStateOf(true) }
+                var showPinSection by remember { mutableStateOf(true) }  // 普通 remember（不用 rememberSaveable），避免 app 重建后状态粘住导致追踪任务永久不置顶
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 LaunchedEffect(backStackEntry?.destination?.route) {
                     // 重新进入主页 → 恢复置顶（刚追踪的"不置顶"只影响当次）
@@ -143,7 +153,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                     LazyColumn(
                         Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 80.dp)
+                        // 底部留 150dp 给浮动追踪键（~70dp 圆钮+数字）+ 系统导航栏（~50dp）+ 缓冲
+                        contentPadding = PaddingValues(bottom = 150.dp)
                     ) {
                         if (showPinSection && tracking.isNotEmpty()) {
                             item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
@@ -1190,77 +1201,66 @@ fun AvatarFrame(onClick: () -> Unit) {
     }
 }
 
-/** 底部中央"追踪"大按钮：金色渐变 + 准星图标（追踪/定位语义，原神风）
- *  简化：去描边/阴影 → 实际能直接点的简洁设计
+/** 底部中央"追踪"按钮：圆形青蓝 + 原神风任务标记（无文字、无红角标，与顶栏"追踪中"Azure 风格一致）
  *  一次性涟漪：点时触发 700ms 扩散，0 持续循环 → 滚动不掉帧
- *  历史：黑底→卡色金边→纯金实底→渐变金+持续涟漪(掉帧)→现在准星+简化+一次性涟漪 */
+ *  追踪数显示在按钮正下方小字（Azure 深色），不用红色角标（boss 嫌丑）
+ *  历史：黑底→金边→纯金实底→渐变金+涟漪→准星→圆形青蓝+红角标(丑)→现在青蓝圆钮+下方小字 */
 @Composable
 fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
-    val hasTracking = trackingCount > 0
-    // 一次性涟漪（Animatable）：点追踪键时触发，700ms 后停止
     val ripple = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = rememberCoroutineScope()
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 80.dp),  // 绝对 padding 80dp 强行上移让出系统导航栏（约 50dp）+ 缓冲 30dp
+            .padding(bottom = 72.dp),  // 让出系统导航栏
         contentAlignment = Alignment.TopCenter
     ) {
-        if (ripple.value > 0f) {
-            Box(
-                Modifier.size(68.dp).drawBehind {
-                    val maxR = 36.dp.toPx()
-                    val radius = 26.dp.toPx() + (maxR - 26.dp.toPx()) * ripple.value
-                    val alpha = (1f - ripple.value) * 0.5f
-                    drawCircle(
-                        color = TGColors.Gold.copy(alpha = alpha),
-                        radius = radius,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx())
-                    )
-                }
-            )
-        }
-        // 不用 PressIcon（IconButton 默认 48dp 触控区会压缩子内容）
-        // 直接 Box.clickable 包整个金色 Row，确保内容完整渲染
-        Box(
-            Modifier
-                .height(46.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(23.dp))
-                .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
-                .clickable {
-                    scope.launch {
-                        ripple.snapTo(0f)
-                        ripple.animateTo(1f, tween(700))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (ripple.value > 0f) {
+                Box(
+                    Modifier.size(64.dp).drawBehind {
+                        val maxR = 34.dp.toPx()
+                        val radius = 26.dp.toPx() + (maxR - 26.dp.toPx()) * ripple.value
+                        val alpha = (1f - ripple.value) * 0.45f
+                        drawCircle(
+                            color = TGColors.Azure.copy(alpha = alpha),
+                            radius = radius,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx())
+                        )
                     }
-                    navController.navigate("track")
-                }
-                .padding(horizontal = 20.dp, vertical = 0.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // 准星图标（追踪/定位语义：外圆+十字刻度+中心点）
-                TGIcon(
-                    drawable = R.drawable.ic_target,
-                    contentDescription = "追踪",
-                    tint = TGColors.Ink,
-                    size = 18.dp
                 )
-                Spacer(Modifier.width(6.dp))
+            }
+            // 圆形青蓝按钮 + 白色任务标记（简洁，与顶栏"追踪中"Azure 视觉一致）
+            Box(
+                Modifier
+                    .size(54.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(TGColors.Azure)
+                    .clickable {
+                        scope.launch {
+                            ripple.snapTo(0f)
+                            ripple.animateTo(1f, tween(700))
+                        }
+                        navController.navigate("track")
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                TGIcon(
+                    drawable = R.drawable.ic_mark,
+                    contentDescription = "追踪",
+                    tint = Color.White,
+                    size = 26.dp
+                )
+            }
+            // 追踪数：按钮正下方小字（Azure 深色，非红色角标）
+            if (trackingCount > 0) {
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    "追踪",
-                    color = TGColors.Ink,
-                    fontSize = 14.sp,
+                    text = trackingCount.toString(),
+                    color = TGColors.Azure,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
-                if (hasTracking) {
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        "$trackingCount",
-                        color = TGColors.Ink.copy(alpha = 0.75f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
         }
     }

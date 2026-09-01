@@ -99,10 +99,11 @@ fun MainApp() {
             NavHost(
                 navController = navController,
                 startDestination = "home",
-                // 显式转场：前后页都快速淡出淡入（150ms），杜绝"前页未消失后页冒出"的重叠
+                // 显式转场 + 全局底部 padding 80dp 让出追踪键（FAB 位置）+ nav bar
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .consumeWindowInsets(WindowInsets.navigationBars),
+                    .consumeWindowInsets(WindowInsets.navigationBars)
+                    .padding(bottom = 100.dp),
                 enterTransition = { fadeIn(tween(150)) },
             exitTransition = { fadeOut(tween(150)) },
             popEnterTransition = { fadeIn(tween(150)) },
@@ -129,14 +130,7 @@ fun MainApp() {
                 AddEditTaskScreen(vm, navController, entry.arguments?.getString("uuid"))
             }
         }
-            // 浮动追踪键（BottomCenter + 让出系统导航栏 + 让出 FAB 右侧）
-            if (currentRoute in topTabs) {
-                val trackingCount by vm.tracking.collectAsState()
-                Box(Modifier.align(Alignment.BottomCenter)) {
-                    CenterTrackingButton(navController, trackingCount.size)
-                }
-            }
-        }
+    }
     }
 
     // 完成庆祝弹层（游戏化正反馈：完成任务弹道具式积分/升级）
