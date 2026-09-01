@@ -1086,17 +1086,17 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.weight(1f))
-                    // 追踪中标签（克制：纯文字+小圆点+数字，不像按钮）——点击进追踪页
+                    // 追踪中标签（与底部导航栏追踪 tab 同款：任务标记图标 + 追踪数，Azure）——点击进追踪页
                     if (trackingCount.isNotEmpty()) {
                         PressIcon(onClick = { navController.navigate("track") }) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(5.dp).background(TGColors.Azure, RoundedCornerShape(3.dp)))
+                                TGIcon(R.drawable.ic_mark, contentDescription = "追踪", tint = TGColors.Azure, size = 14.dp)
                                 Spacer(Modifier.width(3.dp))
                                 Text(
                                     "${trackingCount.size}",
                                     color = TGColors.Azure,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
