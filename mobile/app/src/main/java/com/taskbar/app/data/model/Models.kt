@@ -356,8 +356,9 @@ data class WsMessage(
     val data: String = ""
 )
 
-// ==================== 查询结果对象 ====================
+// ==================== 聚合查询结果对象 ====================
 data class TrackCardItem(
     val task: Task,
     val currentStep: Step?
 )
+

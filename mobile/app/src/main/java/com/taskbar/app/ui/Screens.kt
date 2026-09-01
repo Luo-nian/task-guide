@@ -5,7 +5,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,8 +107,12 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 }
 
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
-                val todo = tasks.filter { it.type != TaskType.HABIT }   // 含追踪中（未置顶时显示在原位）
+                // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时包含（追踪混在列表里）
+                val todo = if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING && it.type != TaskType.HABIT }
+                else tasks.filter { it.type != TaskType.HABIT }
                 val habits = tasks.filter { it.type == TaskType.HABIT }
+                // 步骤聚合：一次 Flow 订阅获取全部步骤 Map，TaskRow 不再各自订阅（性能优化）
+                val stepsByUuid by vm.stepsByUuid.collectAsState()
                 // 今日已打卡的习惯 uuid 集合（决定习惯行的完成态）
                 val checkedHabits by produceState<Set<String>>(initialValue = emptySet(), key1 = habits.size) {
                     value = habits.filter { it.type == TaskType.HABIT }
@@ -128,7 +148,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                         if (showPinSection && tracking.isNotEmpty()) {
                             item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
                             items(tracking, key = { it.uuid }) { task ->
-                                TaskRow(task, vm,
+                                TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
                                     onJustTracked = { showPinSection = false })
@@ -137,7 +157,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                         if (todo.isNotEmpty()) {
                             item(key = "hdr-todo") { SectionHeader("今日任务 (${todo.size})", TGColors.GoldDeep) }
                             items(todo, key = { "t-${it.uuid}" }) { task ->
-                                TaskRow(task, vm,
+                                TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
                                     onJustTracked = { showPinSection = false })
@@ -242,6 +262,7 @@ private fun SectionHeader(title: String, color: Color) {
 @Composable
 private fun TaskRow(
     task: Task,
+    steps: List<Step>,                 // 从外层 stepsByUuid Map 传入（性能：省去内部 Flow 订阅）
     vm: TaskViewModel,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -251,8 +272,6 @@ private fun TaskRow(
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 步骤列表（决定按钮形态 + 推进连按逻辑 + 当前步骤大字）
-    val steps by remember(task.uuid) { vm.steps(task.uuid) }.collectAsState(emptyList())
     val hasSteps = steps.isNotEmpty()
     val trackLimit by vm.trackLimit.collectAsState()
     val tracking = task.trackStatus == TrackStatus.TRACKING
@@ -529,17 +548,16 @@ private fun TaskRow(
     }
 }
 
-/** 分类小标签（金边米底，浅色克制的分类 chip） */
+/** 分类小标签（与 TypeChip 风格统一：金色鲜明底 + 深金字，不违和） */
 @Composable
 private fun CategoryChip(category: String) {
     Box(
         Modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(TGColors.Selected.copy(alpha = 0.6f))
-            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(4.dp))
+            .background(TGColors.Gold.copy(alpha = 0.14f))
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
-        Text(category, color = TGColors.GoldDeep, fontSize = 11.sp)
+        Text(category, color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -902,6 +920,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val main by vm.mainList.collectAsState()
     val future by vm.futureTasks.collectAsState()
     val ctx = LocalContext.current
+    val stepsByUuid by vm.stepsByUuid.collectAsState()
     val todo = main.filter { it.trackStatus != TrackStatus.TRACKING }
     // 置顶/置底确认弹窗状态：(uuid, action) action = "pin" | "unpin"
     var pendingRepoAction by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -928,7 +947,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (tracking.isNotEmpty()) {
                     item(key = "hdr-t") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
                     items(tracking, key = { "t-${it.uuid}" }) { task ->
-                        TaskRow(task, vm,
+                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onUnpin = { pendingRepoAction = task.uuid to "unpin" })
@@ -937,7 +956,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (todo.isNotEmpty()) {
                     item(key = "hdr-todo") { SectionHeader("待办 (${todo.size})", TGColors.GoldDeep) }
                     items(todo, key = { "todo-${it.uuid}" }) { task ->
-                        TaskRow(task, vm,
+                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onUnpin = { pendingRepoAction = task.uuid to "unpin" })
@@ -946,7 +965,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (future.isNotEmpty()) {
                     item(key = "hdr-f") { SectionHeader("未来任务 (${future.size})", TGColors.Azure) }
                     items(future, key = { "f-${it.uuid}" }) { task ->
-                        TaskRow(task, vm,
+                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onPin = { pendingRepoAction = task.uuid to "pin" })
@@ -1066,19 +1085,18 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.weight(1f))
-                    // 追踪中标签（点击进追踪页）——boss 要求主页标签显示"追踪中"
+                    // 追踪中标签（克制：纯文字+小圆点+数字，不像按钮）——点击进追踪页
                     if (trackingCount.isNotEmpty()) {
                         PressIcon(onClick = { navController.navigate("track") }) {
-                            Row(
-                                Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(TGColors.Azure.copy(alpha = 0.14f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TGIcon(R.drawable.ic_track, contentDescription = null, tint = TGColors.Azure, size = 12.dp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(5.dp).background(TGColors.Azure, RoundedCornerShape(3.dp)))
                                 Spacer(Modifier.width(3.dp))
-                                Text("追踪中 ${trackingCount.size}", color = TGColors.Azure, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    "${trackingCount.size}",
+                                    color = TGColors.Azure,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
                         }
                         Spacer(Modifier.width(8.dp))
@@ -1096,12 +1114,36 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                         Text("$points", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                     Spacer(Modifier.width(8.dp))
+                    // 历史任务：金色 pill（图标+单字，简短不截断）
                     PressIcon(onClick = { navController.navigate("history") }) {
-                        TGIcon(R.drawable.ic_clock, contentDescription = "历史任务", tint = TGColors.InkSoft, size = 22.dp)
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(TGColors.GoldLight.copy(alpha = 0.35f))
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TGIcon(R.drawable.ic_clock, contentDescription = "历史任务", tint = TGColors.GoldDeep, size = 13.dp)
+                                Spacer(Modifier.width(3.dp))
+                                Text("史", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                     Spacer(Modifier.width(4.dp))
+                    // 所有任务：金色 pill（仓库/任务库样式）
                     PressIcon(onClick = { navController.navigate("all") }) {
-                        TGIcon(R.drawable.ic_archive, contentDescription = "所有任务", tint = TGColors.InkSoft, size = 22.dp)
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(TGColors.GoldLight.copy(alpha = 0.35f))
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TGIcon(R.drawable.ic_archive, contentDescription = "所有任务", tint = TGColors.GoldDeep, size = 13.dp)
+                                Spacer(Modifier.width(3.dp))
+                                Text("库", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }
@@ -1148,85 +1190,74 @@ fun AvatarFrame(onClick: () -> Unit) {
     }
 }
 
-/** 底部中央"追踪"大按钮：金色渐变 + 深褐字 + 描边（设计感，不再纯金色块）
- *  有追踪中任务时，按钮外圈泛起金色涟漪（boss 要的动态变化）
- *  历史：黑底看不清 → 卡色金边太素 → 纯金实底 → 现在渐变金+涟漪 */
+/** 底部中央"追踪"大按钮：金色渐变 + 准星图标（追踪/定位语义，原神风）
+ *  简化：去描边/阴影 → 实际能直接点的简洁设计
+ *  一次性涟漪：点时触发 700ms 扩散，0 持续循环 → 滚动不掉帧
+ *  历史：黑底→卡色金边→纯金实底→渐变金+持续涟漪(掉帧)→现在准星+简化+一次性涟漪 */
 @Composable
 fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
     val hasTracking = trackingCount > 0
-    // 涟漪：扩散圆环渐隐（仅追踪中有任务时激活，单元素轻量动画）
-    val transition = rememberInfiniteTransition(label = "trackRipple")
-    val ripple by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ripple"
-    )
+    // 一次性涟漪（Animatable）：点追踪键时触发，700ms 后停止
+    val ripple = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
     Box(
-        Modifier.fillMaxWidth().padding(bottom = 14.dp),
-        contentAlignment = Alignment.Center
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 80.dp),  // 绝对 padding 80dp 强行上移让出系统导航栏（约 50dp）+ 缓冲 30dp
+        contentAlignment = Alignment.TopCenter
     ) {
-        if (hasTracking) {
-            // 涟漪圆环（金→淡金扩散，从按钮边缘向外泛开）
+        if (ripple.value > 0f) {
             Box(
-                Modifier.size(72.dp).drawBehind {
-                    val maxR = 38.dp.toPx()
-                    // 两个错开的涟漪圈
-                    repeat(2) { i ->
-                        val p = (ripple + i * 0.5f) % 1f
-                        val radius = 26.dp.toPx() + (maxR - 26.dp.toPx()) * p
-                        val alpha = (1f - p) * 0.4f
-                        drawCircle(
-                            color = TGColors.Gold.copy(alpha = alpha),
-                            radius = radius,
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx())
-                        )
-                    }
+                Modifier.size(68.dp).drawBehind {
+                    val maxR = 36.dp.toPx()
+                    val radius = 26.dp.toPx() + (maxR - 26.dp.toPx()) * ripple.value
+                    val alpha = (1f - ripple.value) * 0.5f
+                    drawCircle(
+                        color = TGColors.Gold.copy(alpha = alpha),
+                        radius = radius,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx())
+                    )
                 }
             )
         }
-        PressIcon(onClick = { navController.navigate("track") }) {
-            Row(
-                Modifier
-                    .height(50.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(25.dp))
-                    .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
-                    .border(
-                        width = 1.dp,
-                        color = TGColors.Black.copy(alpha = 0.35f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp)
-                    )
-                    .shadow(
-                        elevation = 6.dp,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
-                        ambientColor = TGColors.Gold.copy(alpha = 0.35f),
-                        spotColor = TGColors.Gold.copy(alpha = 0.35f)
-                    )
-                    .padding(horizontal = 26.dp, vertical = 0.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        // 不用 PressIcon（IconButton 默认 48dp 触控区会压缩子内容）
+        // 直接 Box.clickable 包整个金色 Row，确保内容完整渲染
+        Box(
+            Modifier
+                .height(46.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(23.dp))
+                .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
+                .clickable {
+                    scope.launch {
+                        ripple.snapTo(0f)
+                        ripple.animateTo(1f, tween(700))
+                    }
+                    navController.navigate("track")
+                }
+                .padding(horizontal = 20.dp, vertical = 0.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 准星图标（追踪/定位语义：外圆+十字刻度+中心点）
                 TGIcon(
-                    drawable = R.drawable.ic_track,
+                    drawable = R.drawable.ic_target,
                     contentDescription = "追踪",
                     tint = TGColors.Ink,
-                    size = 20.dp
+                    size = 18.dp
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     "追踪",
                     color = TGColors.Ink,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
                 if (hasTracking) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
-                        "($trackingCount)",
-                        color = TGColors.Ink.copy(alpha = 0.8f),
-                        fontSize = 13.sp,
+                        "$trackingCount",
+                        color = TGColors.Ink.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

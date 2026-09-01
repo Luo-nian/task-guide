@@ -59,6 +59,9 @@ class TaskRepository(private val db: AppDatabase) {
     fun observeTask(uuid: String): Flow<Task?> = taskDao.observeByUuid(uuid)
     fun observeSteps(taskUuid: String): Flow<List<Step>> = stepDao.observeByTask(taskUuid)
 
+    /** 所有步骤的 Flow（性能优化：用于主页聚合展示，避免每任务独立 Flow 订阅） */
+    fun observeAllSteps(): Flow<List<Step>> = stepDao.observeAll()
+
     /** 未来任务：今天 23:59:59 之后的未完成任务 */
     fun observeFutureTasks(): Flow<List<Task>> {
         val c = java.util.Calendar.getInstance()

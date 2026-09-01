@@ -9,9 +9,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -84,20 +93,17 @@ fun MainApp() {
                 AppTopBar(currentRoute, vm, navController)
             }
         },
-        bottomBar = {
-            // 底部中央"追踪"大按钮（home 和 profile 可见），带追踪数 → 涟漪
-            if (currentRoute in topTabs) {
-                val trackingCount by vm.tracking.collectAsState()
-                CenterTrackingButton(navController, trackingCount.size)
-            }
-        }
+        bottomBar = { Spacer(Modifier.height(0.dp)) },  // 高度 0，让出空间给浮动追踪键
     ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.padding(padding),
-            // 显式转场：前后页都快速淡出淡入（150ms），杜绝"前页未消失后页冒出"的重叠
-            enterTransition = { fadeIn(tween(150)) },
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            NavHost(
+                navController = navController,
+                startDestination = "home",
+                // 显式转场：前后页都快速淡出淡入（150ms），杜绝"前页未消失后页冒出"的重叠
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .consumeWindowInsets(WindowInsets.navigationBars),
+                enterTransition = { fadeIn(tween(150)) },
             exitTransition = { fadeOut(tween(150)) },
             popEnterTransition = { fadeIn(tween(150)) },
             popExitTransition = { fadeOut(tween(150)) }
@@ -121,6 +127,14 @@ fun MainApp() {
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })
             ) { entry ->
                 AddEditTaskScreen(vm, navController, entry.arguments?.getString("uuid"))
+            }
+        }
+            // 浮动追踪键（BottomCenter + 让出系统导航栏 + 让出 FAB 右侧）
+            if (currentRoute in topTabs) {
+                val trackingCount by vm.tracking.collectAsState()
+                Box(Modifier.align(Alignment.BottomCenter)) {
+                    CenterTrackingButton(navController, trackingCount.size)
+                }
             }
         }
     }

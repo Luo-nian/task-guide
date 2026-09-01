@@ -12,15 +12,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskbar.app.BuildConfig
@@ -49,7 +52,6 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val trackLimit by vm.trackLimit.collectAsState()
-    var limitText by remember { mutableStateOf(trackLimit.toString()) }
 
     // ====== 提醒方式（共享 prefs 直读直写；四通道多选 + 端选择 + 升级） ======
     val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
@@ -269,27 +271,35 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
-        // 追踪上限
+        // 追踪上限：直接显示当前值 + 更改按钮（点更改弹窗输入新值）
+        var showLimitDialog by remember { mutableStateOf(false) }
         TGCard(Modifier.fillMaxWidth()) {
-            Text("同时追踪上限", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = limitText,
-                    onValueChange = { limitText = it.filter { c -> c.isDigit() } },
-                    modifier = Modifier.width(80.dp),
-                    singleLine = true
-                )
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = {
-                    val n = limitText.toIntOrNull() ?: 3
-                    vm.setTrackLimit(n.coerceIn(1, 10))
-                }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) {
-                    Text("保存", color = Color(0xFF16120C))
+                Column(Modifier.weight(1f)) {
+                    Text("同时追踪上限", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("$trackLimit", color = TGColors.GoldDeep, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        Text("个任务", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                Text("当前: $trackLimit", color = TGColors.InkMute, fontSize = 13.sp)
+                TextButton(onClick = { showLimitDialog = true }) {
+                    Text("更改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
             }
+        }
+        // 更改追踪上限弹窗（自家风格）
+        if (showLimitDialog) {
+            LimitDialog(
+                current = trackLimit,
+                onDismiss = { showLimitDialog = false },
+                onConfirm = { n ->
+                    vm.setTrackLimit(n.coerceIn(1, 10))
+                    showLimitDialog = false
+                    ToastHelper.show(ctx, "追踪上限已设为 $n")
+                }
+            )
         }
 
         Spacer(Modifier.height(10.dp))
@@ -354,5 +364,74 @@ private suspend fun exportJson(ctx: android.content.Context): String {
         "已导出到: ${file.absolutePath}"
     } catch (e: Exception) {
         "导出失败: ${e.message}"
+    }
+}
+
+/** 更改追踪上限弹窗（自家风格：数字输入 + 滑动步进 + 确定/取消） */
+@Composable
+fun LimitDialog(current: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var num by remember { mutableStateOf(current.toString()) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(TGColors.Card)
+                .border(1.5.dp, TGColors.Gold, RoundedCornerShape(16.dp))
+                .shadow(8.dp, RoundedCornerShape(16.dp))
+                .padding(18.dp)
+        ) {
+            Text("更改同时追踪上限", color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("1~10 个（同时在追踪的任务数）", color = TGColors.InkMute, fontSize = 12.sp)
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 减号
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(TGColors.BgPaperDeep)
+                        .clickable {
+                            val n = (num.toIntOrNull() ?: 1) - 1
+                            num = n.coerceIn(1, 10).toString()
+                        },
+                    contentAlignment = Alignment.Center
+                ) { Text("−", color = TGColors.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                // 当前值
+                OutlinedTextField(
+                    value = num,
+                    onValueChange = { num = it.filter { c -> c.isDigit() }.take(2).ifEmpty { "1" } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.width(70.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 22.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                )
+                // 加号
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(TGColors.BgPaperDeep)
+                        .clickable {
+                            val n = (num.toIntOrNull() ?: 1) + 1
+                            num = n.coerceIn(1, 10).toString()
+                        },
+                    contentAlignment = Alignment.Center
+                ) { Text("+", color = TGColors.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.InkSoft)
+                ) { Text("取消") }
+                Button(
+                    onClick = { onConfirm(num.toIntOrNull() ?: 1) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)
+                ) { Text("确定", color = TGColors.Ink, fontWeight = FontWeight.Medium) }
+            }
+        }
     }
 }

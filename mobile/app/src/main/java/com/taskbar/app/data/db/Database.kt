@@ -120,6 +120,10 @@ interface StepDao {
     @Query("SELECT * FROM steps WHERE task_uuid = :taskUuid AND deleted = 0 ORDER BY sort_order ASC")
     fun observeByTask(taskUuid: String): Flow<List<Step>>
 
+    /** 所有非软删除步骤（性能优化：主页用单个 Flow 订阅，替代每任务独立 Flow） */
+    @Query("SELECT * FROM steps WHERE deleted = 0 ORDER BY sort_order ASC")
+    fun observeAll(): Flow<List<Step>>
+
     @Query("SELECT * FROM steps WHERE task_uuid = :taskUuid AND deleted = 0 ORDER BY sort_order ASC")
     suspend fun getByTask(taskUuid: String): List<Step>
 

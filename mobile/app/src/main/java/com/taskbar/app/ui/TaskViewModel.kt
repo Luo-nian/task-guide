@@ -59,6 +59,14 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun steps(taskUuid: String) = repo.observeSteps(taskUuid)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /**
+     * 所有步骤聚合为 Map<taskUuid, List<Step>>（性能优化：主页 TaskRow 从 Map 查
+     * 步骤而非各自订阅 Flow，9 任务从 9 个 Flow → 1 个 Flow）
+     */
+    val stepsByUuid: StateFlow<Map<String, List<Step>>> = repo.observeAllSteps()
+        .map { it.groupBy { step -> step.taskUuid } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     // ===== 任务操作 =====
     fun createTask(
         type: String, title: String, desc: String, category: String,

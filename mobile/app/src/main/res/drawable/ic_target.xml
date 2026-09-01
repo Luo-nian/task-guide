@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 准星/追踪图标：外圆 + 十字刻度 + 中心点（追踪/定位语义，原神风） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- 外圆 -->
+    <path
+        android:pathData="M24,3 A21,21 0 1,0 24,45 A21,21 0 1,0 24,3 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+    <!-- 上刻度 -->
+    <path
+        android:pathData="M24,8 L24,14"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <!-- 下刻度 -->
+    <path
+        android:pathData="M24,34 L24,40"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <!-- 左刻度 -->
+    <path
+        android:pathData="M8,24 L14,24"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <!-- 右刻度 -->
+    <path
+        android:pathData="M34,24 L40,24"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <!-- 中心点 -->
+    <path
+        android:pathData="M24,17.5 A6.5,6.5 0 1,0 24,30.5 A6.5,6.5 0 1,0 24,17.5 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>
