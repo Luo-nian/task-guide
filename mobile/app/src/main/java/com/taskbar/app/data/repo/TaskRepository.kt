@@ -164,6 +164,8 @@ class TaskRepository(private val db: AppDatabase) {
             emit(ChangeOp("upsert", "habit", uuid))
         } else if (task.type == TaskType.MILESTONE) {
             // 里程碑：进度 +1；达到目标次数才归档（大任务，可多次推进）
+            // 防止重复完成刷分：已归档则不再加分
+            if (task.trackStatus == TrackStatus.DONE) return
             val newProgress = task.progress + 1
             if (newProgress >= task.target) {
                 taskDao.upsert(task.copy(progress = newProgress, trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
