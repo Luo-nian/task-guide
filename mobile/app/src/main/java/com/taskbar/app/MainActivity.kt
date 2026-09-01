@@ -22,6 +22,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import com.taskbar.app.server.SyncService
 import com.taskbar.app.ui.*
 import com.taskbar.app.ui.TGColors
@@ -82,16 +85,22 @@ fun MainApp() {
             }
         },
         bottomBar = {
-            // 底部中央"追踪"大按钮（home 和 profile 可见）
+            // 底部中央"追踪"大按钮（home 和 profile 可见），带追踪数 → 涟漪
             if (currentRoute in topTabs) {
-                CenterTrackingButton(navController)
+                val trackingCount by vm.tracking.collectAsState()
+                CenterTrackingButton(navController, trackingCount.size)
             }
         }
     ) { padding ->
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.padding(padding),
+            // 显式转场：前后页都快速淡出淡入（150ms），杜绝"前页未消失后页冒出"的重叠
+            enterTransition = { fadeIn(tween(150)) },
+            exitTransition = { fadeOut(tween(150)) },
+            popEnterTransition = { fadeIn(tween(150)) },
+            popExitTransition = { fadeOut(tween(150)) }
         ) {
             composable("home") { TaskListScreen(vm, navController) }
             composable("track") { TrackScreen(vm) }
@@ -114,5 +123,17 @@ fun MainApp() {
                 AddEditTaskScreen(vm, navController, entry.arguments?.getString("uuid"))
             }
         }
+    }
+
+    // 完成庆祝弹层（游戏化正反馈：完成任务弹道具式积分/升级）
+    val completion by vm.completion.collectAsState()
+    completion?.let { ev ->
+        CompletionCelebration(
+            title = ev.title,
+            points = ev.points,
+            newLevel = ev.newLevel,
+            newLevelName = ev.newLevelName,
+            onDismiss = { vm.consumeCompletion() }
+        )
     }
 }

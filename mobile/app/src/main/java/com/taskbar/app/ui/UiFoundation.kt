@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,20 +27,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskbar.app.data.model.Priority
 
-// ==================== 全局 Toast（防抖 + 单例覆盖，杜绝连点刷屏/截断） ====================
+// ==================== 全局 Toast（自家风格 + 防抖 + 单例覆盖，杜绝连点刷屏/截断） ====================
 object ToastHelper {
     private var lastMsg: String = ""
     private var lastAt: Long = 0
     private var toast: Toast? = null
 
-    /** 同一内容 2.5s 内只提示一次；新提示会顶掉旧提示（防排队堆积） */
+    /** 同一内容 2.5s 内只提示一次；新提示会顶掉旧提示（防排队堆积）。
+     *  样式：圆角米底 + 金边 + 深褐字（自家软件风格，不用系统灰底黑字） */
     fun show(ctx: Context, msg: String, duration: Int = Toast.LENGTH_SHORT) {
         val now = System.currentTimeMillis()
         if (msg == lastMsg && now - lastAt < 2500) return
         lastMsg = msg
         lastAt = now
         toast?.cancel()
-        toast = Toast.makeText(ctx.applicationContext, msg, duration).apply { show() }
+        val t = Toast.makeText(ctx.applicationContext, msg, duration)
+        val tv = android.widget.TextView(ctx.applicationContext).apply {
+            text = msg
+            setTextColor(0xFF3A2E1A.toInt())
+            textSize = 14f
+            maxLines = 3
+            setPadding(48, 28, 48, 28)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 28f
+                setColor(0xFFFFFBEF.toInt())
+                setStroke(2, 0xFFC9A227.toInt())
+            }
+        }
+        t.view = tv
+        t.show()
+        toast = t
     }
 }
 
@@ -215,6 +233,7 @@ fun PriorityChip(priority: String) {
 fun TypeChip(type: String) {
     val (color, text) = when (type) {
         "goal" -> TGColors.Violet to "目标"
+        "milestone" -> TGColors.Crimson to "里程碑"
         "habit" -> TGColors.Jade to "习惯"
         "repeat" -> TGColors.Azure to "重复"
         "note" -> TGColors.InkMute to "速记"
@@ -263,5 +282,89 @@ fun RewardItem(icon: Int, label: String, highlight: Boolean = false) {
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+/**
+ * 完成庆祝弹层（游戏化正反馈，参考游戏获得道具）：
+ * 半透明遮罩 + 中央奖励卡（"恭喜完成任务，您将获得："小字 + 金币积分），升级时追加等级横幅。
+ * 弹出动画 320ms，2.6s 后自动消失，点击任意处立即关闭。
+ */
+@Composable
+fun CompletionCelebration(
+    title: String,
+    points: Int,
+    newLevel: Int?,
+    newLevelName: String?,
+    onDismiss: () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+        kotlinx.coroutines.delay(2600)
+        onDismiss()
+    }
+    val scale by animateFloatAsState(if (visible) 1f else 0.75f, tween(320))
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(320))
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f * alpha))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale; scaleY = scale; this.alpha = alpha
+            }
+        ) {
+            // 任务名小字
+            Text(title, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
+            Spacer(Modifier.height(10.dp))
+            // "恭喜完成任务，您将获得："小字
+            Text("恭喜完成任务，您将获得：", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(10.dp))
+            // 奖励卡（米底金边 + 金币 + 积分）
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(TGColors.Card)
+                    .border(1.5.dp, TGColors.Gold, RoundedCornerShape(18.dp))
+                    .shadow(12.dp, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 34.dp, vertical = 22.dp)
+            ) {
+                TGIcon(com.taskbar.app.R.drawable.ic_coin, contentDescription = null, tint = TGColors.Gold, size = 42.dp)
+                Spacer(Modifier.height(6.dp))
+                Text("+$points", color = TGColors.GoldDeep, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text("积分", color = TGColors.InkMute, fontSize = 12.sp)
+            }
+            // 升级横幅（层层递进：完成任务 → 得积分 → 升等级）
+            if (newLevel != null && newLevelName != null) {
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
+                        .border(1.dp, TGColors.GoldLight, RoundedCornerShape(24.dp))
+                        .shadow(8.dp, RoundedCornerShape(24.dp))
+                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                ) {
+                    Text("★", color = TGColors.Black, fontSize = 16.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "等级提升！Lv.$newLevel $newLevelName",
+                        color = TGColors.Black,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("★", color = TGColors.Black, fontSize = 16.sp)
+                }
+            }
+        }
     }
 }

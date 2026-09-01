@@ -45,14 +45,45 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
     val trackLimit by vm.trackLimit.collectAsState()
     var limitText by remember { mutableStateOf(trackLimit.toString()) }
 
-    // ====== 提醒方式（共享 prefs 直读直写） ======
+    // ====== 提醒方式（共享 prefs 直读直写；四通道多选 + 端选择 + 升级） ======
     val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
-    var strength by remember { mutableStateOf(prefs.getString("reminder_strength", "notify") ?: "notify") }
+    // 多选通道（通知栏/振动/提示音/铃声） + 端选择（不提醒/仅手机/仅电脑/双端）
+    var channels by remember { mutableStateOf(listOf<String>()) }
+    var reminderScope by remember { mutableStateOf(ReminderStrength.SCOPE_MOBILE) }
     var vibratePattern by remember { mutableStateOf(prefs.getString("reminder_vibrate_pattern", "0,300,200,300,200,300") ?: "0,300,200,300,200,300") }
     var ringUri by remember { mutableStateOf(prefs.getString("reminder_ring_uri", "") ?: "") }
     var escalateOn by remember { mutableStateOf(prefs.getBoolean("reminder_escalate_enabled", true)) }
     var escalateMinutes by remember { mutableIntStateOf(prefs.getInt("reminder_escalate_minutes", 5)) }
     var customVibrateText by remember { mutableStateOf("") }
+
+    // 初始化：读 prefs 里的配置（兼容旧单值）
+    LaunchedEffect(Unit) {
+        val (ch, sc) = ReminderStrength.parseConfig(prefs.getString("reminder_strength", "notify"))
+        channels = ch
+        reminderScope = sc
+    }
+
+    fun saveConfig() {
+        prefs.edit().putString("reminder_strength", ReminderStrength.serializeConfig(channels, reminderScope)).apply()
+    }
+    fun toggleChannel(c: String) {
+        channels = if (c in channels) channels - c else channels + c
+        if (channels.isNotEmpty() && reminderScope == ReminderStrength.SCOPE_NONE) reminderScope = ReminderStrength.SCOPE_MOBILE
+        saveConfig()
+    }
+    fun saveScope(s: String) {
+        reminderScope = s
+        if (s != ReminderStrength.SCOPE_NONE && channels.isEmpty()) channels = listOf(ReminderStrength.NOTIFY)
+        saveConfig()
+    }
+    fun saveVibratePattern(s: String) {
+        vibratePattern = s
+        prefs.edit().putString("reminder_vibrate_pattern", s).apply()
+    }
+    fun saveEscalate(on: Boolean, mins: Int) {
+        escalateOn = on; escalateMinutes = mins
+        prefs.edit().putBoolean("reminder_escalate_enabled", on).putInt("reminder_escalate_minutes", mins).apply()
+    }
 
     // 铃声选择器（系统 RingtonePicker → 回调拿 Uri）
     val ringtonePicker = rememberLauncherForActivityResult(
@@ -66,19 +97,6 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 ToastHelper.show(ctx, "已选择铃声")
             }
         }
-    }
-
-    fun saveStrength(v: String) {
-        strength = ReminderStrength.migrateLegacy(v).ifEmpty { ReminderStrength.NOTIFY }
-        prefs.edit().putString("reminder_strength", strength).apply()
-    }
-    fun saveVibratePattern(s: String) {
-        vibratePattern = s
-        prefs.edit().putString("reminder_vibrate_pattern", s).apply()
-    }
-    fun saveEscalate(on: Boolean, mins: Int) {
-        escalateOn = on; escalateMinutes = mins
-        prefs.edit().putBoolean("reminder_escalate_enabled", on).putInt("reminder_escalate_minutes", mins).apply()
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
@@ -95,29 +113,57 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(6.dp))
-        // 提醒方式（三档：通知栏弹窗 / 振动 / 响铃）
+        // 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 演示键）
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒方式", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp))
-            Text("任务到点用哪种方式提醒你，可在新建/编辑任务时单独覆盖", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("可多选组合，如「通知栏+铃声」；任务到点按最高档提醒", color = TGColors.InkMute, fontSize = 11.sp)
             Spacer(Modifier.height(6.dp))
+            // 四通道多选 + 演示键
             listOf(
-                ReminderStrength.NOTIFY  to ReminderStrength.label(ReminderStrength.NOTIFY),
-                ReminderStrength.VIBRATE to ReminderStrength.label(ReminderStrength.VIBRATE),
-                ReminderStrength.RING    to ReminderStrength.label(ReminderStrength.RING)
+                ReminderStrength.NOTIFY to "通知栏",
+                ReminderStrength.VIBRATE to "振动",
+                ReminderStrength.BEEP to "提示音",
+                ReminderStrength.RING to "铃声"
             ).forEach { (v, l) ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                    RadioButton(
-                        selected = strength == v,
-                        onClick = { saveStrength(v) },
-                        colors = RadioButtonDefaults.colors(selectedColor = TGColors.Gold)
+                    Checkbox(
+                        checked = v in channels,
+                        onCheckedChange = { toggleChannel(v) },
+                        colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
                     )
-                    Text(l, color = TGColors.Ink, fontSize = 13.sp)
+                    Text(l, color = TGColors.Ink, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    // 演示键：点哪个演示哪个效果
+                    TextButton(onClick = {
+                        if (v !in channels) toggleChannel(v)
+                        com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, v)
+                    }) { Text("演示", color = TGColors.GoldDeep, fontSize = 12.sp) }
                 }
             }
 
-            // 振动档：显示周期选择
-            if (strength == ReminderStrength.VIBRATE) {
+            // 端选择（单选：不提醒/仅手机/仅电脑/双端）
+            Spacer(Modifier.height(6.dp))
+            HorizontalDivider(color = TGColors.BorderSoft)
+            Spacer(Modifier.height(8.dp))
+            Text("提醒范围", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    ReminderStrength.SCOPE_NONE to "不提醒",
+                    ReminderStrength.SCOPE_MOBILE to "仅手机端",
+                    ReminderStrength.SCOPE_PC to "仅电脑端",
+                    ReminderStrength.SCOPE_BOTH to "双端提醒"
+                ).forEach { (v, l) ->
+                    FilterChip(selected = reminderScope == v, onClick = { saveScope(v) }, label = { Text(l) })
+                }
+            }
+            if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
+                Spacer(Modifier.height(4.dp))
+                Text("需双端连接后同步提醒（电脑端也要开启提醒）", color = TGColors.Azure, fontSize = 11.sp)
+            }
+
+            // 振动档：显示周期选择（选中振动时）
+            if (ReminderStrength.VIBRATE in channels) {
                 Spacer(Modifier.height(8.dp))
                 Text("振动周期", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(4.dp))
@@ -152,10 +198,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Text("格式：逗号分隔毫秒，如 0,300,200,300", color = TGColors.InkMute, fontSize = 10.sp)
             }
 
-            // 响铃档：显示选择按钮
-            if (strength == ReminderStrength.RING) {
+            // 响铃档：显示铃声选择（选中铃声时，自定义铃声入口一目了然）
+            if (ReminderStrength.RING in channels) {
                 Spacer(Modifier.height(8.dp))
-                Text("铃声", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("铃声（自定义）", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(4.dp))
                 val displayName = if (ringUri.isBlank()) "系统默认铃声" else ringUri.substringAfterLast('/')
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -172,7 +218,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 }
             }
 
-            // 升级机制（所有档位都适用）
+            // 升级机制（按最高档只升一级）
             Spacer(Modifier.height(10.dp))
             HorizontalDivider(color = TGColors.BorderSoft)
             Spacer(Modifier.height(8.dp))
@@ -180,7 +226,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Text("未处理自动升级", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 Switch(checked = escalateOn, onCheckedChange = { saveEscalate(it, escalateMinutes) }, colors = SwitchDefaults.colors(checkedThumbColor = TGColors.Gold))
             }
-            Text("提醒发出后 X 分钟你没处理，就升级到更强的振动/响铃提醒", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("提醒发出后 X 分钟你没处理，就按最高档升一级（如通知→振动）", color = TGColors.InkMute, fontSize = 11.sp)
             if (escalateOn) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

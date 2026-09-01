@@ -11,10 +11,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -24,6 +27,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.taskbar.app.R
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.StepStatus
@@ -38,10 +47,22 @@ import java.util.Locale
 private val dateFmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 
 // ==================== 主页（今天要完成的任务） ====================
+// 分区顺序：正在追踪 → 今日任务（待办）→ 习惯（放最下面）
+// 全部完成（普通任务清空 + 习惯都打卡）→ 主页显示随机语录
+private val DONE_QUOTES = listOf(
+    "今天的任务都已经完成啦，可以去休息休息，或者继续完成非今日的任务哦",
+    "全部搞定！今天的进度 100%，干得漂亮",
+    "该做的都做完了，去喝口水奖励一下自己吧",
+    "任务清空！剩下的时间都是你的",
+    "完美收工！明天也继续保持哦"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val tasks by vm.mainList.collectAsState()
+    val ctx = LocalContext.current
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -60,26 +81,144 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
-                // 追踪中任务置顶分区 + 其余待办分区
+                // 追踪置顶逻辑：当次在主页点追踪 → 不立即置顶（任务原位+金框+追踪键涟漪）；
+                // 退出主页（切子界面/重启）再回来 → 追踪任务才置顶显示
+                var showPinSection by rememberSaveable { mutableStateOf(true) }
+                val backStackEntry by navController.currentBackStackEntryAsState()
+                LaunchedEffect(backStackEntry?.destination?.route) {
+                    // 重新进入主页 → 恢复置顶（刚追踪的"不置顶"只影响当次）
+                    if (backStackEntry?.destination?.route == "home") showPinSection = true
+                }
+
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
-                val rest = tasks.filter { it.trackStatus != TrackStatus.TRACKING }
-                LazyColumn(
-                    Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                val todo = tasks.filter { it.type != TaskType.HABIT }   // 含追踪中（未置顶时显示在原位）
+                val habits = tasks.filter { it.type == TaskType.HABIT }
+                // 今日已打卡的习惯 uuid 集合（决定习惯行的完成态）
+                val checkedHabits by produceState<Set<String>>(initialValue = emptySet(), key1 = habits.size) {
+                    value = habits.filter { it.type == TaskType.HABIT }
+                        .filter { runCatching { vm.repoIsCheckedToday(it.uuid, today) }.getOrDefault(false) }
+                        .map { it.uuid }.toSet()
+                }
+                // 全部完成：无追踪、无待办、习惯非空且全部已打卡
+                val allDone = tracking.isEmpty() && todo.isEmpty() && habits.isNotEmpty() && checkedHabits.size == habits.size
+
+                if (allDone) {
+                    // 随机语录（每次到达此状态重新随机）
+                    val quote = remember(habits.size, checkedHabits.size) { DONE_QUOTES.random() }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            TGIcon(R.drawable.ic_check_circle, contentDescription = null, tint = TGColors.Jade, size = 44.dp)
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                quote,
+                                color = TGColors.InkSoft,
+                                fontSize = 14.sp,
+                                lineHeight = 22.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        if (showPinSection && tracking.isNotEmpty()) {
+                            item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
+                            items(tracking, key = { it.uuid }) { task ->
+                                TaskRow(task, vm,
+                                    onClick = { navController.navigate("detail/${task.uuid}") },
+                                    onEdit = { navController.navigate("edit/${task.uuid}") },
+                                    onJustTracked = { showPinSection = false })
+                            }
+                        }
+                        if (todo.isNotEmpty()) {
+                            item(key = "hdr-todo") { SectionHeader("今日任务 (${todo.size})", TGColors.GoldDeep) }
+                            items(todo, key = { "t-${it.uuid}" }) { task ->
+                                TaskRow(task, vm,
+                                    onClick = { navController.navigate("detail/${task.uuid}") },
+                                    onEdit = { navController.navigate("edit/${task.uuid}") },
+                                    onJustTracked = { showPinSection = false })
+                            }
+                        }
+                        if (habits.isNotEmpty()) {
+                            item(key = "hdr-habit") { SectionHeader("习惯 (${habits.size})", TGColors.Jade) }
+                            // 未打卡的在前，已打卡的沉底（完成态放最下面）
+                            items(habits.sortedBy { checkedHabits.contains(it.uuid) }, key = { "h-${it.uuid}" }) { task ->
+                                HabitRow(task, vm, checkedToday = checkedHabits.contains(task.uuid))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 习惯行：完成=今日打卡（卡片沉底显示"今日已完成"，明天自动重新出现） */
+@Composable
+private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean) {
+    val streak by remember(task.uuid) { vm.observeHabitStreak(task.uuid) }.collectAsState()
+    val bg = if (checkedToday) TGColors.Jade.copy(alpha = 0.10f) else TGColors.Card
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(
+                width = if (checkedToday) 1.dp else 1.dp,
+                color = if (checkedToday) TGColors.Jade.copy(alpha = 0.4f) else TGColors.BorderSoft,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(12.dp)
+                .background(TGColors.Jade, shape = RoundedCornerShape(3.dp))
+                .graphicsLayer { rotationZ = 45f }
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TypeChip(TaskType.HABIT)
+                Spacer(Modifier.width(6.dp))
+                Text("连续 $streak 天", color = TGColors.Jade, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                task.title,
+                color = if (checkedToday) TGColors.InkMute else TGColors.Ink,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                textDecoration = if (checkedToday) TextDecoration.LineThrough else null
+            )
+        }
+        if (checkedToday) {
+            // 完成态：实心绿圆 + 白勾
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(TGColors.Jade),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            // 未完成：打卡按钮（自家风格：绿底白字圆角）
+            PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TGColors.Jade)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (tracking.isNotEmpty()) {
-                        item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
-                        items(tracking, key = { it.uuid }) { task ->
-                            TaskRow(task, vm, onClick = { navController.navigate("detail/${task.uuid}") }, onEdit = { navController.navigate("edit/${task.uuid}") })
-                        }
-                    }
-                    if (rest.isNotEmpty()) {
-                        item(key = "hdr-rest") { SectionHeader("待办 (${rest.size})", TGColors.GoldDeep) }
-                        items(rest, key = { it.uuid }) { task ->
-                            TaskRow(task, vm, onClick = { navController.navigate("detail/${task.uuid}") }, onEdit = { navController.navigate("edit/${task.uuid}") })
-                        }
-                    }
+                    Text("打卡", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -101,10 +240,18 @@ private fun SectionHeader(title: String, color: Color) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: () -> Unit) {
+private fun TaskRow(
+    task: Task,
+    vm: TaskViewModel,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onJustTracked: () -> Unit = {},
+    onPin: (() -> Unit)? = null,
+    onUnpin: (() -> Unit)? = null
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 步骤列表（决定按钮形态 + 推进连按逻辑 + 当前步骤小字）
+    // 步骤列表（决定按钮形态 + 推进连按逻辑 + 当前步骤大字）
     val steps by remember(task.uuid) { vm.steps(task.uuid) }.collectAsState(emptyList())
     val hasSteps = steps.isNotEmpty()
     val trackLimit by vm.trackLimit.collectAsState()
@@ -113,165 +260,286 @@ private fun TaskRow(task: Task, vm: TaskViewModel, onClick: () -> Unit, onEdit: 
     var clicksInWindow by remember { mutableStateOf(0) }
     var showFinish by remember { mutableStateOf(false) }
 
-    // 当前步骤（小字展示）：doing 优先，否则第一个未完成
+    // 当前步骤（doing 优先，否则第一个未完成）
     val currentStep = steps.firstOrNull { it.status == StepStatus.DOING }
         ?: steps.firstOrNull { it.status != StepStatus.DONE }
     val currentStepIndex = currentStep?.let { steps.indexOf(it) }
 
-    // 追踪中卡片：金色边框静态标记（动画去掉，性能优先：滑动卡顿主因之一）
-    val trackingBorderWidth = if (tracking) 1.5.dp else 1.dp
-    val trackingBorderColor = if (tracking) TGColors.Gold else TGColors.BorderSoft
-
+    // 置顶框（非黑金）：追踪中 = 天蓝框 + 顶部蓝金渐变条（原神风清爽）
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
             .border(
-                width = trackingBorderWidth,
-                color = trackingBorderColor,
+                width = if (tracking) 1.5.dp else 1.dp,
+                color = if (tracking) TGColors.Azure.copy(alpha = 0.65f) else TGColors.BorderSoft,
                 shape = RoundedCornerShape(12.dp)
             )
             .combinedClickable(onClick = onClick, onLongClick = onEdit)
     ) {
-        Row(
-            Modifier.padding(12.dp, 12.dp, 6.dp, 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 左侧菱形标识：追踪中紫色（静态，避免重组）
-            val diamondColor = when {
-                tracking -> TGColors.Violet
-                task.priority == "high" -> TGColors.Crimson
-                task.priority == "low" -> TGColors.InkFaint
-                else -> TGColors.Gold
-            }
+        // 顶部渐变条（仅追踪中置顶框）
+        if (tracking) {
             Box(
                 Modifier
-                    .size(12.dp)
-                    .background(diamondColor, shape = RoundedCornerShape(3.dp))
-                    .graphicsLayer { rotationZ = 45f }
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Brush.horizontalGradient(listOf(TGColors.Azure, TGColors.GoldLight, TGColors.Azure)))
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TypeChip(task.type)
-                    Spacer(Modifier.width(6.dp))
-                    PriorityChip(task.priority)
-                    if (tracking) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(TGColors.Violet.copy(alpha = 0.16f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("追踪中", color = TGColors.Violet, fontSize = 11.sp)
-                        }
-                    }
-                    if (task.type == TaskType.HABIT && task.dueAt == null) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(TGColors.Jade.copy(alpha = 0.14f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("习惯", color = TGColors.Jade, fontSize = 11.sp)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(task.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                task.dueAt?.let {
-                    Spacer(Modifier.height(3.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TGIcon(R.drawable.ic_clock, contentDescription = null, tint = TGColors.Orange, size = 12.dp)
-                        Spacer(Modifier.width(3.dp))
-                        Text(dateFmt.format(Date(it)), color = TGColors.InkSoft, fontSize = 11.sp)
-                    }
-                }
-            }
-            // 右侧操作：所有任务统一 [追踪/停止] + [主操作]
-            // 有步骤 → 推进键（5s 内连按 3 次弹出完成键 + 3s 提示）；无步骤 → 完成键
-            // 习惯任务无独立打卡按钮（完成即打卡）
-            if (tracking) {
-                PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                    TGIcon(R.drawable.ic_track, contentDescription = "停止追踪", tint = TGColors.Violet, size = 20.dp)
-                }
-            } else {
-                PressIcon(onClick = {
-                    vm.startTracking(task.uuid) { ok ->
-                        if (!ok) {
-                            ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
-                        }
-                    }
-                }) {
-                    TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 20.dp)
-                }
-            }
-            if (hasSteps) {
-                // 有步骤：推进键（推进当前步骤），连按 3 次显示完成键
-                PressIcon(onClick = {
-                    vm.advanceStepByTask(task.uuid)
-                    val now = System.currentTimeMillis()
-                    if (now - lastClick > 5000) clicksInWindow = 0
-                    lastClick = now
-                    clicksInWindow++
-                    if (clicksInWindow >= 3 && !showFinish) {
-                        showFinish = true
-                        scope.launch {
-                            kotlinx.coroutines.delay(3000)
-                            showFinish = false
-                            clicksInWindow = 0
-                        }
-                    }
-                }) {
-                    TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
-                }
-                if (showFinish) {
-                    PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
-                    }
-                }
-            } else {
-                // 无步骤：完成键（习惯任务即打卡）
-                PressIcon(onClick = {
-                    vm.completeTask(task.uuid)
-                    if (task.type == TaskType.HABIT) {
-                        ToastHelper.show(ctx, "已打卡 ✓")
-                    }
-                }) {
-                    TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
-                }
-            }
         }
-        // 当前步骤小字（有步骤时提示正在追踪哪个步骤）
-        if (currentStep != null && currentStepIndex != null) {
+
+        if (tracking) {
+            // ===== 追踪中布局：任务名上移 / 步骤大字占原任务名位置 / 分类 chips 右移排一排 =====
             Row(
-                Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp),
+                Modifier.padding(12.dp, 8.dp, 6.dp, 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("▶", color = TGColors.GoldDeep, fontSize = 10.sp)
-                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .background(TGColors.Violet, shape = RoundedCornerShape(3.dp))
+                        .graphicsLayer { rotationZ = 45f }
+                )
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    "步骤 ${currentStepIndex + 1}/${steps.size}：${currentStep.title}",
-                    color = TGColors.GoldDeep,
-                    fontSize = 12.sp,
+                    task.title,
+                    color = TGColors.Ink,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                // 操作：停止追踪 + 推进/完成
+                PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
+                    TGIcon(R.drawable.ic_track, contentDescription = "停止追踪", tint = TGColors.Violet, size = 20.dp)
+                }
+                if (hasSteps) {
+                    PressIcon(onClick = {
+                        vm.advanceStepByTask(task.uuid)
+                        val now = System.currentTimeMillis()
+                        if (now - lastClick > 5000) clicksInWindow = 0
+                        lastClick = now
+                        clicksInWindow++
+                        if (clicksInWindow >= 3 && !showFinish) {
+                            showFinish = true
+                            scope.launch {
+                                kotlinx.coroutines.delay(3000)
+                                showFinish = false
+                                clicksInWindow = 0
+                            }
+                        }
+                    }) {
+                        TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                    }
+                    if (showFinish) {
+                        PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        }
+                    }
+                } else {
+                    PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                    }
+                }
+            }
+            // 当前步骤大字（占据原本任务名的位置，一眼看到现在做到哪一步）
+            if (currentStep != null && currentStepIndex != null) {
+                Row(
+                    Modifier.padding(start = 36.dp, end = 12.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("▶", color = TGColors.Azure, fontSize = 12.sp)
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        "步骤 ${currentStepIndex + 1}/${steps.size}：${currentStep.title}",
+                        color = TGColors.Azure,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            // 分类 chips 右移排一排（类型/分类/优先级/追踪中）
+            Row(
+                Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TypeChip(task.type)
+                if (task.category.isNotBlank()) CategoryChip(task.category)
+                PriorityChip(task.priority)
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(TGColors.Azure.copy(alpha = 0.14f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text("追踪中", color = TGColors.Azure, fontSize = 11.sp)
+                }
+            }
+            if (showFinish) {
+                Text(
+                    "步骤都完成了吗？可以直接点完成哦",
+                    color = TGColors.Jade,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp)
+                )
+            }
+        } else {
+            // ===== 未追踪布局：任务名原位（不显示步骤），chips 左上 =====
+            Row(
+                Modifier.padding(12.dp, 12.dp, 6.dp, 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 左侧菱形标识
+                val diamondColor = when {
+                    task.priority == "high" -> TGColors.Crimson
+                    task.priority == "low" -> TGColors.InkFaint
+                    else -> TGColors.Gold
+                }
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .background(diamondColor, shape = RoundedCornerShape(3.dp))
+                        .graphicsLayer { rotationZ = 45f }
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TypeChip(task.type)
+                        Spacer(Modifier.width(6.dp))
+                        if (task.category.isNotBlank()) {
+                            CategoryChip(task.category)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        PriorityChip(task.priority)
+                        if (task.type == TaskType.HABIT && task.dueAt == null) {
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(TGColors.Jade.copy(alpha = 0.14f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("习惯", color = TGColors.Jade, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(task.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    task.dueAt?.let {
+                        Spacer(Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TGIcon(R.drawable.ic_clock, contentDescription = null, tint = TGColors.Orange, size = 12.dp)
+                            Spacer(Modifier.width(3.dp))
+                            Text(dateFmt.format(Date(it)), color = TGColors.InkSoft, fontSize = 11.sp)
+                        }
+                    }
+                    // 里程碑进度（未追踪也显示 2/5 进度感）
+                    if (task.type == TaskType.MILESTONE) {
+                        Spacer(Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("进度 ${task.progress}/${task.target}", color = TGColors.Crimson, fontSize = 11.sp)
+                            Spacer(Modifier.width(6.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { if (task.target > 0) task.progress.toFloat() / task.target else 0f },
+                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                color = TGColors.Crimson,
+                                trackColor = TGColors.BgPaperDeep
+                            )
+                        }
+                    }
+                }
+                // 右侧操作：追踪 + 主操作（完成/推进）
+                if (tracking) {
+                    PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
+                        TGIcon(R.drawable.ic_track, contentDescription = "停止追踪", tint = TGColors.Violet, size = 20.dp)
+                    }
+                } else {
+                    PressIcon(onClick = {
+                        vm.startTracking(task.uuid) { ok ->
+                            if (!ok) {
+                                ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
+                            } else {
+                                onJustTracked()
+                            }
+                        }
+                    }) {
+                        TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 20.dp)
+                    }
+                }
+                if (hasSteps) {
+                    PressIcon(onClick = {
+                        vm.advanceStepByTask(task.uuid)
+                        val now = System.currentTimeMillis()
+                        if (now - lastClick > 5000) clicksInWindow = 0
+                        lastClick = now
+                        clicksInWindow++
+                        if (clicksInWindow >= 3 && !showFinish) {
+                            showFinish = true
+                            scope.launch {
+                                kotlinx.coroutines.delay(3000)
+                                showFinish = false
+                                clicksInWindow = 0
+                            }
+                        }
+                    }) {
+                        TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                    }
+                    if (showFinish) {
+                        PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        }
+                    }
+                } else {
+                    PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                    }
+                }
+            }
+            if (showFinish) {
+                Text(
+                    "步骤都完成了吗？可以直接点完成哦",
+                    color = TGColors.Jade,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp)
+                )
+            }
+            // 仓库操作行（所有任务页专用：置顶到主页 / 移回仓库）
+            if (onPin != null || onUnpin != null) {
+                Row(
+                    Modifier.padding(start = 30.dp, end = 12.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    onPin?.let {
+                        TextButton(onClick = it, modifier = Modifier.height(32.dp)) {
+                            Text("↑ 置顶到主页", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    onUnpin?.let {
+                        TextButton(onClick = it, modifier = Modifier.height(32.dp)) {
+                            Text("↓ 移回仓库", color = TGColors.InkMute, fontSize = 12.sp)
+                        }
+                    }
+                }
             }
         }
-        // 推进 3 次后的提示条
-        if (showFinish) {
-            Text(
-                "步骤都完成了吗？可以直接点完成哦",
-                color = TGColors.Jade,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp)
-            )
-        }
+    }
+}
+
+/** 分类小标签（金边米底，浅色克制的分类 chip） */
+@Composable
+private fun CategoryChip(category: String) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(TGColors.Selected.copy(alpha = 0.6f))
+            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(category, color = TGColors.GoldDeep, fontSize = 11.sp)
     }
 }
 
@@ -305,8 +573,10 @@ fun TrackScreen(vm: TaskViewModel) {
 @Composable
 private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
     val steps by remember(task.uuid) { vm.steps(task.uuid) }.collectAsState(emptyList())
+    val ctx = LocalContext.current
     var expanded by remember(task.uuid) { mutableStateOf(true) }
     var showAddStep by remember(task.uuid) { mutableStateOf(false) }
+    var showJsonImport by remember(task.uuid) { mutableStateOf(false) }
     val doneCount = steps.count { it.status == StepStatus.DONE }
     val total = steps.size
 
@@ -360,6 +630,10 @@ private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
                         Spacer(Modifier.width(3.dp))
                         Text("添加步骤", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
+                    // 右上角 JSON 入口（AI 拆解粘贴）
+                    TextButton(onClick = { showJsonImport = true }) {
+                        Text("JSON", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
                 }
             } else {
                 Column(
@@ -369,11 +643,16 @@ private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
                     steps.forEachIndexed { index, step ->
                         TrackStepLine(index + 1, step, vm)
                     }
-                    // 底部追加步骤入口
-                    TextButton(onClick = { showAddStep = true }, modifier = Modifier.padding(top = 2.dp)) {
-                        TGIcon(R.drawable.ic_add, contentDescription = null, tint = TGColors.GoldDeep, size = 15.dp)
-                        Spacer(Modifier.width(3.dp))
-                        Text("添加步骤", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    // 底部追加步骤入口 + JSON
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { showAddStep = true }, modifier = Modifier.weight(1f)) {
+                            TGIcon(R.drawable.ic_add, contentDescription = null, tint = TGColors.GoldDeep, size = 15.dp)
+                            Spacer(Modifier.width(3.dp))
+                            Text("添加步骤", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                        TextButton(onClick = { showJsonImport = true }) {
+                            Text("JSON", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -388,6 +667,20 @@ private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
             onConfirm = { title, label, value, insertAt ->
                 if (title.isNotBlank()) vm.addStep(task.uuid, title.trim(), label.trim(), value.trim(), insertAt)
                 showAddStep = false
+            }
+        )
+    }
+    if (showJsonImport) {
+        JsonImportDialog(
+            onDismiss = { showJsonImport = false },
+            onApply = { jsonTitle, steps2 ->
+                if (steps2.isNotEmpty()) {
+                    steps2.forEach { (t, l, v) ->
+                        if (t.isNotBlank()) vm.addStep(task.uuid, t.trim(), l.trim(), v.trim())
+                    }
+                    ToastHelper.show(ctx, "已添加 ${steps2.size} 个步骤")
+                }
+                showJsonImport = false
             }
         )
     }
@@ -602,14 +895,16 @@ fun HabitScreen(vm: TaskViewModel) {
     }
 }
 
-// ==================== 所有任务（追踪/待办/未来/已完成 全量） ====================
+// ==================== 所有任务（追踪/待办/未来 全量，不含已完成——已完成只进历史任务） ====================
 @Composable
 fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val tracking by vm.tracking.collectAsState()
     val main by vm.mainList.collectAsState()
     val future by vm.futureTasks.collectAsState()
-    val archive by vm.archive.collectAsState()
+    val ctx = LocalContext.current
     val todo = main.filter { it.trackStatus != TrackStatus.TRACKING }
+    // 置顶/置底确认弹窗状态：(uuid, action) action = "pin" | "unpin"
+    var pendingRepoAction by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // 顶栏：返回 + 标题
@@ -623,7 +918,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             Spacer(Modifier.width(4.dp))
             Text("所有任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         }
-        if (tracking.isEmpty() && todo.isEmpty() && future.isEmpty() && archive.isEmpty()) {
+        if (tracking.isEmpty() && todo.isEmpty() && future.isEmpty()) {
             EmptyState("还没有任何任务", Modifier.fillMaxSize())
         } else {
             LazyColumn(
@@ -633,28 +928,62 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (tracking.isNotEmpty()) {
                     item(key = "hdr-t") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
                     items(tracking, key = { "t-${it.uuid}" }) { task ->
-                        TaskRow(task, vm, onClick = { navController.navigate("detail/${task.uuid}") }, onEdit = { navController.navigate("edit/${task.uuid}") })
+                        TaskRow(task, vm,
+                            onClick = { navController.navigate("detail/${task.uuid}") },
+                            onEdit = { navController.navigate("edit/${task.uuid}") },
+                            onUnpin = { pendingRepoAction = task.uuid to "unpin" })
                     }
                 }
                 if (todo.isNotEmpty()) {
                     item(key = "hdr-todo") { SectionHeader("待办 (${todo.size})", TGColors.GoldDeep) }
                     items(todo, key = { "todo-${it.uuid}" }) { task ->
-                        TaskRow(task, vm, onClick = { navController.navigate("detail/${task.uuid}") }, onEdit = { navController.navigate("edit/${task.uuid}") })
+                        TaskRow(task, vm,
+                            onClick = { navController.navigate("detail/${task.uuid}") },
+                            onEdit = { navController.navigate("edit/${task.uuid}") },
+                            onUnpin = { pendingRepoAction = task.uuid to "unpin" })
                     }
                 }
                 if (future.isNotEmpty()) {
                     item(key = "hdr-f") { SectionHeader("未来任务 (${future.size})", TGColors.Azure) }
                     items(future, key = { "f-${it.uuid}" }) { task ->
-                        TaskRow(task, vm, onClick = { navController.navigate("detail/${task.uuid}") }, onEdit = { navController.navigate("edit/${task.uuid}") })
-                    }
-                }
-                if (archive.isNotEmpty()) {
-                    item(key = "hdr-a") { SectionHeader("已完成 (${archive.size})", TGColors.Jade) }
-                    items(archive, key = { "a-${it.uuid}" }) { task ->
-                        DoneTaskRow(task, vm)
+                        TaskRow(task, vm,
+                            onClick = { navController.navigate("detail/${task.uuid}") },
+                            onEdit = { navController.navigate("edit/${task.uuid}") },
+                            onPin = { pendingRepoAction = task.uuid to "pin" })
                     }
                 }
             }
+        }
+    }
+
+    // 置顶/置底确认弹窗（防误触）
+    pendingRepoAction?.let { (uuid, action) ->
+        if (action == "pin") {
+            TGConfirmDialog(
+                title = "置顶到主页",
+                message = "确定把任务移到主页吗？\n它将出现在主页的今天任务里",
+                confirmText = "置顶",
+                confirmColor = TGColors.GoldDeep,
+                onConfirm = {
+                    vm.pinToHome(uuid)
+                    ToastHelper.show(ctx, "已将任务移至主页")
+                    pendingRepoAction = null
+                },
+                onDismiss = { pendingRepoAction = null }
+            )
+        } else {
+            TGConfirmDialog(
+                title = "移回仓库",
+                message = "确定把任务移回仓库吗？\n它将不再出现在主页（明天 9 点到期）",
+                confirmText = "移回",
+                confirmColor = TGColors.Crimson,
+                onConfirm = {
+                    vm.unpinToRepo(uuid)
+                    ToastHelper.show(ctx, "已移回任务仓库")
+                    pendingRepoAction = null
+                },
+                onDismiss = { pendingRepoAction = null }
+            )
         }
     }
 }
@@ -722,6 +1051,7 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
         when (currentRoute) {
             "home" -> {
                 val points by vm.totalPoints.collectAsState()
+                val trackingCount by vm.tracking.collectAsState()
                 Row(
                     Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -736,6 +1066,23 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.weight(1f))
+                    // 追踪中标签（点击进追踪页）——boss 要求主页标签显示"追踪中"
+                    if (trackingCount.isNotEmpty()) {
+                        PressIcon(onClick = { navController.navigate("track") }) {
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(TGColors.Azure.copy(alpha = 0.14f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TGIcon(R.drawable.ic_track, contentDescription = null, tint = TGColors.Azure, size = 12.dp)
+                                Spacer(Modifier.width(3.dp))
+                                Text("追踪中 ${trackingCount.size}", color = TGColors.Azure, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
                     // 积分 pill：米底深金字（克制，不抢眼）
                     Row(
                         Modifier
@@ -750,11 +1097,11 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     }
                     Spacer(Modifier.width(8.dp))
                     PressIcon(onClick = { navController.navigate("history") }) {
-                        TGIcon(R.drawable.ic_archive, contentDescription = "历史任务", tint = TGColors.InkSoft, size = 22.dp)
+                        TGIcon(R.drawable.ic_clock, contentDescription = "历史任务", tint = TGColors.InkSoft, size = 22.dp)
                     }
                     Spacer(Modifier.width(4.dp))
                     PressIcon(onClick = { navController.navigate("all") }) {
-                        TGIcon(R.drawable.ic_list, contentDescription = "所有任务", tint = TGColors.InkSoft, size = 22.dp)
+                        TGIcon(R.drawable.ic_archive, contentDescription = "所有任务", tint = TGColors.InkSoft, size = 22.dp)
                     }
                 }
             }
@@ -801,20 +1148,57 @@ fun AvatarFrame(onClick: () -> Unit) {
     }
 }
 
-/** 底部中央"追踪"大按钮（金色实底 + 深褐字 + 阴影——一眼看出是可点按钮）
- *  历史：黑底太黑看不清 → 卡色金边又太素 → 现在金色实底高对比 */
+/** 底部中央"追踪"大按钮：金色渐变 + 深褐字 + 描边（设计感，不再纯金色块）
+ *  有追踪中任务时，按钮外圈泛起金色涟漪（boss 要的动态变化）
+ *  历史：黑底看不清 → 卡色金边太素 → 纯金实底 → 现在渐变金+涟漪 */
 @Composable
-fun CenterTrackingButton(navController: NavController) {
+fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
+    val hasTracking = trackingCount > 0
+    // 涟漪：扩散圆环渐隐（仅追踪中有任务时激活，单元素轻量动画）
+    val transition = rememberInfiniteTransition(label = "trackRipple")
+    val ripple by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple"
+    )
     Box(
         Modifier.fillMaxWidth().padding(bottom = 14.dp),
         contentAlignment = Alignment.Center
     ) {
+        if (hasTracking) {
+            // 涟漪圆环（金→淡金扩散，从按钮边缘向外泛开）
+            Box(
+                Modifier.size(72.dp).drawBehind {
+                    val maxR = 38.dp.toPx()
+                    // 两个错开的涟漪圈
+                    repeat(2) { i ->
+                        val p = (ripple + i * 0.5f) % 1f
+                        val radius = 26.dp.toPx() + (maxR - 26.dp.toPx()) * p
+                        val alpha = (1f - p) * 0.4f
+                        drawCircle(
+                            color = TGColors.Gold.copy(alpha = alpha),
+                            radius = radius,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx())
+                        )
+                    }
+                }
+            )
+        }
         PressIcon(onClick = { navController.navigate("track") }) {
             Row(
                 Modifier
                     .height(50.dp)
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(25.dp))
-                    .background(TGColors.Gold)
+                    .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
+                    .border(
+                        width = 1.dp,
+                        color = TGColors.Black.copy(alpha = 0.35f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp)
+                    )
                     .shadow(
                         elevation = 6.dp,
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
@@ -837,6 +1221,15 @@ fun CenterTrackingButton(navController: NavController) {
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
+                if (hasTracking) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "($trackingCount)",
+                        color = TGColors.Ink.copy(alpha = 0.8f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
