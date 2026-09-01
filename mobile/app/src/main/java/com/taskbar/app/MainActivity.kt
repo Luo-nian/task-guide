@@ -16,9 +16,15 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -78,9 +85,9 @@ fun MainApp() {
     val navController = rememberNavController()
     val vm: TaskViewModel = viewModel()
 
-    // 顶层 tab：home（主页）、profile（我的，用 AppTopBar 里的 AvatarFrame）。
-    // 追踪从底部中央"追踪"大按钮进入，不放在 tab 里。
-    val topTabs = listOf("home", "profile")
+        // 顶层 tab：home（主页）、profile（我的，用 AppTopBar 里的 AvatarFrame）。
+        // 追踪从底部导航栏的追踪 tab 进入，不放在顶部 tab 里。
+        val topTabs = listOf("home", "profile")
 
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
@@ -93,7 +100,56 @@ fun MainApp() {
                 AppTopBar(currentRoute, vm, navController)
             }
         },
-        bottomBar = { Spacer(Modifier.height(0.dp)) },  // 高度 0，让出空间给浮动追踪键
+        bottomBar = {
+            // 底部导航栏：只放"追踪"tab（居中）；我的/主页走顶部（跟以前一样）
+            if (currentRoute in listOf("home", "profile", "track")) {
+                val trackingCount by vm.tracking.collectAsState()
+                BottomAppBar(
+                    containerColor = TGColors.PanelSolid,
+                    tonalElevation = 2.dp
+                ) {
+                    // Spacer.weight 撑开两侧让 NavigationBarItem 居中
+                    Spacer(modifier = Modifier.weight(1f))
+                    NavigationBarItem(
+                        selected = currentRoute == "track",
+                        onClick = {
+                            navController.navigate("track") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        icon = {
+                            Box {
+                                TGIcon(R.drawable.ic_mark, contentDescription = "追踪", tint = if (currentRoute == "track") TGColors.Azure else TGColors.InkSoft, size = 24.dp)
+                                if (trackingCount.size > 0) {
+                                    // 追踪数小角标（Azure 深色，不用红色）
+                                    Box(
+                                        Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(TGColors.Azure)
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        label = { Text("追踪", fontSize = 10.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = TGColors.Azure,
+                            selectedTextColor = TGColors.Azure,
+                            indicatorColor = TGColors.Azure.copy(alpha = 0.12f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             NavHost(
@@ -102,8 +158,7 @@ fun MainApp() {
                 // 显式转场 + 全局底部 padding 80dp 让出追踪键（FAB 位置）+ nav bar
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .consumeWindowInsets(WindowInsets.navigationBars)
-                    .padding(bottom = 100.dp),
+                    .consumeWindowInsets(WindowInsets.navigationBars),
                 enterTransition = { fadeIn(tween(150)) },
             exitTransition = { fadeOut(tween(150)) },
             popEnterTransition = { fadeIn(tween(150)) },

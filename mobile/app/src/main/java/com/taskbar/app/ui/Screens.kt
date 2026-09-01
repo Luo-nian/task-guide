@@ -82,27 +82,17 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 
     Scaffold(
         containerColor = Color.Transparent,
+        // 追踪 tab 已在底部 NavigationBar，这里只保留添加 FAB
         floatingActionButton = {
-            // 两个 FAB 共存：底部居中 = 追踪键（追踪/定位），底部右 = 添加
-            val trackingCount by vm.tracking.collectAsState()
-            Box(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                // 追踪键（居中）
-                Box(Modifier.align(Alignment.BottomCenter)) {
-                    CenterTrackingButton(navController, trackingCount.size)
-                }
-                // 添加 FAB（居右）
-                FloatingActionButton(
-                    onClick = { navController.navigate("add") },
-                    containerColor = TGColors.Gold,
-                    contentColor = TGColors.Black,
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                ) {
-                    TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
-                }
+            FloatingActionButton(
+                onClick = { navController.navigate("add") },
+                containerColor = TGColors.Gold,
+                contentColor = TGColors.Black
+            ) {
+                TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
             }
         }
     ) { padding ->
-        // 全局 NavHost 已 padding(bottom 80dp) 让出追踪键，此处不再加
         Column(Modifier.padding(padding)) {
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
@@ -1158,23 +1148,25 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     }
                 }
             }
-            "profile" -> barWithTitle("我的", navController)
-            "track" -> barWithTitle("追踪中", navController)
+            "profile" -> barWithTitle("我的", navController, showBack = false)  // 底部导航栏已有，顶部无返回键
+            "track" -> barWithTitle("追踪中", navController, showBack = false)    // 底部导航栏已有
             else -> barWithTitle("任务栏", navController)
         }
     }
 }
 
 @Composable
-private fun barWithTitle(title: String, navController: NavController) {
+private fun barWithTitle(title: String, navController: NavController, showBack: Boolean = true) {
     Row(
         Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
-            TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
+        if (showBack) {
+            androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
+                TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
+            }
+            Spacer(Modifier.width(4.dp))
         }
-        Spacer(Modifier.width(4.dp))
         Text(title, color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -1233,7 +1225,7 @@ fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
             // 圆形青蓝按钮 + 白色任务标记（简洁，与顶栏"追踪中"Azure 视觉一致）
             Box(
                 Modifier
-                    .size(54.dp)
+                    .size(48.dp)
                     .clip(androidx.compose.foundation.shape.CircleShape)
                     .background(TGColors.Azure)
                     .clickable {
@@ -1249,7 +1241,7 @@ fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
                     drawable = R.drawable.ic_mark,
                     contentDescription = "追踪",
                     tint = Color.White,
-                    size = 26.dp
+                    size = 24.dp
                 )
             }
             // 追踪数：按钮正下方小字（Azure 深色，非红色角标）
