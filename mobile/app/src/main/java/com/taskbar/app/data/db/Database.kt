@@ -177,6 +177,10 @@ interface HabitLogDao {
     @Query("SELECT check_date FROM habit_logs WHERE task_uuid = :taskUuid ORDER BY check_date DESC")
     fun observeCheckDatesByTask(taskUuid: String): Flow<List<String>>
 
+    /** 全部 habit 打卡 (task_uuid + check_date)，客户端 map 出今日已打卡 uuid（点完卡后 Flow 立刻 emit → UI 实时更新） */
+    @Query("SELECT * FROM habit_logs ORDER BY check_date DESC")
+    fun observeAllHabitLogs(): Flow<List<HabitLog>>
+
     @Query("SELECT * FROM habit_logs WHERE created_at > :since")
     suspend fun getChangedSince(since: Long): List<HabitLog>
 

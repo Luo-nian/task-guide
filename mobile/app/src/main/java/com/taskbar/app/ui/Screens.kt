@@ -112,12 +112,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 val habits = tasks.filter { it.type == TaskType.HABIT }
                 // 步骤聚合：一次 Flow 订阅获取全部步骤 Map，TaskRow 不再各自订阅（性能优化）
                 val stepsByUuid by vm.stepsByUuid.collectAsState()
-                // 今日已打卡的习惯 uuid 集合（决定习惯行的完成态）
-                val checkedHabits by produceState<Set<String>>(initialValue = emptySet(), key1 = habits.size) {
-                    value = habits.filter { it.type == TaskType.HABIT }
-                        .filter { runCatching { vm.repoIsCheckedToday(it.uuid, today) }.getOrDefault(false) }
-                        .map { it.uuid }.toSet()
-                }
+                // 今日已打卡的习惯 uuid 集合（订阅 habit_logs Flow，点完卡后 UI 立刻更新）
+                val checkedHabits by vm.todayCheckedHabits.collectAsState()
                 // 全部完成：无追踪、无待办、习惯非空且全部已打卡
                 val allDone = tracking.isEmpty() && todo.isEmpty() && habits.isNotEmpty() && checkedHabits.size == habits.size
 

@@ -360,6 +360,15 @@ class TaskRepository(private val db: AppDatabase) {
     suspend fun isHabitCheckedToday(taskUuid: String, date: String): Boolean =
         habitDao.isChecked(taskUuid, date)
 
+    /** 实时观察今日已打卡的 habit uuid 集合（点完卡后 Flow 立刻 emit → UI 实时更新） */
+    fun observeTodayCheckedHabitUuids(): Flow<Set<String>> {
+        val df = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return habitDao.observeAllHabitLogs().map { logs ->
+            val today = df.format(java.util.Date())
+            logs.filter { it.checkDate == today }.map { it.taskUuid }.toSet()
+        }
+    }
+
     suspend fun habitStreak(taskUuid: String): Int {
         val logs = habitDao.getByTask(taskUuid).map { it.checkDate }.sortedDescending()
         if (logs.isEmpty()) return 0

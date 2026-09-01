@@ -183,6 +183,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun observeHabitStreak(taskUuid: String) = repo.observeHabitStreak(taskUuid)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /** 今日已打卡的 habit uuid 集合（Flow 实时刷新，点完卡后 UI 立刻更新） */
+    val todayCheckedHabits: StateFlow<Set<String>> = repo.observeTodayCheckedHabitUuids()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     suspend fun habitStreak(taskUuid: String) = repo.habitStreak(taskUuid)
 
     /** 所有习惯最长连续天数（"我的"页"坚持"统计） */
