@@ -14,15 +14,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.*
@@ -101,67 +108,90 @@ fun MainApp() {
             }
         },
         bottomBar = {
-            // 底部导航栏：只放"追踪"tab（居中）；我的/主页走顶部（跟以前一样）
+            // 底部导航栏：矮条（58dp）+ 中央凸起圆形追踪钮（boss 要"凸出来+面积小+设计感"）
+            // 追踪钮向上凸出 18dp 形成"悬浮凸起"效果；home/profile 显示 ic_track 靶心，track 路由变 ic_home 房子
             if (currentRoute in listOf("home", "profile", "track")) {
                 val trackingCount by vm.tracking.collectAsState()
-                BottomAppBar(
-                    containerColor = TGColors.PanelSolid,
-                    tonalElevation = 2.dp
+                val isOnTrack = currentRoute == "track"
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .background(TGColors.PanelSolid)
                 ) {
-                    // 差分化：home/profile 时显示追踪（与任务行追踪键同款靶心 ic_track），
-                    // 进入 track 路由后变成"主页"（房子 ic_home），点它 popBackStack 回主页
-                    val isOnTrack = currentRoute == "track"
-                    Spacer(modifier = Modifier.weight(1f))
-                    NavigationBarItem(
-                        selected = isOnTrack,
-                        onClick = {
-                            if (isOnTrack) {
-                                // 在追踪页：点主页图标 → 返回主页（popBackStack）
-                                if (!navController.popBackStack("home", inclusive = false)) {
-                                    navController.navigate("home") { launchSingleTop = true }
-                                }
-                            } else {
-                                navController.navigate("track") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Box {
+                    // 顶部分隔细线（设计感细节）
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(TGColors.BorderSoft)
+                            .align(Alignment.TopCenter)
+                    )
+                    // 凸起圆形按钮（用 Box.align 浮在导航栏上方）
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = (-22).dp)  // 向上凸出 22dp
+                            .size(56.dp)
+                            .shadow(
+                                elevation = 6.dp,
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                ambientColor = TGColors.Gold.copy(alpha = 0.4f),
+                                spotColor = TGColors.Gold.copy(alpha = 0.5f)
+                            )
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        TGColors.GoldLight,
+                                        TGColors.Gold
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.5.dp,
+                                color = Color.White.copy(alpha = 0.6f),
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                            .clickable {
                                 if (isOnTrack) {
-                                    TGIcon(R.drawable.ic_home, contentDescription = "主页", tint = TGColors.GoldDeep, size = 24.dp)
+                                    if (!navController.popBackStack("home", inclusive = false)) {
+                                        navController.navigate("home") { launchSingleTop = true }
+                                    }
                                 } else {
-                                    TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.InkSoft, size = 24.dp)
-                                }
-                                // 追踪数角标（仅非 track 路由显示，差分化颜色：profile 紫 / home 金深）
-                                if (!isOnTrack && trackingCount.size > 0) {
-                                    Box(
-                                        Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (currentRoute == "profile") TGColors.Violet else TGColors.GoldDeep)
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
-                                            color = Color.White,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                    navController.navigate("track") {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
                                     }
                                 }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isOnTrack) {
+                            TGIcon(R.drawable.ic_home, contentDescription = "主页", tint = Color.White, size = 26.dp)
+                        } else {
+                            TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = Color.White, size = 24.dp)
+                        }
+                        // 追踪数小点（凸起钮右上角，选中态隐藏避免视觉拥挤）
+                        if (!isOnTrack && trackingCount.size > 0) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(16.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(TGColors.Orange)
+                                    .border(1.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black
+                                )
                             }
-                        },
-                        label = { Text(if (isOnTrack) "主页" else "追踪", fontSize = 10.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TGColors.GoldDeep,
-                            selectedTextColor = TGColors.GoldDeep,
-                            indicatorColor = TGColors.Selected.copy(alpha = 0.6f),
-                            unselectedIconColor = TGColors.InkSoft,
-                            unselectedTextColor = TGColors.InkSoft
-                        )
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }

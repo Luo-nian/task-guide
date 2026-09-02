@@ -1,41 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 全部/仓库（替代 ic_archive，更像"所有任务"：列表+勾选） -->
+<!-- 仓库（层叠卡片：表达"多个任务堆放在一起"，更贴"任务库"语义） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 外框 -->
+    <!-- 底层卡片（最浅、最后） -->
     <path
-        android:pathData="M4,6 L20,6 L20,20 L4,20 Z"
+        android:pathData="M4,15 L4,20 L18,20 L18,15"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- 中间层卡片 -->
+    <path
+        android:pathData="M6,11 L6,16 L20,16 L20,11"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- 顶层卡片（最前，含勾选标记，象征"当前选中/查看的任务"） -->
+    <path
+        android:pathData="M3,5 L3,10 L17,10 L17,5 Z"
         android:strokeColor="#FF000000"
         android:strokeWidth="1.8"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 勾选标记（第一行任务完成） -->
+    <!-- 顶层勾选 -->
     <path
-        android:pathData="M7,11 L9,13 L12,10"
+        android:pathData="M6,7.5 L8,9 L11,6"
         android:strokeColor="#FF000000"
         android:strokeWidth="1.8"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 第二行短线 -->
-    <path
-        android:pathData="M13.5,12 L17,12"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round" />
-    <!-- 勾选标记（第三行任务完成） -->
-    <path
-        android:pathData="M7,16 L9,18 L12,15"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 第四行短线 -->
-    <path
-        android:pathData="M13.5,17 L17,17"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round" />
 </vector>

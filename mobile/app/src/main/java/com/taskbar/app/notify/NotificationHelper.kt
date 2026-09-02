@@ -189,18 +189,89 @@ object NotificationHelper {
     }
 
     /** 演示提醒效果（设置页"演示"键用）：立即发一条对应通道的测试通知 */
+    /**
+     * 演示某通道的提醒效果（每个通道触发真实效果，不再全部只发通知）
+     * - VIBRATE：真振动 Vibrator（用设置里"振动周期"pattern）
+     * - NOTIFY：弹通知 + 系统默认通知提示音（通道已 setSound）
+     * - BEEP：弹通知 + 短促提示音（通道 IMPORTANCE_DEFAULT 默认声）
+     * - RING：弹通知 + 自定义铃声（通道 setSound 用户选择）
+     */
     fun demoReminder(context: Context, strength: String) {
-        ensureChannels(context)
-        val (channel, _) = channelFor(strength)
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val label = ReminderStrength.label(strength).removePrefix("通知栏弹窗（").removePrefix("振动提醒（")
             .removePrefix("提示音（").removePrefix("响铃提醒（").removeSuffix("）")
-        val builder = NotificationCompat.Builder(context, channel)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("提醒效果演示")
-            .setContentText("这是「$label」的效果，完成任务后可到设置里调整")
-            .setAutoCancel(true)
-        nm.notify(99999, builder.build())
+
+        when (ReminderStrength.migrateLegacy(strength)) {
+            ReminderStrength.VIBRATE -> {
+                // 真振动：用 Vibrator 系统服务（绕过通知通道的通道级振动）
+                val pattern = getVibratePatternSetting(context)
+                triggerVibrate(context, pattern)
+            }
+            ReminderStrength.NOTIFY -> {
+                ensureChannels(context)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(99999, NotificationCompat.Builder(context, CHANNEL_NOTIFY)
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                    .setContentTitle("提醒效果演示")
+                    .setContentText("这是「$label」的效果（顶部横幅 + 提示音）")
+                    .setAutoCancel(true)
+                    .build())
+            }
+            ReminderStrength.BEEP -> {
+                ensureChannels(context)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(99998, NotificationCompat.Builder(context, CHANNEL_BEEP)
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                    .setContentTitle("提醒效果演示")
+                    .setContentText("这是「$label」的效果（短促提示音）")
+                    .setAutoCancel(true)
+                    .build())
+            }
+            ReminderStrength.RING -> {
+                ensureChannels(context)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(99997, NotificationCompat.Builder(context, CHANNEL_RING)
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                    .setContentTitle("提醒效果演示")
+                    .setContentText("这是「$label」的效果（自定义铃声）")
+                    .setAutoCancel(true)
+                    .build())
+            }
+            else -> {
+                // 兜底：弹通用通知
+                ensureChannels(context)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(99999, NotificationCompat.Builder(context, CHANNEL_NOTIFY)
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                    .setContentTitle("提醒效果演示")
+                    .setContentText("这是「$label」的效果")
+                    .setAutoCancel(true)
+                    .build())
+            }
+        }
+    }
+
+    /**
+     * 真振动：用系统 Vibrator 服务触发（不依赖通知通道）
+     * 解析 "0,300,200,300" 格式的振动模式 → 实际振动
+     */
+    private fun triggerVibrate(context: Context, pattern: String) {
+        val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        } ?: return
+
+        val longArray = parseVibratePattern(pattern)
+        if (longArray.isNotEmpty()) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator.vibrate(android.os.VibrationEffect.createWaveform(longArray, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(longArray, -1)
+            }
+        }
     }
 
     /** 前台服务常驻通知 */
