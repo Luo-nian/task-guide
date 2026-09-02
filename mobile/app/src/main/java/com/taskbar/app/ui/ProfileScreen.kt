@@ -102,26 +102,17 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            // 进度条：Lv5 用三色撞，其他用主→辅渐变
-            val trackBrush = if (level.lv >= 5) {
-                androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    listOf(palette.primary, palette.secondary, palette.accent)
-                )
-            } else {
-                androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    listOf(palette.primary, palette.secondary)
-                )
-            }
+            // 进度条：白条高对比（在彩底上最显眼）
             Box(
                 Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
-                    .background(palette.border.copy(alpha = 0.25f))
+                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.32f))
             ) {
                 Box(
                     Modifier
                         .fillMaxWidth(level.progress.coerceIn(0f, 1f))
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(brush = trackBrush)
+                        .background(androidx.compose.ui.graphics.Color.White)
                 )
             }
             Spacer(Modifier.height(4.dp))

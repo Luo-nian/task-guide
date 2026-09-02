@@ -83,49 +83,50 @@ fun PressIcon(
     ) { content() }
 }
 
-// ==================== 配色（v5.0 撞色方案：冰川蓝主 + 赤陶高亮 + 紫罗兰辅助，告别黑金） ====================
-// 设计思路：暖色米底 + 冷色主调（冰川蓝）+ 暖色高亮（赤陶橙）+ 神秘紫辅助，三色撞色
-// 旧黑金方案（v4.9 之前）已在 git 历史 b17503e 留档，可一键回退
+// ==================== 配色（v5.4 暖土撞色：赤陶+桃黏土+鼠尾草绿，告别冰川蓝冷感） ====================
+// 设计思路：2026 流行 Terracotta Modern 撞色——米白底 + 暖赤陶主 + 桃黏土强调 + 鼠尾草绿完成 + 浓缩咖啡深底
+// 蓝调（冰川蓝）取消，整体偏暖不冷；金调（之前的金色仍保留少量做"荣誉"色，不作主色）
+// 旧冰川蓝方案 v5.0/v5.3 在 git 142292a 留档可一键回退
 object TGColors {
-    // ---- 背景（米色暖底） ----
-    val BgPaper     = Color(0xFFF4EFE3)   // 主背景 米色（略带冷调）
-    val BgPaperDeep = Color(0xFFE8DFCD)   // 深一档米色
-    val Panel       = Color(0xFFFBF6EA)   // 面板
-    val PanelSolid  = Color(0xFFF8F2E2)   // 面板实色
-    val Card        = Color(0xFFFFFCF0)   // 卡片白米色
+    // ---- 背景（暖米白底，更柔） ----
+    val BgPaper     = Color(0xFFF5F0E8)   // 主背景 暖白米色（Terracotta Modern 暖白 #F5F0E8）
+    val BgPaperDeep = Color(0xFFEAE2D2)   // 深一档
+    val Panel       = Color(0xFFFCF8EE)   // 面板
+    val PanelSolid  = Color(0xFFF9F2E2)   // 面板实色
+    val Card        = Color(0xFFFFFCF3)   // 卡片
     val Bar         = Color(0xFFE8DDC2)   // 任务条
     val BarHover    = Color(0xFFE4D5AF)   // 任务条按下
-    val Selected    = Color(0xFFDDD0B0)   // 选中
+    val Selected    = Color(0xFFE6D9BC)   // 选中
 
-    // ---- 文字（冷色深蓝灰，告别深褐） ----
-    val Ink         = Color(0xFF1F2A37)   // 主文字 深海岩（冷色字在暖底上）
-    val InkSoft     = Color(0xFF4A5765)   // 副文字
-    val InkMute     = Color(0xFF8895A3)   // 三级文字
-    val InkFaint    = Color(0xFFB8C0C8)   // 四级/分隔
+    // ---- 文字（暖深咖啡，告别蓝灰冷感） ----
+    val Ink         = Color(0xFF3B2A20)   // 主文字 浓缩咖啡（Terracotta Modern #3B2A20）
+    val InkSoft     = Color(0xFF6B574A)   // 副文字
+    val InkMute     = Color(0xFF9C8B7A)   // 三级
+    val InkFaint    = Color(0xFFC2B59E)   // 四级/分隔
 
-    // ---- 招牌位（深色板/卡：用深海岩作墨黑替代，告别 #16120C 纯黑） ----
-    val Black       = Color(0xFF1A2530)   // 招牌位深底（深海岩，比纯黑柔和）
-    val BlackSoft   = Color(0xFF2A3A4A)   // 深蓝灰
+    // ---- 招牌位（深底：浓缩咖啡） ----
+    val Black       = Color(0xFF3B2A20)   // 招牌位深底（深咖啡，告别纯黑/蓝灰）
+    val BlackSoft   = Color(0xFF5A463A)   // 浅深咖
 
-    // ---- 冰川蓝（主色，取代金色作"点缀+描边+主调"） ----
-    val Gold        = Color(0xFF4A8FB5)   // 主色 冰川蓝（图标/描边/主调）
-    val GoldLight   = Color(0xFF7CB8D9)   // 浅冰川蓝 填充底/高亮
-    val GoldDeep    = Color(0xFF2E6A8E)   // 深冰川蓝 浅底上的可读蓝字
+    // ---- 主色：赤陶（取代冰川蓝作"主调/描边/点缀"） ----
+    val Gold        = Color(0xFFC1603F)   // 主色 赤陶 Terracotta Modern #C1603F
+    val GoldLight   = Color(0xFFE8A87C)   // 浅赤陶 桃黏土 Peach Clay
+    val GoldDeep    = Color(0xFF8E4424)   // 深赤陶 浅底可读字
 
-    // ---- 赤陶（强调色，取代金色"廉价"感——冷蓝+暖橙撞色） ----
-    val Orange      = Color(0xFFD4795A)   // 赤陶（强调/重要提示）
-    val OrangeLight = Color(0xFFE8A87C)   // 浅赤陶 桃黏土
+    // ---- 强调色：桃黏土（辅助高亮） ----
+    val Orange      = Color(0xFFD4795A)   // 暖橙偏赤陶（重要提示）
+    val OrangeLight = Color(0xFFE8A87C)   // 桃黏土
 
-    // ---- 装饰色（微调：去掉游戏页游感，加深一档更稳重） ----
-    val Jade        = Color(0xFF5B9274)   // 玉青 完成（更沉稳的绿）
+    // ---- 装饰色（v5.4 全面去蓝化） ----
+    val Jade        = Color(0xFF7D9B76)   // 鼠尾草绿 Muted Sage #7D9B76（取代"完成绿"）
     val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级
-    val Azure       = Color(0xFF4F86B5)   // 冰川蓝旧名（保留兼容）
-    val Violet      = Color(0xFF9B7FB5)   // 紫罗兰 Dusty Purple（取代"游戏紫"）
+    val Azure       = Color(0xFF6B8E9E)   // 浅灰蓝（保留少量做"重复任务"等标签，整体不蓝）
+    val Violet      = Color(0xFFA38FA0)   // 灰紫（取代紫罗兰，低饱和不刺眼）
 
     // ---- 边框（含 alpha） ----
-    val BorderSoft   = Color(0x384A8FB5)   // 冰川蓝透明
-    val BorderMid    = Color(0x592E6A8E)
-    val BorderStrong = Color(0x8C2E6A8E)
+    val BorderSoft   = Color(0x38C1603F)   // 赤陶透明
+    val BorderMid    = Color(0x598E4424)
+    val BorderStrong = Color(0x8C8E4424)
 }
 
 private val TGColorScheme = lightColorScheme(

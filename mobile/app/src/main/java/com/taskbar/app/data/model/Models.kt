@@ -176,46 +176,46 @@ data class LevelInfo(
 )
 
 object Levels {
-    // 5 级主题色：青蓝 → 玉青 → 蓝紫撞 → 紫金撞 → 三色撞（等级越高撞色越复杂）
-    private val P1 = LevelPalette(  // Lv1 历练学徒：冰川蓝单色，新手淡雅
-        primary = androidx.compose.ui.graphics.Color(0xFF4A8FB5),
-        secondary = androidx.compose.ui.graphics.Color(0xFF7CB8D9),
-        accent = androidx.compose.ui.graphics.Color(0xFF4A8FB5),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFEEF6FB),
-        border = androidx.compose.ui.graphics.Color(0xFF7CB8D9)
-    )
-    private val P2 = LevelPalette(  // Lv2 风华游侠：玉青活力，初成绿意
-        primary = androidx.compose.ui.graphics.Color(0xFF4F8A6A),
-        secondary = androidx.compose.ui.graphics.Color(0xFF7AB395),
-        accent = androidx.compose.ui.graphics.Color(0xFF7AB395),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFE8F4ED),
-        border = androidx.compose.ui.graphics.Color(0xFF7AB395)
-    )
-    private val P3 = LevelPalette(  // Lv3 破浪骑士：冰川蓝+紫罗兰撞色横渐变
-        primary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
-        secondary = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
-        accent = androidx.compose.ui.graphics.Color(0xFF7CB8D9),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFEDEAF5),
-        border = androidx.compose.ui.graphics.Color(0xFF9B7FB5)
-    )
-    private val P4 = LevelPalette(  // Lv4 群星行者：紫罗兰主+冰川蓝撞色，巅峰感
-        primary = androidx.compose.ui.graphics.Color(0xFF7E5DA0),
-        secondary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
-        accent = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFEAE4F2),
-        border = androidx.compose.ui.graphics.Color(0xFFC4A5E0)
-    )
-    private val P5 = LevelPalette(  // Lv5 传奇勇者：赤陶+冰川蓝+紫罗兰三色撞（最华丽）
-        primary = androidx.compose.ui.graphics.Color(0xFFD4795A),
-        secondary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
-        accent = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
+    // 5 级主题色（v5.4 暖土撞色：赤陶+桃黏土+鼠尾草绿+浓缩咖啡，等级越高越华丽）
+    private val P1 = LevelPalette(  // Lv1 历练学徒：赤陶单色，新手温暖
+        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
+        secondary = androidx.compose.ui.graphics.Color(0xFFE8A87C),
+        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
         onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
         onSecondary = androidx.compose.ui.graphics.Color(0xFFFFF0E8),
-        border = androidx.compose.ui.graphics.Color(0xFFFFC4A8)  // 浅赤陶描边
+        border = androidx.compose.ui.graphics.Color(0xFFE8A87C)
+    )
+    private val P2 = LevelPalette(  // Lv2 风华游侠：鼠尾草绿+桃黏土，活力初成
+        primary = androidx.compose.ui.graphics.Color(0xFF5B8A66),
+        secondary = androidx.compose.ui.graphics.Color(0xFF7D9B76),
+        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFEBF3E8),
+        border = androidx.compose.ui.graphics.Color(0xFFA0BC97)
+    )
+    private val P3 = LevelPalette(  // Lv3 破浪骑士：赤陶+鼠尾草绿撞色横渐变
+        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
+        secondary = androidx.compose.ui.graphics.Color(0xFF5B8A66),
+        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFFAF1E8),
+        border = androidx.compose.ui.graphics.Color(0xFFD08B5E)
+    )
+    private val P4 = LevelPalette(  // Lv4 群星行者：深咖啡+赤陶撞色，浓郁沉稳
+        primary = androidx.compose.ui.graphics.Color(0xFF8E4424),
+        secondary = androidx.compose.ui.graphics.Color(0xFF3B2A20),
+        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFF5E0CE),
+        border = androidx.compose.ui.graphics.Color(0xFFC1603F)
+    )
+    private val P5 = LevelPalette(  // Lv5 传奇勇者：赤陶+桃黏土+浓缩咖啡三色撞（最华丽神话）
+        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
+        secondary = androidx.compose.ui.graphics.Color(0xFFE8A87C),
+        accent = androidx.compose.ui.graphics.Color(0xFF3B2A20),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFFFF1E6),
+        border = androidx.compose.ui.graphics.Color(0xFFFFC4A8)
     )
 
     private val LEVELS = listOf(
