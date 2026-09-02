@@ -8,21 +8,24 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  /* === 原神 HUD 深色主题：墨蓝黑底 + 鎏金描边 + 米白文字 === */
-  --bg-paper:        #10141F;          /* 主背景 墨蓝黑 */
-  --bg-paper-deep:   #0B0E16;          /* 更深处 */
-  --panel:           rgba(18, 24, 38, 0.86);   /* 面板半透明墨蓝玻璃 */
-  --panel-solid:     #141A28;          /* 面板实色 */
-  --bar:             rgba(32, 42, 62, 0.55);   /* 任务条 */
-  --bar-hover:       rgba(48, 60, 88, 0.8);    /* 任务条 hover */
-  --card:            rgba(28, 36, 54, 0.72);   /* 卡片 深蓝玻璃 */
-  --selected:        rgba(46, 58, 84, 0.9);    /* 选中状态 */
+  /* === 原神 HUD 深色主题：墨蓝黑底 + 鎏金描边 + 米白文字 ===
+     v4.10.1：boss 反馈「太白太亮、字看不清」（老花眼）——
+     半透明玻璃太透（壁纸透入显亮），小号灰字对比不足。收敛如下：
+     玻璃几乎不透明、文字色全部提亮一档、关键字号提大 */
+  --bg-paper:        #0E121C;          /* 主背景 墨蓝黑（略加深，防透亮） */
+  --bg-paper-deep:   #0A0D15;          /* 更深处 */
+  --panel:           rgba(13, 17, 27, 0.97);   /* 面板 近实色墨蓝（几乎不透壁纸） */
+  --panel-solid:     #11161F;          /* 面板实色 */
+  --bar:             rgba(36, 48, 71, 0.88);   /* 任务条（提不透明） */
+  --bar-hover:       rgba(52, 66, 96, 0.94);   /* 任务条 hover */
+  --card:            rgba(21, 28, 43, 0.94);   /* 卡片 近实色深蓝 */
+  --selected:        rgba(48, 62, 92, 0.96);   /* 选中状态 */
 
-  /* === 文字（米白/暖白系） === */
-  --ink:             #EDE7D8;          /* 主文字 米白 */
-  --ink-soft:        #C4C9D6;          /* 副文字 */
-  --ink-mute:        #8E96A8;          /* 三级文字 */
-  --ink-faint:       #5D6678;          /* 四级文字/分隔 */
+  /* === 文字（米白/暖白系，全部提亮保对比） === */
+  --ink:             #F7F3E9;          /* 主文字 亮米白 */
+  --ink-soft:        #D9DEE9;          /* 副文字 */
+  --ink-mute:        #B4BDCF;          /* 三级文字（原 #8E96A8 太暗） */
+  --ink-faint:       #98A2B8;          /* 四级文字/分隔（原 #5D6678 深底上不可读） */
 
   /* === 鎏金元素（原神主色） === */
   --ink-black:       #0B0E16;          /* 深底(按钮字) */
@@ -525,8 +528,9 @@ body::after {
 .progress-bar .bar-fill::after {
   content: "";
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%);
-  animation: barShine 2.5s ease-in-out infinite;
+  /* v4.10.1：原白色 0.45 扫光太刺眼（boss 反馈太白/反光），降为几乎不可见的微光 */
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
+  animation: barShine 3.5s ease-in-out infinite;
 }
 @keyframes barShine {
   0% { transform: translateX(-100%); }
@@ -1587,3 +1591,116 @@ input::placeholder { color: var(--ink-faint); }
 .setting-row label { font-size: 13.5px; }
 
 
+
+/* ========== v4.10.1 可读性增强 ==========
+   boss 反馈「太白太亮、字看不清」（老花眼）：上面 :root 已把玻璃压到几乎不透明 +
+   文字色整体提亮一档；这里把关键信息字号提到 ≥13px（正文/标题 14px+），
+   弱信息也保底 12.5px。放文件尾覆盖旧值。 */
+.nav-tip { font-size: 13px; }
+.title { font-size: 15px; }
+.title-sub { font-size: 12px; color: var(--ink-mute); }
+.cc-name { font-size: 13.5px; }
+.cat-task .ct-title, .list-task .ct-title, .arc-item .arc-title { font-size: 14px; }
+.ct-meta, .arc-sub { font-size: 12px; }
+.cc-empty, .empty-line { font-size: 13px; }
+.dash-greet-sub { font-size: 13px; }
+.level-name { font-size: 17px; }
+.level-title { font-size: 13px; }
+.progress-title { font-size: 14px; }
+.progress-stat .sep { font-size: 15px; }
+.stat-label { font-size: 12.5px; }
+.stat-trend { font-size: 12.5px; }
+.stat-value .unit { font-size: 12px; }
+.tip-card .tip-text { font-size: 13px; }
+.vh-title { font-size: 14px; }
+.vh-hint { font-size: 12.5px; }
+.dv-sub { font-size: 13px; }
+.goal-head, .g-text { font-size: 13.5px; }
+.setting-row label { font-size: 14px; }
+.ss-title { font-size: 13.5px; }
+.setting-row .hint, .hint { font-size: 13px; }
+.search, .arc-search { font-size: 13.5px; }
+.arc-tab { font-size: 13px; }
+
+/* ========== v4.10.2 浅色主题（boss：不要黑底；保留鎏金 HUD 味） ==========
+   底部 :root 覆盖头部深色变量：浅色纸感底 + 深咖啡字 + 鎏金描边加深保留。
+   其后针对性修正深色时代遗留的硬编码白字/亮底。 */
+:root{
+  --bg-paper: #F1ECE2;
+  --bg-paper-deep: #E9E2D3;
+  --panel: rgba(250, 247, 240, 0.9);
+  --panel-solid: #FAF7F0;
+  --bar: rgba(255, 255, 255, 0.78);
+  --bar-hover: rgba(250, 244, 230, 0.98);
+  --card: rgba(255, 254, 250, 0.94);
+  --selected: rgba(212, 175, 55, 0.2);
+  --ink: #322F28;
+  --ink-soft: #5C564A;
+  --ink-mute: #837B6B;
+  --ink-faint: #A49B88;
+  --ink-black: #3A362E;
+  --ink-black-soft: #5C564A;
+  --gold: #C3911B;
+  --gold-light: #E0BC57;
+  --gold-deep: #9C7210;
+  --orange: #C97A33;
+  --jade: #3E8E6B;
+  --crimson: #C2503A;
+  --azure: #3E7FB4;
+  --violet: #8A6FC0;
+  --border-soft: rgba(156, 120, 25, 0.32);
+  --border-mid: rgba(156, 120, 25, 0.52);
+  --border-strong: rgba(122, 88, 12, 0.66);
+  --glow-gold: rgba(201, 151, 31, 0.22);
+  --glow-azure: rgba(62, 127, 180, 0.25);
+  --glow-violet: rgba(138, 111, 192, 0.28);
+  --shadow-card: 0 2px 8px rgba(90, 70, 28, 0.14), 0 0 0 1px rgba(156, 120, 25, 0.14);
+  --shadow-hover: 0 8px 20px rgba(90, 70, 28, 0.2), 0 0 0 1px rgba(156, 120, 25, 0.24);
+}
+html, body { background: #ECE7DB; color: var(--ink); }
+body::before {
+  background:
+    radial-gradient(90% 70% at 78% 12%, rgba(224, 188, 87, 0.22), transparent 55%),
+    radial-gradient(70% 60% at 12% 85%, rgba(62, 127, 180, 0.10), transparent 58%),
+    radial-gradient(60% 50% at 88% 88%, rgba(138, 111, 192, 0.08), transparent 55%),
+    linear-gradient(170deg, #F6F1E5 0%, #EFE9DA 45%, #E6DECC 100%);
+}
+body::after { background: linear-gradient(175deg, rgba(224, 188, 87, 0.10), rgba(140, 105, 40, 0.10)); }
+.widget { box-shadow: 0 10px 40px rgba(90, 70, 28, 0.18); }
+.topbar { background: linear-gradient(180deg, rgba(255, 252, 244, 0.96), rgba(248, 243, 231, 0.94)); }
+/* 弹窗遮罩：浅色下用更浅的暖褐 */
+.overlay { background: rgba(70, 58, 34, 0.32); }
+/* 深色时代金色渐变按钮上的白字 → 改深字（浅底金上白字不可读） */
+.primary, .track-btn, .complete-btn, .em-btn.primary, .small-btn.primary,
+.ddl-btn.active, .prio-btn.active, .json-copy-btn, .gh-progress, .level-badge,
+.arc-search-btn, .nav-item.active .nav-tip {
+  color: var(--ink-black);
+}
+/* 彩色实底按钮保留白字（绿/红/蓝仍是深饱和底） */
+.goal-item.done .g-play { color: #fff; }
+.prio-btn[data-prio=high].active, .chip.prio-h, .chip.cat-daily { color: #fff; }
+.track-btn.tracking { color: #fff; }
+/* 选中态任务描边在浅底上明显些 */
+.nav-item.active { border-color: var(--border-strong); }
+/* tracking 任务淡蓝底 → 浅色可读化 */
+.cat-task.tracking, .list-task.tracking {
+  background: rgba(62, 127, 180, 0.12);
+  border-color: rgba(62, 127, 180, 0.4);
+}
+/* 进度条扫光浅底几乎无用，去掉动画白闪 */
+.progress-bar .bar-fill::after { display: none; }
+
+/* ========== v4.10.2 添加弹窗增强：次数"默认·修改" + 限时"自定义" ========== */
+.hidden { display: none !important; }
+.count-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; }
+.count-default-text { font-size: 13.5px; color: var(--ink); }
+.count-default-text b { color: var(--gold-deep); font-size: 15px; font-weight: 700; margin: 0 2px; }
+.ddl-custom { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
+.ddl-custom select {
+  background: var(--panel-solid); color: var(--ink);
+  border: 1px solid var(--border-mid); border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
+.ddl-custom input[type=number] {
+  background: var(--panel-solid); color: var(--ink);
+  border: 1px solid var(--border-mid); border-radius: 6px; padding: 6px 8px; font-size: 14px;
+}

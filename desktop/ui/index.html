@@ -424,11 +424,26 @@
           <button type="button" class="ddl-btn" data-ddl="7d">7 天</button>
           <button type="button" class="ddl-btn" data-ddl="30d">30 天</button>
           <button type="button" class="ddl-btn" data-ddl="none">不限</button>
+          <button type="button" class="ddl-btn" data-ddl="custom">自定义</button>
+        </div>
+        <div class="ddl-custom hidden" id="addDdlCustom">
+          <input type="number" id="ddlCustomNum" min="1" max="99999" placeholder="时长" style="width:110px" />
+          <select id="ddlCustomUnit">
+            <option value="minute">分钟</option>
+            <option value="hour" selected>小时</option>
+            <option value="day">天</option>
+          </select>
         </div>
 
         <label class="label">次数（仅次数任务）</label>
-        <input type="number" id="addCount" min="1" max="999" value="5" style="max-width:120px" />
-        <span class="hint">默认 5，可在设置里改</span>
+        <div class="count-row" id="addCountDefaultRow">
+          <span class="count-default-text">默认 <b id="addCountText">5</b> 次</span>
+          <button type="button" class="small-btn" id="addCountEditBtn">修改</button>
+        </div>
+        <div class="count-row hidden" id="addCountEditRow">
+          <input type="number" id="addCount" min="1" max="999" value="5" style="max-width:110px" />
+          <button type="button" class="small-btn primary" id="addCountOkBtn">确定</button>
+        </div>
 
         <label class="label">优先级</label>
         <div class="prio-row" id="addPrioRow">

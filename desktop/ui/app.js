@@ -813,9 +813,14 @@ function openAdd() {
   draftCat = null; draftDdl = 'none'; draftPrio = 'medium'; draftCount = settings.count_default;
   document.getElementById('addTitle').value = '';
   document.getElementById('addCount').value = settings.count_default;
+  // 次数行：默认态（"默认 N 次 · 修改"），点修改才出输入框
+  document.getElementById('addCountText').textContent = settings.count_default;
+  document.getElementById('addCountDefaultRow').classList.remove('hidden');
+  document.getElementById('addCountEditRow').classList.add('hidden');
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', false));
   document.querySelectorAll('.ddl-btn').forEach(b => b.classList.toggle('active', b.dataset.ddl === 'none'));
   document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', b.dataset.prio === 'medium'));
+  document.getElementById('addDdlCustom').classList.add('hidden');
   document.getElementById('addCatHint').textContent = '请选择一个分类';
   document.getElementById('addSubmit').disabled = true;
   addOverlay.style.display = '';
@@ -824,6 +829,22 @@ function openAdd() {
 function closeAdd() { addOverlay.style.display = 'none'; }
 document.getElementById('fabAdd').addEventListener('click', openAdd);
 document.querySelectorAll('[data-close-overlay="addOverlay"]').forEach(b => b.addEventListener('click', closeAdd));
+
+// 次数"默认 N 次 · 修改"：点修改展开输入，点确定写回本次次数
+document.getElementById('addCountEditBtn').addEventListener('click', () => {
+  document.getElementById('addCount').value = draftCount;
+  document.getElementById('addCountDefaultRow').classList.add('hidden');
+  document.getElementById('addCountEditRow').classList.remove('hidden');
+  document.getElementById('addCount').focus();
+  document.getElementById('addCount').select();
+});
+document.getElementById('addCountOkBtn').addEventListener('click', () => {
+  const v = Math.max(1, parseInt(document.getElementById('addCount').value, 10) || 1);
+  draftCount = v;
+  document.getElementById('addCountText').textContent = v;
+  document.getElementById('addCountEditRow').classList.add('hidden');
+  document.getElementById('addCountDefaultRow').classList.remove('hidden');
+});
 
 document.querySelectorAll('.cat-btn').forEach(b => {
   b.addEventListener('click', () => {
@@ -837,6 +858,9 @@ document.querySelectorAll('.ddl-btn').forEach(b => {
   b.addEventListener('click', () => {
     draftDdl = b.dataset.ddl;
     document.querySelectorAll('.ddl-btn').forEach(x => x.classList.toggle('active', x === b));
+    // 选「自定义」时展开数字输入，选其他收起
+    const custom = document.getElementById('addDdlCustom');
+    if (custom) custom.classList.toggle('hidden', b.dataset.ddl !== 'custom');
   });
 });
 document.querySelectorAll('.prio-btn').forEach(b => {
@@ -858,9 +882,18 @@ document.getElementById('addSubmit').addEventListener('click', async () => {
     alert('限时任务请选择时长');
     return;
   }
+  // 自定义时长：把"数值 + 单位"换算成毫秒传给后端（custom:<ms>）
+  let deadlineKey = draftCat === 'time-limited' ? draftDdl : 'none';
+  if (deadlineKey === 'custom') {
+    const num = Math.max(1, parseInt(document.getElementById('ddlCustomNum').value, 10) || 0);
+    if (num <= 0) { alert('请填写自定义时长'); return; }
+    const unit = document.getElementById('ddlCustomUnit').value;
+    const factor = unit === 'day' ? 86400000 : unit === 'hour' ? 3600000 : 60000;
+    deadlineKey = 'custom:' + (num * factor);
+  }
   await call('add_task', {
     title, category: draftCat,
-    deadlineKey: draftCat === 'time-limited' ? draftDdl : 'none',
+    deadlineKey,
     priority: draftPrio,
     count: draftCat === 'once' ? draftCount : 1
   });

@@ -259,12 +259,17 @@ fn category_to_type(cat: &str) -> &str {
 fn deadline_key_to_ms(k: &str) -> Option<i64> {
     match k {
         "none" => None,
+        "5min" => Some(5 * 60 * 1000),
         "60min" => Some(60 * 60 * 1000),
         "6h" => Some(6 * 3600 * 1000),
         "1d" => Some(86400 * 1000),
         "3d" => Some(3 * 86400 * 1000),
         "7d" => Some(7 * 86400 * 1000),
         "30d" => Some(30 * 86400 * 1000),
+        // 自定义：custom:<毫秒>
+        _ if k.starts_with("custom:") => {
+            k["custom:".len()..].parse::<i64>().ok().filter(|v| *v > 0)
+        }
         _ => None,
     }
 }
@@ -1094,7 +1099,12 @@ fn start_emergency_tick(state: &AppState) {
 // =============== 启动 ===============
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let db_path = std::env::current_dir().unwrap().join("taskguide.db");
+    // db 固定放 exe 同目录（不随 CWD 漂移）：否则从快捷方式/其他工作目录启动时
+    // 会在 CWD 下新建空库，造成多个分裂 taskguide.db（验证期实测踩坑）
+    let exe_dir = std::env::current_exe().ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+    let db_path = exe_dir.join("taskguide.db");
     let conn = Connection::open(&db_path).expect("打开数据库失败");
     conn.execute_batch(include_str!("../db/schema.sql")).expect("建表失败");
     migrate(&conn);
