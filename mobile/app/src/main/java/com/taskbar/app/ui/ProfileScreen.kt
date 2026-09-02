@@ -52,128 +52,76 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
-        // 等级卡（暗色金属高级卡：深底 + 金属描边 + 顶部光带 + 水印等级数字）
+        // 等级卡（暗色金属高级卡，紧凑横版：不占屏）
         val p = level.palette
         Box(
             Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(p.bgDeep)
-                .then(
-                    if (level.lv >= 4) {
-                        // Lv4+ 加外圈微光描边（金辉更显）
-                        Modifier.border(1.dp, p.metal.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
-                    } else {
-                        Modifier.border(1.dp, p.metal.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                    }
-                )
-                .shadow(10.dp, RoundedCornerShape(16.dp))
+                .border(1.dp, p.metal.copy(alpha = if (level.lv >= 4) 0.55f else 0.4f), RoundedCornerShape(12.dp))
         ) {
-            // 左上→右下的微妙金属光泽（不是亮彩，是暗底上的光线）
+            // 左上→右下微妙金属光泽
             Box(
-                Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                p.metal.copy(alpha = 0.10f),
+                                p.metal.copy(alpha = 0.08f),
                                 androidx.compose.ui.graphics.Color.Transparent,
-                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f)
+                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.2f)
                             )
                         )
                     )
             )
-            // 顶部细光带（金属高光线，随等级变亮）
-            Box(
-                Modifier.fillMaxWidth().height(2.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                androidx.compose.ui.graphics.Color.Transparent,
-                                p.metalLight.copy(alpha = if (level.lv >= 3) 0.9f else 0.55f),
-                                androidx.compose.ui.graphics.Color.Transparent
-                            )
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 左：等级名
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Lv.${level.lv} ${level.name}",
+                            color = p.metalLight,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
                         )
-                    )
-            )
-            // 右侧超大水印等级数字
-            Text(
-                "Lv.${level.lv}",
-                color = p.metal.copy(alpha = if (level.lv >= 4) 0.14f else 0.08f),
-                fontSize = if (level.lv >= 4) 74.sp else 64.sp,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp)
-            )
-            Column(Modifier.padding(16.dp)) {
-                // 徽章行：菱形色标 + "历练学徒" 小字
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .background(
-                                Brush.linearGradient(listOf(p.metalLight, p.metal)),
-                                androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
-                            )
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        "ADVENTURER LV.${level.lv}",
-                        color = p.metal.copy(alpha = 0.75f),
-                        fontSize = 9.sp,
-                        letterSpacing = 2.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                // 等级名大字（金属渐变感：用金属色）
-                Text(
-                    level.name,
-                    color = p.metalLight,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    level.title,
-                    color = p.onDeepSoft,
-                    fontSize = 12.sp
-                )
-                Spacer(Modifier.height(14.dp))
-                // 进度条（暗底 + 金属渐变填充）
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.weight(1f).height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f))
-                    ) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth(level.progress.coerceIn(0f, 1f))
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(p.metal, p.metalLight)
-                                    )
-                                )
+                        Text(
+                            level.title,
+                            color = p.onDeepSoft,
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "$points / ${level.max}",
-                        color = p.onDeep,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // 右：积分 + 距下级
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "$points / ${level.max}",
+                            color = p.onDeep,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            if (level.toNext > 0) "距 ${nextLevelName(level.lv)} 差 ${level.toNext} 分"
+                            else "已登顶 · 荣誉加身",
+                            color = p.onDeepSoft.copy(alpha = 0.8f),
+                            fontSize = 10.sp
+                        )
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                if (level.toNext > 0) {
-                    Text(
-                        "距「${nextLevelName(level.lv)}」还差 ${level.toNext} 分",
-                        color = p.onDeepSoft.copy(alpha = 0.8f),
-                        fontSize = 11.sp
+                Spacer(Modifier.height(7.dp))
+                // 细进度条
+                Box(
+                    Modifier.fillMaxWidth().height(3.5.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(level.progress.coerceIn(0f, 1f))
+                            .height(3.5.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Brush.horizontalGradient(listOf(p.metal, p.metalLight)))
                     )
-                } else {
-                    Text("已登顶 · 所有荣誉加身", color = p.metalLight.copy(alpha = 0.9f), fontSize = 11.sp)
                 }
             }
         }
