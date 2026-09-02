@@ -250,7 +250,7 @@ async function render() {
     if (!dbg) {
       dbg = document.createElement('div');
       dbg.id = '_dbg';
-      dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#fff8dc;border:1px solid #c0392b;color:#a02820;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
+      dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#1A2336;border:1px solid #c0392b;color:#EDE7D8;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
       document.body.appendChild(dbg);
     }
     dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
