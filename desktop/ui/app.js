@@ -1,10 +1,14 @@
 // 任务栏 桌面端前端 v4.6
 // 暖色浅色 + 三栏布局（7% / 30% / 63%）
 // 等级系统 + 每日进度条（三样式）+ 涟漪追踪 + 步骤推进 + 挂件模式 + SVG 图标库
-const isTauri = !!(window.__TAURI__ && window.__TAURI__.core);
+// ⚠️ 2026-09-02 22:5x 修复：原 `const isTauri` 与 Tauri/WebView2 环境预置的全局保留名
+// `isTauri`（window 上 defineProperty 的不可写属性，值恒 true，先于页面脚本注入）冲突，
+// 导致本脚本顶层 const 声明抛 SyntaxError、整份 JS 被拒绝执行（图标不注入/按钮全瘫）。
+// 改名 isTauriEnv 彻底避开；此处不依赖 window.isTauri（其恒 true 但不可写，语义不同）。
+const isTauriEnv = !!(window.__TAURI__ && window.__TAURI__.core);
 
 async function call(cmd, args) {
-  if (isTauri) {
+  if (isTauriEnv) {
     return window.__TAURI__.core.invoke(cmd, args || {});
   }
   const qs = args && Object.keys(args).length
@@ -924,7 +928,7 @@ document.getElementById('setWidgetMode').addEventListener('click', () => {
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('foldedView').style.display = '';
   renderFolded();
-  if (isTauri) call('set_window_size', { w: 360, h: 88 }).catch(()=>{});
+  if (isTauriEnv) call('set_window_size', { w: 360, h: 88 }).catch(()=>{});
 });
 
 // 等级徽章点击 → 打开设置
@@ -1011,7 +1015,7 @@ function exitWidgetMode() {
   document.getElementById('foldedView').style.display = 'none';
   document.getElementById('dashboardView').style.display = '';
   render();
-  if (isTauri) call('set_window_size', { w: 1100, h: 720 }).catch(()=>{});
+  if (isTauriEnv) call('set_window_size', { w: 1100, h: 720 }).catch(()=>{});
 }
 
 function renderFolded() {
