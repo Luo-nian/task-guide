@@ -203,6 +203,15 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
             onConfirm = { title, label, value, insertAt ->
                 if (title.isNotBlank()) vm.addStep(uuid, title.trim(), label.trim(), value.trim(), insertAt)
                 showAddStepDialog = false
+            },
+            onJsonImport = { steps2 ->
+                if (steps2.isNotEmpty()) {
+                    steps2.forEach { (t, l, v) ->
+                        if (t.isNotBlank()) vm.addStep(uuid, t.trim(), l.trim(), v.trim())
+                    }
+                    ToastHelper.show(ctx, "已添加 ${steps2.size} 个步骤")
+                }
+                showAddStepDialog = false
             }
         )
     }
@@ -215,75 +224,131 @@ fun AddStepDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, String, String, Int?) -> Unit,
     currentCount: Int = 0,
-    titleText: String = "添加步骤"
+    titleText: String = "添加步骤",
+    onJsonImport: ((List<Triple<String, String, String>>) -> Unit)? = null
 ) {
     var title by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var value by remember { mutableStateOf("") }
     // 插入位置：null = 追加到最后；0..count-1 = 插入到第 N 步之前
     var insertAt by remember { mutableStateOf<Int?>(null) }
+    // JSON 模式切换（弹窗内嵌 AI 拆解粘贴）
+    var jsonMode by remember { mutableStateOf(false) }
+    var jsonText by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {
-        // 弹窗打开自动聚焦步骤名输入框
         try { focusRequester.requestFocus() } catch (_: Exception) {}
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(titleText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = title, onValueChange = { title = it },
-                    label = { Text("步骤名 *") },
-                    placeholder = { Text("例如：通读第 1 章") },
-                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                    singleLine = true
-                )
-                Spacer(Modifier.height(8.dp))
-                // 插入位置选择
-                Text("插入位置", color = TGColors.InkSoft, fontSize = 12.sp)
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // 最后（默认）
-                    FilterChip(
-                        selected = insertAt == null,
-                        onClick = { insertAt = null },
-                        label = { Text("最后") }
-                    )
-                    // 每个现有位置前插入：第1步..第count步
-                    (0 until currentCount).forEach { i ->
-                        FilterChip(
-                            selected = insertAt == i,
-                            onClick = { insertAt = i },
-                            label = { Text("第${i + 1}步前") }
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(titleText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                // JSON 模式切换（仅在有 onJsonImport 回调时显示）
+                if (onJsonImport != null) {
+                    TextButton(onClick = { jsonMode = !jsonMode }) {
+                        Text(
+                            if (jsonMode) "单步" else "JSON",
+                            color = TGColors.GoldDeep,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("属性与值是选填的，比如「距离 5km」「用时 30分钟」，不用可以留空", color = TGColors.InkMute, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(
-                        value = label, onValueChange = { label = it },
-                        label = { Text("属性(选填)") },
-                        placeholder = { Text("如 距离") },
-                        modifier = Modifier.weight(1f), singleLine = true
+            }
+        },
+        text = {
+            if (jsonMode && onJsonImport != null) {
+                // JSON 粘贴模式：多行输入 + 解析+应用 + 复制示例
+                Column {
+                    Text(
+                        "把 AI 拆解的结果（或示例格式）粘到下面，应用后会批量添加到本任务。",
+                        color = TGColors.InkMute, fontSize = 12.sp
                     )
+                    Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
-                        value = value, onValueChange = { value = it },
-                        label = { Text("值(选填)") },
-                        placeholder = { Text("如 5km") },
-                        modifier = Modifier.weight(1f), singleLine = true
+                        value = jsonText,
+                        onValueChange = { jsonText = it },
+                        placeholder = { Text("""{"title":"步骤名","steps":[{"title":"...","attr_label":"距离","attr_value":"5km"}, ...]}""", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth().height(160.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            val example = """{"title":"示例任务","steps":[{"title":"通读第 1 章","attr_label":"","attr_value":""},{"title":"整理笔记","attr_label":"用时","attr_value":"30 分钟"}]}"""
+                            // 复制到剪贴板
+                            val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("taskguide steps json", example))
+                            ToastHelper.show(ctx, "已复制示例 JSON")
+                        }) {
+                            Text("复制示例", color = TGColors.GoldDeep, fontSize = 13.sp)
+                        }
+                    }
+                }
+            } else {
+                Column {
+                    OutlinedTextField(
+                        value = title, onValueChange = { title = it },
+                        label = { Text("步骤名 *") },
+                        placeholder = { Text("例如：通读第 1 章") },
+                        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // 插入位置选择
+                    Text("插入位置", color = TGColors.InkSoft, fontSize = 12.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = insertAt == null,
+                            onClick = { insertAt = null },
+                            label = { Text("最后") }
+                        )
+                        (0 until currentCount).forEach { i ->
+                            FilterChip(
+                                selected = insertAt == i,
+                                onClick = { insertAt = i },
+                                label = { Text("第${i + 1}步前") }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("属性与值是选填的，比如「距离 5km」「用时 30分钟」，不用可以留空", color = TGColors.InkMute, fontSize = 12.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = label, onValueChange = { label = it },
+                            label = { Text("属性(选填)") },
+                            placeholder = { Text("如 距离") },
+                            modifier = Modifier.weight(1f), singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = value, onValueChange = { value = it },
+                            label = { Text("值(选填)") },
+                            placeholder = { Text("如 5km") },
+                            modifier = Modifier.weight(1f), singleLine = true
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (title.isNotBlank()) onConfirm(title, label, value, insertAt) }) {
-                Text("确认添加", color = TGColors.GoldDeep, fontWeight = FontWeight.Medium)
+            if (jsonMode && onJsonImport != null) {
+                TextButton(onClick = {
+                    val steps = com.taskbar.app.ui.parseStepsJson(jsonText).second
+                    if (steps.isNotEmpty()) onJsonImport(steps)
+                }) {
+                    Text("解析并应用", color = TGColors.GoldDeep, fontWeight = FontWeight.Medium)
+                }
+            } else {
+                TextButton(onClick = { if (title.isNotBlank()) onConfirm(title, label, value, insertAt) }) {
+                    Text("确认添加", color = TGColors.GoldDeep, fontWeight = FontWeight.Medium)
+                }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
@@ -1126,32 +1191,46 @@ fun TGConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // 取消外层 AlertDialog 默认外框（用 androidx Dialog + 自定义 Column，去掉"外面套了一个框"的别扭感）
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier
-                .clip(RoundedCornerShape(16.dp))
+            modifier = Modifier
+                .fillMaxWidth(0.86f)   // 不撑满屏幕，左右留出空间让弹窗"浮"起来
+                .clip(RoundedCornerShape(8.dp))   // 圆角小一点（去掉 16dp "很卡"的圆角）
                 .background(TGColors.Card)
-                .border(1.5.dp, TGColors.Gold, RoundedCornerShape(16.dp))
-                .shadow(8.dp, RoundedCornerShape(16.dp))
-                .padding(18.dp)
+                .padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
-            Text(title, color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Text(message, color = TGColors.InkSoft, fontSize = 13.sp, lineHeight = 19.sp)
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // 取消：金边米底
-                OutlinedButton(
+            // 标题：小字间距，紧凑
+            Text(
+                title,
+                color = TGColors.Ink,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.3.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            // 消息：行高宽松
+            Text(
+                message,
+                color = TGColors.InkSoft,
+                fontSize = 13.sp,
+                lineHeight = 20.sp
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 取消：白底字
+                androidx.compose.material3.TextButton(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.InkSoft)
-                ) { Text("取消") }
-                // 确认：按 confirmColor 引导
+                    colors = ButtonDefaults.textButtonColors(contentColor = TGColors.InkSoft)
+                ) { Text("取消", fontSize = 14.sp) }
+                // 确认：实心引导色（按 confirmColor 提示用户该按哪个——boss 要的颜色引导）
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = confirmColor)
-                ) { Text(confirmText, color = Color.White, fontWeight = FontWeight.Medium) }
+                    colors = ButtonDefaults.buttonColors(containerColor = confirmColor),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
+                ) { Text(confirmText, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 14.sp) }
             }
         }
     }

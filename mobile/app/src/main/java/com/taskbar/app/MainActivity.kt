@@ -108,25 +108,38 @@ fun MainApp() {
                     containerColor = TGColors.PanelSolid,
                     tonalElevation = 2.dp
                 ) {
-                    // Spacer.weight 撑开两侧让 NavigationBarItem 居中
+                    // 差分化：home/profile 时显示追踪（与任务行追踪键同款靶心 ic_track），
+                    // 进入 track 路由后变成"主页"（房子 ic_home），点它 popBackStack 回主页
+                    val isOnTrack = currentRoute == "track"
                     Spacer(modifier = Modifier.weight(1f))
                     NavigationBarItem(
-                        selected = currentRoute == "track",
+                        selected = isOnTrack,
                         onClick = {
-                            navController.navigate("track") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
+                            if (isOnTrack) {
+                                // 在追踪页：点主页图标 → 返回主页（popBackStack）
+                                if (!navController.popBackStack("home", inclusive = false)) {
+                                    navController.navigate("home") { launchSingleTop = true }
+                                }
+                            } else {
+                                navController.navigate("track") {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                }
                             }
                         },
                         icon = {
                             Box {
-                                TGIcon(R.drawable.ic_mark, contentDescription = "追踪", tint = if (currentRoute == "track") TGColors.Azure else TGColors.InkSoft, size = 24.dp)
-                                if (trackingCount.size > 0) {
-                                    // 追踪数小角标（Azure 深色，不用红色）
+                                if (isOnTrack) {
+                                    TGIcon(R.drawable.ic_home, contentDescription = "主页", tint = TGColors.GoldDeep, size = 24.dp)
+                                } else {
+                                    TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.InkSoft, size = 24.dp)
+                                }
+                                // 追踪数角标（仅非 track 路由显示，差分化颜色：profile 紫 / home 金深）
+                                if (!isOnTrack && trackingCount.size > 0) {
                                     Box(
                                         Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(TGColors.Azure)
+                                            .background(if (currentRoute == "profile") TGColors.Violet else TGColors.GoldDeep)
                                             .padding(horizontal = 4.dp, vertical = 1.dp)
                                     ) {
                                         Text(
@@ -139,11 +152,13 @@ fun MainApp() {
                                 }
                             }
                         },
-                        label = { Text("追踪", fontSize = 10.sp) },
+                        label = { Text(if (isOnTrack) "主页" else "追踪", fontSize = 10.sp) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TGColors.Azure,
-                            selectedTextColor = TGColors.Azure,
-                            indicatorColor = TGColors.Azure.copy(alpha = 0.12f)
+                            selectedIconColor = TGColors.GoldDeep,
+                            selectedTextColor = TGColors.GoldDeep,
+                            indicatorColor = TGColors.Selected.copy(alpha = 0.6f),
+                            unselectedIconColor = TGColors.InkSoft,
+                            unselectedTextColor = TGColors.InkSoft
                         )
                     )
                     Spacer(modifier = Modifier.weight(1f))
@@ -159,10 +174,11 @@ fun MainApp() {
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .consumeWindowInsets(WindowInsets.navigationBars),
-                enterTransition = { fadeIn(tween(150)) },
-            exitTransition = { fadeOut(tween(150)) },
-            popEnterTransition = { fadeIn(tween(150)) },
-            popExitTransition = { fadeOut(tween(150)) }
+                // 全部页面切换无动画（boss 嫌默认"右上角移下来"的动画影响体验）
+                enterTransition = { androidx.compose.animation.EnterTransition.None },
+                exitTransition = { androidx.compose.animation.ExitTransition.None },
+                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+                popExitTransition = { androidx.compose.animation.ExitTransition.None }
         ) {
             composable("home") { TaskListScreen(vm, navController) }
             composable("track") { TrackScreen(vm) }

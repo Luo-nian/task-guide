@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主页（房子：底部 tab 进入追踪页后变成"主页"图标，点它回主页） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 屋顶 -->
+    <path
+        android:pathData="M3,11 L12,4 L21,11"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- 房身 -->
+    <path
+        android:pathData="M5,10 L5,20 L19,20 L19,10"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- 门 -->
+    <path
+        android:pathData="M10,20 L10,14 L14,14 L14,20"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

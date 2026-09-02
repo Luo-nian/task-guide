@@ -62,7 +62,6 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
     var ringUri by remember { mutableStateOf(prefs.getString("reminder_ring_uri", "") ?: "") }
     var escalateOn by remember { mutableStateOf(prefs.getBoolean("reminder_escalate_enabled", true)) }
     var escalateMinutes by remember { mutableIntStateOf(prefs.getInt("reminder_escalate_minutes", 5)) }
-    var customVibrateText by remember { mutableStateOf("") }
 
     // 初始化：读 prefs 里的配置（兼容旧单值）
     LaunchedEffect(Unit) {
@@ -146,11 +145,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
                     )
                     Text(l, color = TGColors.Ink, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    // 演示键：点哪个演示哪个效果
-                    TextButton(onClick = {
-                        if (v !in channels) toggleChannel(v)
-                        com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, v)
-                    }) { Text("演示", color = TGColors.GoldDeep, fontSize = 12.sp) }
+                    // 演示键：点哪个演示哪个效果（不修改 channels 选中状态）
+                    TextButton(onClick = { com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, v) }) {
+                        Text("演示", color = TGColors.GoldDeep, fontSize = 12.sp)
+                    }
                 }
             }
 
@@ -193,27 +191,24 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     ).forEach { (label, pattern) ->
                         FilterChip(
                             selected = vibratePattern == pattern,
-                            onClick = { saveVibratePattern(pattern); customVibrateText = "" },
+                            onClick = { saveVibratePattern(pattern) },
                             label = { Text(label) }
                         )
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = customVibrateText,
-                        onValueChange = { customVibrateText = it.filter { c -> c.isDigit() || c == ',' }.take(40) },
-                        placeholder = { Text("自定义毫秒模式", color = TGColors.InkMute, fontSize = 11.sp) },
-                        label = { Text("自定义", fontSize = 11.sp) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    TextButton(onClick = {
-                        if (customVibrateText.isNotBlank()) saveVibratePattern(customVibrateText)
-                    }) { Text("应用", color = TGColors.GoldDeep) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "演示短震" to "0,300,200,300",
+                        "演示中震" to "0,500,300,500,300,500",
+                        "演示长震" to "0,1000,500,1000,500,1000"
+                    ).forEach { (label, pattern) ->
+                        TextButton(onClick = {
+                            saveVibratePattern(pattern)
+                            com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, ReminderStrength.VIBRATE)
+                        }) { Text(label, color = TGColors.GoldDeep, fontSize = 12.sp) }
+                    }
                 }
-                Text("格式：逗号分隔毫秒，如 0,300,200,300", color = TGColors.InkMute, fontSize = 10.sp)
             }
 
             // 响铃档：显示铃声选择（选中铃声时，自定义铃声入口一目了然）
@@ -249,20 +244,20 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 10, 30).forEach { m ->
-                        // 自定义 chip（固定内边距，不被挤压变小）
+                        // 升级分钟 chip：深色背景确保开关打开后按键不消失
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(18.dp))
-                                .background(if (escalateMinutes == m) TGColors.Selected else TGColors.BgPaperDeep)
-                                .border(1.dp, if (escalateMinutes == m) TGColors.Gold else TGColors.BorderSoft, RoundedCornerShape(18.dp))
+                                .background(if (escalateMinutes == m) TGColors.Ink else TGColors.Selected.copy(alpha = 0.85f))
+                                .border(1.dp, if (escalateMinutes == m) TGColors.Gold else TGColors.GoldDeep.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
                                 .clickable { saveEscalate(true, m) }
-                                .padding(horizontal = 16.dp, vertical = 9.dp)
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
                         ) {
                             Text(
                                 "$m 分钟",
-                                color = if (escalateMinutes == m) TGColors.GoldDeep else TGColors.Ink,
+                                color = if (escalateMinutes == m) TGColors.GoldLight else TGColors.Ink,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }

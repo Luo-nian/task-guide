@@ -83,43 +83,49 @@ fun PressIcon(
     ) { content() }
 }
 
-// ==================== 配色（暖色浅色底 + 黑金元素点缀，与桌面端同步） ====================
-// 色值与 desktop/ui/style.css 的 :root 变量一一对应，改配色时两边一起改
+// ==================== 配色（v5.0 撞色方案：冰川蓝主 + 赤陶高亮 + 紫罗兰辅助，告别黑金） ====================
+// 设计思路：暖色米底 + 冷色主调（冰川蓝）+ 暖色高亮（赤陶橙）+ 神秘紫辅助，三色撞色
+// 旧黑金方案（v4.9 之前）已在 git 历史 b17503e 留档，可一键回退
 object TGColors {
-    // ---- 背景（浅色米系） ----
-    val BgPaper     = Color(0xFFF5EFE0)   // 主背景 米色（--bg-paper）
-    val BgPaperDeep = Color(0xFFEDE3CC)   // 深一档米色（--bg-paper-deep）
-    val Panel       = Color(0xFFFCF7EB)   // 面板（--panel 的实色近似）
-    val PanelSolid  = Color(0xFFFAF5E6)   // 面板实色（--panel-solid）
-    val Card        = Color(0xFFFFFBEF)   // 卡片白米色（--card）
-    val Bar         = Color(0xFFEDE2C8)   // 任务条（--bar 的实色近似）
-    val BarHover    = Color(0xFFE4D5AF)   // 任务条按下（--bar-hover）
-    val Selected    = Color(0xFFF4E6B9)   // 选中（--selected）
+    // ---- 背景（米色暖底） ----
+    val BgPaper     = Color(0xFFF4EFE3)   // 主背景 米色（略带冷调）
+    val BgPaperDeep = Color(0xFFE8DFCD)   // 深一档米色
+    val Panel       = Color(0xFFFBF6EA)   // 面板
+    val PanelSolid  = Color(0xFFF8F2E2)   // 面板实色
+    val Card        = Color(0xFFFFFCF0)   // 卡片白米色
+    val Bar         = Color(0xFFE8DDC2)   // 任务条
+    val BarHover    = Color(0xFFE4D5AF)   // 任务条按下
+    val Selected    = Color(0xFFDDD0B0)   // 选中
 
-    // ---- 文字（深褐系） ----
-    val Ink         = Color(0xFF3A2E1A)   // 主文字 深褐（--ink）
-    val InkSoft     = Color(0xFF6B5D3E)   // 副文字（--ink-soft）
-    val InkMute     = Color(0xFF9C8B6A)   // 三级文字（--ink-mute）
-    val InkFaint    = Color(0xFFC2B58E)   // 四级/分隔（--ink-faint）
+    // ---- 文字（冷色深蓝灰，告别深褐） ----
+    val Ink         = Color(0xFF1F2A37)   // 主文字 深海岩（冷色字在暖底上）
+    val InkSoft     = Color(0xFF4A5765)   // 副文字
+    val InkMute     = Color(0xFF8895A3)   // 三级文字
+    val InkFaint    = Color(0xFFB8C0C8)   // 四级/分隔
 
-    // ---- 黑金元素（在浅色底上做黑+金的高级点缀） ----
-    val Black       = Color(0xFF16120C)   // 墨黑（黑金面板/文字）
-    val BlackSoft   = Color(0xFF2A2318)   // 黑灰（黑金卡片底）
-    val Gold        = Color(0xFFC9A227)   // 主金：图标/描边（--gold）
-    val GoldLight   = Color(0xFFE6C77A)   // 浅金：填充底（--gold-light）
-    val GoldDeep    = Color(0xFF9A7B1A)   // 深金：浅底上的可读金文字（--gold-deep）
+    // ---- 招牌位（深色板/卡：用深海岩作墨黑替代，告别 #16120C 纯黑） ----
+    val Black       = Color(0xFF1A2530)   // 招牌位深底（深海岩，比纯黑柔和）
+    val BlackSoft   = Color(0xFF2A3A4A)   // 深蓝灰
 
-    // ---- 装饰色 ----
-    val Orange      = Color(0xFFD88A3F)   // 暖橘（--orange）
-    val Jade        = Color(0xFF4A8B6F)   // 玉青 完成（--jade）
-    val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级（--crimson）
-    val Azure       = Color(0xFF4F86B5)   // 蓝 追踪/重复（--azure）
-    val Violet      = Color(0xFF8A6BC9)   // 紫 涟漪/目标（--violet）
+    // ---- 冰川蓝（主色，取代金色作"点缀+描边+主调"） ----
+    val Gold        = Color(0xFF4A8FB5)   // 主色 冰川蓝（图标/描边/主调）
+    val GoldLight   = Color(0xFF7CB8D9)   // 浅冰川蓝 填充底/高亮
+    val GoldDeep    = Color(0xFF2E6A8E)   // 深冰川蓝 浅底上的可读蓝字
 
-    // ---- 边框（含 alpha，对应 --border-soft / mid / strong）----
-    val BorderSoft   = Color(0x38C9A227)
-    val BorderMid    = Color(0x599A7B1A)
-    val BorderStrong = Color(0x8C9A7B1A)
+    // ---- 赤陶（强调色，取代金色"廉价"感——冷蓝+暖橙撞色） ----
+    val Orange      = Color(0xFFD4795A)   // 赤陶（强调/重要提示）
+    val OrangeLight = Color(0xFFE8A87C)   // 浅赤陶 桃黏土
+
+    // ---- 装饰色（微调：去掉游戏页游感，加深一档更稳重） ----
+    val Jade        = Color(0xFF5B9274)   // 玉青 完成（更沉稳的绿）
+    val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级
+    val Azure       = Color(0xFF4F86B5)   // 冰川蓝旧名（保留兼容）
+    val Violet      = Color(0xFF9B7FB5)   // 紫罗兰 Dusty Purple（取代"游戏紫"）
+
+    // ---- 边框（含 alpha） ----
+    val BorderSoft   = Color(0x384A8FB5)   // 冰川蓝透明
+    val BorderMid    = Color(0x592E6A8E)
+    val BorderStrong = Color(0x8C2E6A8E)
 }
 
 private val TGColorScheme = lightColorScheme(
@@ -286,9 +292,10 @@ fun RewardItem(icon: Int, label: String, highlight: Boolean = false) {
 }
 
 /**
- * 完成庆祝弹层（游戏化正反馈，参考游戏获得道具）：
- * 半透明遮罩 + 中央奖励卡（"恭喜完成任务，您将获得："小字 + 金币积分），升级时追加等级横幅。
- * 弹出动画 320ms，2.6s 后自动消失，点击任意处立即关闭。
+ * 完成庆祝弹层（v5.0 精致化：去一刀999廉价感，用撞色横条+极简排版）
+ * - 不再用刺眼金币+恭喜字样，改用"极简奖励块"：任务名小字 + 横线分隔 + 积分数字
+ * - 升级用冰川蓝→赤陶撞色横条（柔和高亮而非刺眼金色）
+ * - 弹出/关闭 280ms 平滑缩放，2.8s 自动消失
  */
 @Composable
 fun CompletionCelebration(
@@ -301,16 +308,16 @@ fun CompletionCelebration(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         visible = true
-        kotlinx.coroutines.delay(2600)
+        kotlinx.coroutines.delay(2800)
         onDismiss()
     }
-    val scale by animateFloatAsState(if (visible) 1f else 0.75f, tween(320))
-    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(320))
+    val scale by animateFloatAsState(if (visible) 1f else 0.92f, tween(280))
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(280))
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.35f * alpha))
+            .background(Color(0xFF0F1822).copy(alpha = 0.55f * alpha))
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center
     ) {
@@ -320,49 +327,80 @@ fun CompletionCelebration(
                 scaleX = scale; scaleY = scale; this.alpha = alpha
             }
         ) {
-            // 任务名小字
-            Text(title, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
-            Spacer(Modifier.height(10.dp))
-            // "恭喜完成任务，您将获得："小字
-            Text("恭喜完成任务，您将获得：", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(10.dp))
-            // 奖励卡（米底金边 + 金币 + 积分）
+            // 任务名小字（柔和米色）
+            Text(
+                title,
+                color = Color(0xFFEFE8DC).copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                maxLines = 1,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(Modifier.height(20.dp))
+            // 奖励块：白米底 + 冰川蓝描边 + 极简排版
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(TGColors.Card)
-                    .border(1.5.dp, TGColors.Gold, RoundedCornerShape(18.dp))
-                    .shadow(12.dp, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 34.dp, vertical = 22.dp)
+                    .clip(RoundedCornerShape(4.dp))   // 圆角小一点更现代
+                    .background(Color(0xFFF6F0E1))
+                    .border(1.dp, TGColors.GoldLight, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 40.dp, vertical = 26.dp)
             ) {
-                TGIcon(com.taskbar.app.R.drawable.ic_coin, contentDescription = null, tint = TGColors.Gold, size = 42.dp)
-                Spacer(Modifier.height(6.dp))
-                Text("+$points", color = TGColors.GoldDeep, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text("积分", color = TGColors.InkMute, fontSize = 12.sp)
+                // 极简横线 + "获得"小字
+                Text(
+                    "获  得",
+                    color = TGColors.InkMute,
+                    fontSize = 11.sp,
+                    letterSpacing = 4.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                // 大数字 + 积分（冰川蓝，深海岩作高对比）
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "+",
+                        color = TGColors.GoldDeep,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "$points",
+                        color = TGColors.Black,
+                        fontSize = 42.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-1).sp
+                    )
+                }
+                Text(
+                    "积分",
+                    color = TGColors.InkMute,
+                    fontSize = 11.sp,
+                    letterSpacing = 3.sp
+                )
             }
-            // 升级横幅（层层递进：完成任务 → 得积分 → 升等级）
+            // 升级横幅（冰川蓝→赤陶撞色横条——柔和高亮）
             if (newLevel != null && newLevelName != null) {
                 Spacer(Modifier.height(14.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.GoldDeep)))
-                        .border(1.dp, TGColors.GoldLight, RoundedCornerShape(24.dp))
-                        .shadow(8.dp, RoundedCornerShape(24.dp))
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(2.dp))   // 几乎无圆角=横条感
+                        .background(Brush.horizontalGradient(listOf(TGColors.Gold, TGColors.Orange)))
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
                 ) {
-                    Text("★", color = TGColors.Black, fontSize = 16.sp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "等级提升！Lv.$newLevel $newLevelName",
-                        color = TGColors.Black,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                    Text("Lv.$newLevel", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .size(width = 1.dp, height = 12.dp)
+                            .background(Color.White.copy(alpha = 0.5f))
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text("★", color = TGColors.Black, fontSize = 16.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        newLevelName,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 1.sp
+                    )
                 }
             }
         }
