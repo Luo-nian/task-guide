@@ -86,8 +86,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                         colorStops = arrayOf(
                             0.00f to Color(0xFF6B5220).copy(alpha = 0.0f),
                             0.32f to Color(0xFFFFFFFF).copy(alpha = 0.05f * gloss),
-                            0.45f to Color(0xFFFFFFFF).copy(alpha = 0.40f * gloss),  // 高光最亮点（克制）
-                            0.52f to Color(0xFFFFF3C0).copy(alpha = 0.28f * gloss),
+                            0.46f to Color(0xFFFFFFFF).copy(alpha = 0.30f * gloss),  // 高光最亮点
+                            0.53f to Color(0xFFFFF3C0).copy(alpha = 0.20f * gloss),
                             0.62f to Color(0xFFFFFFFF).copy(alpha = 0.15f * gloss),
                             0.78f to Color(0xFFFFE9A8).copy(alpha = 0.05f * gloss),
                             1.00f to Color(0xFF3A2A0C).copy(alpha = 0.0f)
@@ -120,29 +120,29 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(Color(0xFF2A1D08), RoundedCornerShape(2.dp)).graphicsLayer { rotationZ = 45f })
+                        Box(Modifier.size(8.dp).background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(2.dp)).graphicsLayer { rotationZ = 45f })
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "Lv.${level.lv} · ${level.name}",
-                            color = Color(0xFF241703),
+                            color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.5.sp,
-                            style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0xFFFFF3C0).copy(alpha = 0.6f), Offset(0f, 1f), 0f))
+                            style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0x66000000), Offset(0f, 1f), 0f))
                         )
                     }
                     Spacer(Modifier.height(3.dp))
-                    Text(level.title, color = Color(0xFF3D2C0E), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(level.title, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Spacer(Modifier.height(9.dp))
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF241703).copy(alpha = 0.18f))) {
-                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF5C430F), Color(0xFF2A1D08)))))
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
+                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF2A1D08), Color(0xFF8A6A20)))))
                     }
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$points / ${level.max}", color = Color(0xFF241703), fontSize = 15.sp, fontWeight = FontWeight.Black)
+                    Text("$points / ${level.max}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0x66000000), Offset(0f, 1f), 0f)))
                     Spacer(Modifier.height(3.dp))
-                    Text(if (level.toNext > 0) "距下一级差 ${level.toNext}" else "已登顶", color = Color(0xFF3D2C0E), fontSize = 10.sp)
+                    Text(if (level.toNext > 0) "距下一级差 ${level.toNext}" else "已登顶", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
                 }
             }
         }
