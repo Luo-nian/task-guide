@@ -694,6 +694,20 @@ fn set_display_mode(window: tauri::Window, mode: String) {
     }
 }
 
+// v4.10 顶栏三键命令：最小化 / 切换最大化 / 隐藏（保留后台，前端不再被 X 强行退出）
+#[tauri::command]
+fn win_minimize(window: tauri::Window) { let _ = window.minimize(); }
+#[tauri::command]
+fn win_toggle_maximize(window: tauri::Window) {
+    if window.is_maximized().unwrap_or(false) {
+        let _ = window.unmaximize();
+    } else {
+        let _ = window.maximize();
+    }
+}
+#[tauri::command]
+fn win_hide(window: tauri::Window) { let _ = window.hide(); }
+
 #[tauri::command]
 fn connect_server(state: tauri::State<AppState>, url: String) -> String {
     *state.server_url.lock().unwrap() = url.clone();
@@ -788,6 +802,135 @@ fn set_setting(state: tauri::State<AppState>, key: String, value: String) {
          ON CONFLICT(key) DO UPDATE SET value=?2",
         params![&key, &value]
     ).ok();
+}
+
+// v4.10 示例任务 seed：首次启动时检测 task 表为空则注入 5 条
+// 让用户开箱就有东西测（每日 / 限时 / 次数 三类全覆盖）。
+// 依赖 exists_for_seed 标记，一个端 seed 之后另一个端 sync 时不会重复注入。
+fn exists_for_seed(db: &Connection) -> bool {
+    db.query_row("SELECT value FROM settings WHERE key='seed_v4'", [], |r| r.get::<_, String>(0))
+        .ok().map(|s| s == "1").unwrap_or(false)
+}
+fn mark_seeded(db: &Connection) {
+    db.execute(
+        "INSERT INTO settings(key,value) VALUES('seed_v4','1') \
+         ON CONFLICT(key) DO UPDATE SET value='1'", []
+    ).ok();
+}
+// 把"这周X / 下周X" 转换成毫秒时间戳
+fn next_weekday_ms(target_weekday: u32, hour: u32, minute: u32) -> i64 {
+    let now = chrono::Local::now();
+    let mut n = now;
+    // chrono 的周一=0... 我们转成西方周一=1 的口径
+    let cur = n.weekday().number_from_monday();
+    let mut delta = (target_weekday + 7 - cur) % 7;
+    if delta == 0 {
+        // 避免"恰好今天" 的语义模糊：今天若 hour:minute 已过则算下一周
+        let today_target = n.with_hour(hour).and_then(|d| d.with_minute(minute)).and_then(|d| d.with_second(0));
+        if let Some(t) = today_target {
+            if t.timestamp_millis() <= now.timestamp_millis() {
+                delta = 7;
+            }
+        }
+    }
+    let target = n.checked_add_signed(chrono::Duration::days(delta as i64))
+        .and_then(|d| d.with_hour(hour))
+        .and_then(|d| d.with_minute(minute))
+        .and_then(|d| d.with_second(0));
+    target.map(|d| d.timestamp_millis()).unwrap_or(now.timestamp_millis())
+}
+
+#[tauri::command]
+fn seed_default_tasks(state: tauri::State<AppState>) -> serde_json::Value {
+    let now = chrono::Local::now().timestamp_millis();
+    let count: i64 = {
+        let db = state.db.lock().unwrap();
+        if exists_for_seed(&db) { return serde_json::json!({ "seeded": false, "reason": "already" }); }
+        let n: i64 = db.query_row("SELECT COUNT(*) FROM tasks WHERE deleted=0", [], |r| r.get(0))
+            .unwrap_or(0);
+        n
+    };
+    if count > 0 {
+        // 表里已有数据（可能是 sync 后端带来的），仅打标不再注，避免污染用户库
+        let db = state.db.lock().unwrap();
+        mark_seeded(&db);
+        return serde_json::json!({ "seeded": false, "reason": "non_empty" });
+    }
+    // 注 5 条
+    let next_tue_18 = next_weekday_ms(2, 18, 0);   // 周二 18:00
+    let next_thu_18 = next_weekday_ms(4, 18, 0);   // 周四 18:00
+    let items: Vec<(&str, &str, &str, &str, Option<i64>, Option<i64>, Option<i64>)> = vec![
+        // (title, category, type, priority, deadline_ms, count, reward_points)
+        ("晨跑 30 分钟",       "daily",         "habit",  "medium", None,            None, Some(8)),
+        ("每日读书 1 小时",     "daily",         "habit",  "high",   None,            None, Some(12)),
+        ("写周报",             "time-limited",  "repeat", "medium", Some(next_tue_18),None, Some(14)),
+        ("通读+做笔记+复习",   "once",          "once",   "high",   None,            Some(5), Some(15)),
+        ("准备季度汇报",       "once",          "once",   "high",   Some(next_thu_18),Some(3), Some(15)),
+    ];
+    let inserted: usize = {
+        let db = state.db.lock().unwrap();
+        let mut n = 0usize;
+        for (title, cat, typ, prio, deadline, cnt, rp) in &items {
+            let uuid = uuid::Uuid::new_v4().to_string();
+            let rp_v = rp.unwrap_or_else(|| reward_points_for(typ, prio));
+            let cnt_v = cnt.unwrap_or(1);
+            let deadline_v = deadline.unwrap_or(now);
+            // daily：due_at 与 deadline 都置 None；repeat：deadline = due_at 都置 deadline
+            let due_at = if *cat == "daily" { None } else { Some(deadline_v) };
+            let dl = if *cat == "time-limited" { Some(deadline_v) } else { None };
+            let due_sql = due_at.map(|v| v as i64);
+            let dl_sql = dl.map(|v| v as i64);
+            let res = db.execute(
+                "INSERT INTO tasks (uuid,type,title,desc,category,priority,due_at,deadline,repeat_rule,count,done_count,track_status,reward_points,created_at,updated_at,deleted) \
+                 VALUES (?1,?2,?3,'',?4,?5,?6,?7,?8,?9,0,'pending',?10,?11,?11,0)",
+                params![
+                    &uuid, typ, title, cat, prio,
+                    due_sql, dl_sql,
+                    if *cat == "daily" { Some("daily") } else { None },
+                    cnt_v, rp_v, now
+                ]
+            );
+            if res.is_ok() { n += 1; }
+        }
+        // 给"每日读书 1 小时" + "通读+做笔记+复习" 各加几个示例步骤（让用户能看到步骤 UI 怎么用）
+        let book_uuid: Option<String> = db.query_row(
+            "SELECT uuid FROM tasks WHERE title='每日读书 1 小时' LIMIT 1", [], |r| r.get(0)
+        ).ok();
+        if let Some(t) = book_uuid {
+            for (i, (s_title, label, value)) in [
+                ("通读章节", "用时", "30 分钟"),
+                ("整理笔记", "结果", "≥5 条要点"),
+                ("做自测题", "用时", "15 分钟"),
+            ].iter().enumerate() {
+                let su = uuid::Uuid::new_v4().to_string();
+                let _ = db.execute(
+                    "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,created_at,updated_at,deleted) \
+                     VALUES (?1,?2,?3,'todo',?4,?5,?6,?7,?7,0)",
+                    params![su, t, s_title, label, value, i as i64, now]
+                );
+            }
+        }
+        let read_uuid: Option<String> = db.query_row(
+            "SELECT uuid FROM tasks WHERE title='通读+做笔记+复习' LIMIT 1", [], |r| r.get(0)
+        ).ok();
+        if let Some(t) = read_uuid {
+            for (i, (s_title, label, value)) in [
+                ("通读第 1 章", "用时", "30 分钟"),
+                ("整理笔记", "", ""),
+                ("做自测题", "结果", "90 分以上"),
+            ].iter().enumerate() {
+                let su = uuid::Uuid::new_v4().to_string();
+                let _ = db.execute(
+                    "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,created_at,updated_at,deleted) \
+                     VALUES (?1,?2,?3,'todo',?4,?5,?6,?7,?7,0)",
+                    params![su, t, s_title, label, value, i as i64, now]
+                );
+            }
+        }
+        mark_seeded(&db);
+        n
+    };
+    serde_json::json!({ "seeded": inserted > 0, "inserted": inserted })
 }
 
 #[tauri::command]
@@ -961,7 +1104,10 @@ pub fn run() {
         "INSERT OR IGNORE INTO settings(key,value) VALUES \
          ('theme','frosted'),('track_limit','3'),('tracking_max','3'),\
          ('emergency_on','1'),('eta_short_pct','30'),('eta_long_h','36'),\
-         ('auto_start','1'),('delay_options','custom'),('total_points','0');"
+         ('auto_start','1'),('delay_options','custom'),('total_points','0'),\
+         ('nickname','历练者'),('progress_style','bar'),\
+         ('count_default','5'),('time_limit_min','5'),\
+         ('daily_refresh','1'),('night_notify','1');"
     );
     let conn = Arc::new(Mutex::new(conn));
 
@@ -1010,7 +1156,7 @@ pub fn run() {
             set_display_mode, set_window_size,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
-            discover_devices
+            discover_devices, seed_default_tasks
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

@@ -97,11 +97,16 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
     let op = if data.is_none() { "delete" } else { "upsert" };
     let change = ChangeOp { op: op.into(), entity: entity.into(), uuid: uuid.into(), data };
     let body = serde_json::json!({ "changes": [change], "client_time": chrono::Local::now().timestamp_millis() });
-    let _ = reqwest::blocking::Client::new()
-        .post(format!("{}/api/sync/changes", base))
-        .timeout(Duration::from_secs(5))
-        .json(&body)
-        .send();
+    let url = format!("{}/api/sync/changes", base);
+    // 网络推送放后台线程：手机不在线时最多拖 5s 超时，若阻塞在主线程，点「添加步骤/完成任务」
+    // 会卡住整个 UI 直到超时（boss 实测感知为「按了没反应」）。这里立即返回、推送失败不影响主流程。
+    std::thread::spawn(move || {
+        let _ = reqwest::blocking::Client::new()
+            .post(url)
+            .timeout(Duration::from_secs(5))
+            .json(&body)
+            .send();
+    });
 }
 
 /// WS 监听循环：连接手机 ws，收变更写入本地；断连 5s 重试

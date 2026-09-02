@@ -1460,3 +1460,130 @@ input::placeholder { color: var(--ink-faint); }
   background: rgba(255, 255, 255, 0.75);
   display: inline-block;
 }
+
+/* ============================================================
+   v4.10 追加
+   ============================================================ */
+
+/* 顶栏三键 + 关闭 + 标题副标 */
+.title-sub {
+  color: var(--ink-mute);
+  font-size: 11.5px; font-weight: 400; letter-spacing: 1px;
+  margin-left: 10px;
+  opacity: 0.7;
+}
+.win-btn { width: 26px; height: 22px; border-radius: 6px; font-size: 0; padding: 0; }
+.win-btn:hover { background: rgba(46, 58, 84, 0.9); color: var(--gold-deep); }
+.win-btn.close:hover { background: rgba(208, 90, 66, 0.85); color: #fff; }
+.win-btn svg { display: block; }
+.top-right { gap: 4px; }
+
+/* 历史弹窗：搜索框 + 放大镜按钮 */
+.arc-search-row { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.arc-search-row .search { width: 130px; padding: 5px 10px; border: 1px solid var(--border-soft); border-radius: 6px; background: rgba(22, 31, 50, 0.5); color: var(--ink); font-size: 12px; }
+.arc-search-row .search:focus { outline: 0; border-color: var(--gold); }
+.arc-search-btn { width: 26px; height: 26px; border-radius: 6px; background: rgba(212, 175, 55, 0.14); border: 1px solid var(--border-soft); color: var(--gold-deep); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.arc-search-btn:hover { background: rgba(212, 175, 55, 0.28); color: var(--gold-light); }
+
+/* 个人信息 modal */
+.profile-modal { width: 460px; max-width: 92vw; }
+.profile-hero {
+  display: flex; gap: 18px; align-items: center;
+  padding: 18px 16px 14px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(28, 36, 54, 0.85), rgba(18, 26, 44, 0.85));
+  border: 1px solid var(--border-soft);
+  margin-bottom: 14px;
+}
+.ph-avatar-wrap { position: relative; }
+.ph-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  color: var(--ink-black);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 700;
+  box-shadow: 0 0 14px var(--glow-gold), inset 0 0 0 2px rgba(255,255,255,0.2);
+  cursor: pointer; user-select: none;
+}
+.ph-avatar-edit {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(22, 31, 50, 0.92); border: 1px solid var(--gold);
+  color: var(--gold-light); font-size: 11px; font-weight: 600;
+  cursor: pointer;
+}
+.ph-info { flex: 1; min-width: 0; }
+.ph-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ph-nick-input {
+  flex: 1; min-width: 0;
+  background: rgba(22, 31, 50, 0.6); border: 1px solid var(--border-soft);
+  color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: 1px;
+  padding: 6px 10px; border-radius: 8px;
+}
+.ph-nick-input:focus { outline: 0; border-color: var(--gold); }
+.ph-nick-save-tip { color: var(--ink-mute); font-size: 11px; }
+.ph-sub { color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+
+.profile-card {
+  border: 1px solid var(--border-soft); border-radius: 12px;
+  background: linear-gradient(160deg, rgba(28, 36, 54, 0.7), rgba(18, 26, 44, 0.7));
+  padding: 14px 16px; margin-bottom: 14px;
+}
+.pc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.pc-level-icon {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  color: var(--ink-black); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 10px var(--glow-gold);
+}
+.pc-level-text { flex: 1; min-width: 0; }
+.pc-level-name { color: var(--gold-light); font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.pc-level-title { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+.pc-points { text-align: right; }
+.pc-points-num { color: var(--gold); font-size: 24px; font-weight: 700; line-height: 1; }
+.pc-points-label { color: var(--ink-mute); font-size: 11px; }
+.pc-exp-row { display: flex; align-items: center; gap: 10px; }
+.pc-exp-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(22, 31, 50, 0.7); overflow: hidden; border: 1px solid var(--border-soft); }
+.pc-exp-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold-deep)); transition: width .35s; }
+.pc-exp-hint { color: var(--ink-mute); font-size: 11px; }
+
+/* 解除配对 disabled 态 */
+.small-btn.disabled, .small-btn:disabled {
+  opacity: 0.4; cursor: not-allowed; pointer-events: none;
+}
+
+/* 详情页：添加步骤 inline 行 */
+.goal-add-row { background: rgba(212, 175, 55, 0.06); border-color: var(--border-soft); }
+.goal-add-row .g-input {
+  flex: 1; min-width: 0; background: transparent; border: none; color: var(--ink);
+  font-size: 14px; padding: 4px 6px; outline: none;
+}
+.goal-add-row .g-submit {
+  background: var(--gold); color: var(--ink-black); border: none; border-radius: 6px;
+  padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.goal-add-row .g-cancel {
+  background: transparent; color: var(--ink-mute); border: 1px solid var(--border-soft);
+  border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+  margin-left: 4px;
+}
+.goal-add-row .g-submit:disabled { opacity: 0.5; cursor: wait; }
+
+/* 等级卡整修：左侧加宽，中间放大、字号升级 */
+.level-card { padding: 10px 14px !important; min-height: 56px; }
+.level-character {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  color: var(--ink-black); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 10px var(--glow-gold);
+}
+.level-info { flex: 1; min-width: 0; padding-left: 4px; }
+.level-name { color: var(--gold-light); font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+.level-title { color: var(--ink-soft); font-size: 12px; margin-top: 2px; line-height: 1.4; }
+
+/* 全局次要文字字号微调（之前 11/11.5 太小看不清） */
+.setting-row .hint, .empty-line, .cc-empty { font-size: 12.5px; }
+.ss-title { font-size: 12.5px; }
+.setting-row label { font-size: 13.5px; }
+
+

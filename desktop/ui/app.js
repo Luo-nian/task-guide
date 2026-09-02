@@ -34,10 +34,11 @@ let settings = {
   eta_long_h: 36,
   progress_style: 'bar',          // bar | circle | dots
   time_limit_min: 5,              // 限时任务默认时长（分钟）
-  count_default: 1,                // 次数任务默认次数
+  count_default: 5,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   night_notify: true,              // 22:00 未完成弹窗
-  pairing: null
+  pairing: null,
+  nickname: '历练者'               // 用户昵称（自称；打卡汇报用）
 };
 let selectedUuid = null;
 let emergencyQueue = [];
@@ -183,14 +184,18 @@ function applySettingsToUi() {
   document.getElementById('setEtaLong').value = settings.eta_long_h;
   document.getElementById('setTimeLimit').value = settings.time_limit_min;
   document.getElementById('setCountDefault').value = settings.count_default;
-  document.getElementById('setDailyRefresh').checked = settings.daily_refresh;
+  // 每日刷新 / 进度条样式已撤出设置 UI（旧字段保留用于兼容 / 不再写入）
+  // document.getElementById('setDailyRefresh').checked = settings.daily_refresh;
   document.getElementById('setNightNotify').checked = settings.night_notify;
-  document.getElementById('setProgressStyle').value = settings.progress_style;
+  // document.getElementById('setProgressStyle').value = settings.progress_style;
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
-  // 进度条样式 tab 高亮
-  document.querySelectorAll('.style-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.style === settings.progress_style);
-  });
+  // 解除配对按钮：未配对时禁用 + 灰
+  const unpair = document.getElementById('setUnpair');
+  if (unpair) {
+    unpair.disabled = !settings.pairing;
+    unpair.classList.toggle('disabled', !settings.pairing);
+    unpair.title = settings.pairing ? ('解除与 ' + settings.pairing.url + ' 的配对') : '尚未配对，无法解除';
+  }
 }
 async function persistSettingsServer() {
   try {
@@ -203,7 +208,8 @@ async function persistSettingsServer() {
       time_limit_min: settings.time_limit_min,
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
-      night_notify: settings.night_notify ? '1' : '0'
+      night_notify: settings.night_notify ? '1' : '0',
+      nickname: settings.nickname || '历练者'
     };
     for (const [k, v] of Object.entries(map)) {
       await call('set_setting', { key: k, value: String(v) });
@@ -212,6 +218,15 @@ async function persistSettingsServer() {
       await call('save_pairing', { url: settings.pairing.url, deviceId: settings.pairing.deviceId || '' });
     }
   } catch(e) {}
+}
+// 启动时从后端把 user-profile 字段同步到 settings（昵称 / 头像 / ...)
+async function hydrateUserProfile() {
+  try {
+    const nn = await call('get_setting', { key: 'nickname' });
+    if (nn) settings.nickname = nn;
+    const ai = await call('get_setting', { key: 'avatar_idx' });
+    if (ai != null && !isNaN(parseInt(ai))) settings.avatar_idx = parseInt(ai);
+  } catch (e) {}
 }
 
 // =============== 渲染主流程 ===============
@@ -324,12 +339,15 @@ function renderListView() {
   document.getElementById('listView').style.display = '';
   const box = document.getElementById('listViewBody');
   let arr = [];
-  const titleMap = { daily:'每日任务', 'time-limited':'限时任务', once:'次数任务' };
+  const titleMap = { daily:'每日任务', goal:'目标任务', 'time-limited':'限时任务', once:'次数任务' };
   document.getElementById('listViewTitle').textContent = titleMap[nav] || '任务';
 
   if (nav === 'daily') {
     arr = tasks.filter(t => t.category === 'daily');
     document.getElementById('listViewHint').textContent = '每日 0 点自动刷新';
+  } else if (nav === 'goal') {
+    arr = tasks.filter(t => t.category === 'goal');
+    document.getElementById('listViewHint').textContent = '为目标坚持推进';
   } else if (nav === 'time-limited') {
     arr = tasks.filter(t => t.category === 'time-limited');
     document.getElementById('listViewHint').textContent = '到期前记得完成';
@@ -401,11 +419,12 @@ function renderArchiveModal() {
 
 // =============== 右侧今日概览仪表盘 ===============
 function renderDashboard() {
-  // 问候语
+  // 问候语（动态昵称，不再固定"冒险者"）
   const h = new Date().getHours();
   let greet = '夜深了';
   if (h < 6) greet = '夜深了'; else if (h < 11) greet = '早上好'; else if (h < 14) greet = '中午好'; else if (h < 18) greet = '下午好'; else greet = '晚上好';
-  document.getElementById('dashGreetText').textContent = greet + '，冒险者';
+  const nick = settings.nickname || '历练者';
+  document.getElementById('dashGreetText').textContent = greet + '，' + nick;
 
   // 等级卡
   renderLevelCard();
@@ -424,11 +443,11 @@ function renderDashboard() {
   document.getElementById('statWeek').innerHTML = (progressInfo.week || 0) + '<span class="unit">项</span>';
   document.getElementById('statWeekTrend').textContent = '稳步前行';
 
-  // 22:00 提示
+  // 22:00 提示（白话版）
   const night = settings.night_notify;
   document.getElementById('tipText').innerHTML = night
-    ? '每日任务每日 0 点自动刷新，<b>22:00 还没完成</b>会弹窗提醒'
-    : '每日任务每日 0 点自动刷新（22:00 提醒已关闭）';
+    ? '每日任务到 <b>0 点会自动刷新</b>；每天 <b>22:00</b> 还没做完会弹窗提醒'
+    : '每日任务到 0 点会自动刷新（22:00 提醒已关闭）';
 }
 
 function renderLevelBadge() {
@@ -442,29 +461,34 @@ function renderLevelBadge() {
 function renderLevelCard() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
+  // 总览大卡
   document.getElementById('levelChar').innerHTML = svgIcon(lv.ico || 'lv1', 30, 1.7);
   document.getElementById('levelName').textContent = lv.name;
   document.getElementById('levelTitle').textContent = lv.title;
-  // 总览等级卡：只放等级名 + 灰色问号（点问号看经验条）。分数/进度/下一级全部挪到设置-个人信息
+  // 历史遗留：旧设置页等级卡的元素已删除，留空保护即可（个人信息的等级卡在下方同步刷新）
   const lt2 = document.getElementById('levelText2');
   if (lt2) lt2.textContent = '';
   const lf = document.getElementById('levelFill');
   if (lf) lf.style.width = '0%';
-  // 设置-个人信息：经验条 + 分数 + 距下一级
-  document.getElementById('setCurrentLevel').textContent = lv.name + ' · ' + points + ' / ' + lv.max + ' 分';
-  document.getElementById('setTotalPoints').textContent = points;
-  let pct = 100;
+  // 个人信息 modal 的等级卡同步刷新（打开时即最新）
+  const pn = document.getElementById('profileLevelName'); if (pn) pn.textContent = lv.name;
+  const pt = document.getElementById('profileLevelTitle'); if (pt) pt.textContent = lv.title;
+  const pi = document.getElementById('profileLevelIcon'); if (pi) pi.innerHTML = svgIcon(lv.ico || 'lv1', 28, 1.8);
+  const pnum = document.getElementById('profilePointsNum'); if (pnum) pnum.textContent = points;
+  const pfill = document.getElementById('profileExpFill');
+  const phint = document.getElementById('profileExpHint');
   if (next) {
-    pct = Math.min(100, Math.max(0, ((points - lv.min) / (lv.max - lv.min)) * 100));
-    document.getElementById('setLevelHint').textContent = '距下一级（' + next.name + '）还差 ' + (lv.max - points) + ' 分';
+    const pct = Math.min(100, Math.max(0, ((points - lv.min) / Math.max(1, lv.max - lv.min)) * 100));
+    if (pfill) pfill.style.width = pct + '%';
+    if (phint) phint.textContent = '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
   } else {
-    pct = 100;
-    document.getElementById('setLevelHint').textContent = '已至巅峰，满级成就达成';
+    if (pfill) pfill.style.width = '100%';
+    if (phint) phint.textContent = '已至巅峰，满级成就达成';
   }
-  document.getElementById('setLevelFill').style.width = pct + '%';
 }
 
-// =============== 进度条三样式 ===============
+// 进度条统一硬编码条形样式；旧版本允许 bar/circle/dots 三选一，但 UI 看不清，移除冗余设计。
+// 原 .progress-style-tabs 节点已从 index.html 删除，progressInfo.style 字段后端读取若返回也忽略。
 function renderProgress() {
   const total = progressInfo.total || 0;
   const done = Math.min(progressInfo.done || 0, total);
@@ -473,59 +497,15 @@ function renderProgress() {
   document.getElementById('progressTotal').textContent = total;
   const labelEl = document.getElementById('progressLabel');
   if (over > 0) labelEl.textContent = '完成 +' + over; else labelEl.textContent = '已完成';
-
+  const pct = total > 0 ? (done / total) * 100 : 0;
+  const overPct = total > 0 ? (over / total) * 100 : 0;
   const content = document.getElementById('progressContent');
-  const style = settings.progress_style || 'bar';
-  if (style === 'bar') {
-    const pct = total > 0 ? (done / total) * 100 : 0;
-    const overPct = total > 0 ? (over / total) * 100 : 0;
-    content.innerHTML = `<div class="progress-bar ${over>0?'has-over':''}" style="flex:1">
+  content.innerHTML = `<div class="progress-bar ${over>0?'has-over':''}" style="flex:1">
       <div class="bar-fill" style="width:${pct}%"></div>
       <div class="bar-over" style="left:${pct}%; width:${overPct}%"></div>
       <span class="over-tag">+${over} 超额</span>
     </div>`;
-  } else if (style === 'circle') {
-    const pct = total > 0 ? (done / total) : 0;
-    const C = 2 * Math.PI * 26;  // 半径 26 → 周长
-    const dashoffset = C * (1 - Math.min(1, pct));
-    content.innerHTML = `<div class="progress-circle">
-      <svg viewBox="0 0 64 64">
-        <defs><linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#E6C77A"/>
-          <stop offset="100%" stop-color="#9A7B1A"/>
-        </linearGradient></defs>
-        <circle class="track" cx="32" cy="32" r="26"></circle>
-        <circle class="fill" cx="32" cy="32" r="26"
-          stroke-dasharray="${C}" stroke-dashoffset="${dashoffset}"></circle>
-      </svg>
-      <div class="pct">${Math.round(pct*100)}%</div>
-    </div>`;
-  } else {
-    // dots
-    const n = Math.max(1, total);
-    let html = '<div class="progress-dots">';
-    for (let i = 0; i < n; i++) {
-      const cls = i < done ? 'done' : '';
-      html += `<div class="dot ${cls}"></div>`;
-    }
-    for (let i = 0; i < over; i++) {
-      html += `<div class="dot over"></div>`;
-    }
-    html += '</div>';
-    content.innerHTML = html;
-  }
 }
-
-// 进度条样式切换
-document.getElementById('progressStyleTabs').addEventListener('click', e => {
-  const t = e.target.closest('.style-tab');
-  if (!t) return;
-  settings.progress_style = t.dataset.style;
-  document.querySelectorAll('.style-tab').forEach(x => x.classList.toggle('active', x === t));
-  saveSettings();
-  persistSettingsServer();
-  renderProgress();
-});
 
 // =============== 详情页 ===============
 window.openDetail = async function(uuid) {
@@ -661,12 +641,58 @@ window.toggleStep = async function(taskUuid, stepUuid, curStatus) {
   openDetail(taskUuid);
   render();
 };
-window.addStep = async function(taskUuid) {
+// 添加步骤 inline 版：原生 prompt 在 Tauri WebView2 里被禁用，会出现"按了没反应"的假死，
+// 改成在目标任务的步骤列表里就地插入一行输入框，按回车 / 点"添加"提交，Esc/取消收起。
+window.showInlineAddStep = function(taskUuid) {
+  // 详情页步骤区的工具行（添加步骤 / 添加 JSON 所在容器），把内联输入行插到它前面
+  const wrap = document.querySelector('#detailView .goal-tools, #detailBody .goal-tools');
+  if (!wrap) return;
+  if (document.getElementById('inlineStepRow')) return;          // 已展开就别重开
+  const row = document.createElement('div');
+  row.className = 'goal-item goal-add-row';
+  row.id = 'inlineStepRow';
+  row.innerHTML = `
+    <span class="g-play">${svgIcon('plus',13,2.2)}</span>
+    <input class="g-input" id="inlineStepInput" placeholder="步骤名（按回车提交）" autocomplete="off" />
+    <button class="g-submit" id="inlineStepSubmit">添加</button>
+    <button class="g-cancel" id="inlineStepCancel">取消</button>
+  `;
+  wrap.parentNode.insertBefore(row, wrap);
+  const inp = document.getElementById('inlineStepInput');
+  inp.focus();
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitInlineStep(taskUuid); }
+    else if (e.key === 'Escape') { cancelInlineStep(); }
+  });
+  document.getElementById('inlineStepSubmit').onclick = () => submitInlineStep(taskUuid);
+  document.getElementById('inlineStepCancel').onclick = cancelInlineStep;
+};
+window.submitInlineStep = async function(taskUuid) {
+  const inp = document.getElementById('inlineStepInput');
+  if (!inp) return;
+  const title = inp.value.trim();
+  if (!title) { inp.focus(); return; }
+  const subBtn = document.getElementById('inlineStepSubmit');
+  if (subBtn) subBtn.disabled = true;
+  try {
+    await call('add_step', { taskUuid, title });
+    await openDetail(taskUuid);
+  } catch (e) {
+    alert('添加失败：' + (e.message || e));
+  } finally {
+    if (subBtn) subBtn.disabled = false;
+  }
+};
+window.cancelInlineStep = function() {
+  const row = document.getElementById('inlineStepRow');
+  if (row) row.remove();
+};
+// 兼容旧入口（如有外部 / 调试引用），保留但走新流程
+window.addStep = function(taskUuid) { showInlineAddStep(taskUuid); };
+window._addStepLegacy = function(taskUuid) {                                  // 真·降级 prompt（仅 fallback）
   const title = prompt('步骤名：');
   if (!title) return;
-  await call('add_step', { taskUuid, title });
-  openDetail(taskUuid);
-  render();
+  return call('add_step', { taskUuid, title }).then(() => { openDetail(taskUuid); render(); });
 };
 
 // 添加 JSON（外部 AI 拆解导入）：详情卡点「添加 JSON」→ 弹窗里粘贴外部 AI 生成的 JSON，
@@ -675,7 +701,13 @@ let jsonImportTaskUuid = null;
 function openJsonImport(taskUuid) {
   jsonImportTaskUuid = taskUuid;
   const area = document.getElementById('jsonArea');
-  area.value = '';
+  // 默认填一份示意模板：次数默认 5，与「次数任务默认次数」保持一致
+  area.value = JSON.stringify({
+    steps: [
+      { title: '步骤一', attr_label: '次数', attr_value: '5 次' },
+      { title: '步骤二' }
+    ]
+  }, null, 2);
   const hint = document.getElementById('jsonHint');
   hint.textContent = '';
   hint.className = 'hint';
@@ -847,6 +879,7 @@ document.querySelectorAll('[data-close-overlay="settingsOverlay"]').forEach(b =>
 
 function bindSetting(id, key, parser) {
   const el = document.getElementById(id);
+  if (!el) return;                       // UI 改版后某些旧控件已删除，找不到就跳过，不能中断整份脚本
   el.addEventListener('change', e => {
     settings[key] = parser ? parser(e.target.value) : e.target.checked !== undefined ? e.target.checked : e.target.value;
     saveSettings();
@@ -859,9 +892,82 @@ bindSetting('setEtaShort', 'eta_short_pct', v => Math.max(1, Math.min(100, parse
 bindSetting('setEtaLong', 'eta_long_h', v => Math.max(1, Math.min(240, parseInt(v) || 36)));
 bindSetting('setTimeLimit', 'time_limit_min', v => Math.max(1, Math.min(1440, parseInt(v) || 5)));
 bindSetting('setCountDefault', 'count_default', v => Math.max(1, Math.min(999, parseInt(v) || 1)));
-bindSetting('setDailyRefresh', 'daily_refresh');
+// 「每日任务自动刷新」开关已撤（每日任务本就该每天刷新，UI 不再暴露，旧 key 保留兼容）
 bindSetting('setNightNotify', 'night_notify');
-bindSetting('setProgressStyle', 'progress_style');
+
+// =============== 个人信息 modal ===============
+// 头像用 emoji 或字符当占位（先用等级 SVG，后面可以换 Gravatar / 文件上传）
+const AVATAR_GLYPHS = ['✦','✧','☀','☾','⚡','❄','♨','⚓','⚝','❀','✿','❁','✪','✯','✰','✸','✱','✲'];
+let avatarIdx = 0;
+function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.length]; }
+
+function openProfileModal() {
+  const lv = level || levelOf(points);
+  const next = nextLevelOf(points);
+  document.getElementById('profileLevelIcon').innerHTML = svgIcon(lv.ico || 'lv1', 28, 1.8);
+  document.getElementById('profileLevelName').textContent = lv.name;
+  document.getElementById('profileLevelTitle').textContent = lv.title;
+  document.getElementById('profilePointsNum').textContent = points;
+  // 经验条
+  let pct = 100;
+  if (next) {
+    pct = Math.min(100, Math.max(0, ((points - lv.min) / (lv.max - lv.min)) * 100));
+    document.getElementById('profileExpHint').textContent =
+      '距下一级（' + next.name + '）还差 ' + (lv.max - points) + ' 分';
+  } else {
+    pct = 100;
+    document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';
+  }
+  document.getElementById('profileExpFill').style.width = pct + '%';
+  // 配对
+  document.getElementById('profilePairStatus').textContent =
+    settings.pairing ? ('已配对：' + settings.pairing.url) : '未配对';
+  // 昵称
+  document.getElementById('profileNickname').value = settings.nickname || '历练者';
+  // 头像字符
+  avatarIdx = (settings.avatar_idx != null) ? settings.avatar_idx : 0;
+  const av = document.getElementById('profileAvatar');
+  av.textContent = pickAvatarGlyph();
+  document.getElementById('profileOverlay').style.display = '';
+}
+function closeProfileModal() { document.getElementById('profileOverlay').style.display = 'none'; }
+window.openProfileModal = openProfileModal;
+window.closeProfileModal = closeProfileModal;
+document.querySelectorAll('[data-close-overlay="profileOverlay"]').forEach(b => b.addEventListener('click', closeProfileModal));
+
+// 昵称保存：回车或失焦
+const _profileNick = document.getElementById('profileNickname');
+function commitNickname() {
+  const v = (_profileNick.value || '').trim().slice(0, 12);
+  if (!v) { _profileNick.value = settings.nickname || '历练者'; return; }
+  settings.nickname = v;
+  saveSettings();
+  call('set_setting', { key: 'nickname', value: v }).catch(() => {});
+  render();
+}
+_profileNick.addEventListener('change', commitNickname);
+_profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _profileNick.blur(); } });
+
+// 换头像
+document.getElementById('profileAvatarEdit').addEventListener('click', () => {
+  avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
+  settings.avatar_idx = avatarIdx;
+  document.getElementById('profileAvatar').textContent = pickAvatarGlyph();
+  saveSettings();
+});
+document.getElementById('profileAvatar').addEventListener('click', () => {
+  avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
+  settings.avatar_idx = avatarIdx;
+  document.getElementById('profileAvatar').textContent = pickAvatarGlyph();
+  saveSettings();
+});
+
+// 跳转到"设置"页（连接手机端）
+document.getElementById('profileGoSettings').addEventListener('click', () => {
+  closeProfileModal();
+  document.getElementById('settingsBtn').click();
+});
+// 「进度条样式选择器」已撤（统一条形），旧 key 保留兼容、不再绑定 UI
 
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();
@@ -931,22 +1037,19 @@ document.getElementById('setWidgetMode').addEventListener('click', () => {
   if (isTauriEnv) call('set_window_size', { w: 360, h: 88 }).catch(()=>{});
 });
 
-// 等级徽章点击 → 打开设置
+// 等级徽章点击 → 个人信息（昵称 / 头像 / 经验条都在那）
 document.getElementById('levelBadge').addEventListener('click', () => {
-  applySettingsToUi();
-  document.getElementById('settingsOverlay').style.display = '';
+  openProfileModal();
 });
-// 等级卡灰色问号 → 打开设置-个人信息（看经验条）
-document.getElementById('levelQ').addEventListener('click', e => {
-  e.stopPropagation();
-  applySettingsToUi();
-  document.getElementById('settingsOverlay').style.display = '';
-  // 滚动到个人信息区块
-  const exp = document.getElementById('setCurrentLevel');
-  if (exp && exp.closest('.settings-section')) {
-    exp.closest('.settings-section').scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }
-});
+// 等级卡的「?」按钮已删除：经验条合并到个人信息 modal 里，避免多余入口
+
+// v4.10 顶栏三键（最小化 / 最大化 / 隐藏），关闭只隐藏不退出，靠托盘图标唤回
+const _winMin = document.getElementById('winMin');
+const _winMax = document.getElementById('winMax');
+const _winClose = document.getElementById('winClose');
+if (_winMin) _winMin.addEventListener('click', () => isTauriEnv && call('win_minimize').catch(()=>{}));
+if (_winMax) _winMax.addEventListener('click', () => isTauriEnv && call('win_toggle_maximize').catch(()=>{}));
+if (_winClose) _winClose.addEventListener('click', () => isTauriEnv && call('win_hide').catch(()=>{}));
 
 // =============== 紧急任务弹窗 ===============
 function checkEmergency() {
@@ -1071,7 +1174,12 @@ document.title = '…loading…';
 // 等 DOM/资源全部 ready 再 render（避免 init 时拿不到某些元素）
 function startApp() {
   initIcons();      // 先把所有 data-icon 占位注入成内联 SVG
-  render();
+  // 启动时把昵称 / 头像索引从后端拉到本地，再调一次 render 让 dashboard 显示
+  hydrateUserProfile().then(() => render()).catch(() => render());
+  // 首次启动 seed 5 条示例任务（后端去重：seed_v4 标记 + 已有任务时跳过）
+  call('seed_default_tasks', {}).then(r => {
+    if (r && r.seeded) render();
+  }).catch(() => {});
   setTimeout(render, 250);
   setTimeout(render, 1000);
   // 设置平时只在改动时推后端，启动补推一次，

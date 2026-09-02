@@ -10,17 +10,29 @@
 <div class="widget" id="app">
 
   <!-- ===== 顶栏 ===== -->
-  <header class="topbar" data-tauri-drag-region>
+  <header class="topbar" id="topbar" data-tauri-drag-region>
     <div class="title">
       <span class="title-glyph"></span>
       <span>任务栏</span>
+      <span class="title-sub">— 每完成一项，积分往前走</span>
     </div>
-    <div class="top-right">
-      <div class="level-badge" id="levelBadge" title="点击查看等级经验">
+    <div class="top-right" id="topRight">
+      <div class="level-badge" id="levelBadge" title="点击查看 / 修改个人信息">
         <span class="level-icon" id="levelIcon"></span>
         <span class="level-text" id="levelText">历练学徒</span>
       </div>
-      <button class="ico-btn" id="settingsBtn" title="设置"><span class="ico-slot" data-icon="gear" data-icon-size="15"></span></button>
+      <button class="ico-btn win-btn" id="winMin" title="最小化" data-tauri-drag-region-exclude>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M5 12h14"/></svg>
+      </button>
+      <button class="ico-btn win-btn" id="winMax" title="最大化" data-tauri-drag-region-exclude>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><rect x="5.4" y="5.4" width="13.2" height="13.2" rx="1.4"/></svg>
+      </button>
+      <button class="ico-btn win-btn close" id="winClose" title="最小化到托盘" data-tauri-drag-region-exclude>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>
+      </button>
+      <button class="ico-btn" id="settingsBtn" title="设置" data-tauri-drag-region-exclude>
+        <span class="ico-slot" data-icon="gear" data-icon-size="16" data-icon-sw="1.9"></span>
+      </button>
     </div>
   </header>
 
@@ -34,6 +46,10 @@
       <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
       <span class="nav-tip">每日任务</span>
     </button>
+    <button class="nav-item" data-nav="goal" title="目标任务">
+      <span class="ico ico-goal" data-icon="goal" data-icon-size="15"></span>
+      <span class="nav-tip">目标任务</span>
+    </button>
     <button class="nav-item" data-nav="time-limited" title="限时任务">
       <span class="ico ico-lim" data-icon="lim" data-icon-size="15"></span>
       <span class="nav-tip">限时任务</span>
@@ -44,7 +60,7 @@
     </button>
     <div class="nav-spacer"></div>
     <button class="nav-item repo" data-nav="archive" title="历史任务">
-      <span class="ico ico-archive" data-icon="archive" data-icon-size="15"></span>
+      <span class="ico ico-clock" data-icon="clock" data-icon-size="15"></span>
       <span class="nav-tip">历史任务</span>
     </button>
   </nav>
@@ -100,25 +116,19 @@
         </div>
       </div>
 
-      <!-- 等级卡（只放等级名 + 问号，经验条在设置-个人信息） -->
+      <!-- 等级卡（只显示等级名 + 副标，没有"?"按钮，经验条挪去 profile modal） -->
       <div class="level-card" id="levelCard">
         <div class="level-character" id="levelChar"></div>
         <div class="level-info">
           <div class="level-name" id="levelName">历练学徒</div>
           <div class="level-title" id="levelTitle">敢开始，就已经赢了一半</div>
         </div>
-        <button class="level-q" id="levelQ" title="查看等级经验"><span class="ico-slot" data-icon="question" data-icon-size="14" data-icon-sw="2"></span></button>
       </div>
 
-      <!-- 进度条卡 -->
+      <!-- 进度条卡（统一硬编码条形；旧版三样式 tab 已撤） -->
       <div class="progress-card">
         <div class="progress-head">
           <div class="progress-title">今日进度</div>
-          <div class="progress-style-tabs" id="progressStyleTabs">
-            <div class="style-tab" data-style="bar"  title="条形"><span class="ico-slot" data-icon="bar" data-icon-size="15" data-icon-sw="1.9"></span></div>
-            <div class="style-tab" data-style="circle" title="圆形"><span class="ico-slot" data-icon="circle" data-icon-size="15" data-icon-sw="1.9"></span></div>
-            <div class="style-tab" data-style="dots"  title="点状"><span class="ico-slot" data-icon="dots" data-icon-size="15" data-icon-sw="1.9"></span></div>
-          </div>
         </div>
         <div class="progress-body">
           <div id="progressContent"></div>
@@ -148,10 +158,10 @@
         </div>
       </div>
 
-      <!-- 22:00 提醒 / 紧急任务提示卡 -->
+      <!-- 22:00 提醒 / 紧急任务提示卡（白话版） -->
       <div class="tip-card" id="tipCard">
         <div class="tip-ico" data-icon="bell" data-icon-size="15"></div>
-        <div class="tip-text" id="tipText">每日任务每日 0 点自动刷新，22:00 还没完成会弹窗提醒</div>
+        <div class="tip-text" id="tipText">每日任务到 0 点会自动刷新；每天 22:00 还没做完会弹窗提醒</div>
       </div>
     </div>
 
@@ -240,9 +250,66 @@
         <button class="arc-tab" data-cat="goal" onclick="switchArchiveCat('goal')">目标任务</button>
         <button class="arc-tab" data-cat="time-limited" onclick="switchArchiveCat('time-limited')">限时任务</button>
         <button class="arc-tab" data-cat="once" onclick="switchArchiveCat('once')">次数任务</button>
-        <input class="search" id="archiveSearch" placeholder="检索…" style="margin-left:auto; width:110px" />
+        <div class="arc-search-row">
+          <input class="search" id="archiveSearch" placeholder="搜索标题…" />
+          <button class="arc-search-btn" id="archiveSearchBtn" title="搜索"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/></svg></button>
+        </div>
       </div>
       <div class="arc-body" id="archiveBody"></div>
+    </div>
+  </div>
+
+  <!-- ===== 个人信息抽屉（昵称 / 头像 / 等级 / 积分 / 配对） ===== -->
+  <div class="overlay" id="profileOverlay" style="display:none">
+    <div class="modal profile-modal">
+      <div class="m-head"><span>个人信息</span><button class="m-close" data-close-overlay="profileOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
+      <div class="m-body">
+
+        <div class="profile-hero">
+          <div class="ph-avatar-wrap">
+            <div class="ph-avatar" id="profileAvatar"><span class="ico-slot" data-icon="sparkle" data-icon-size="32" data-icon-sw="1.7"></span></div>
+            <button class="ph-avatar-edit" id="profileAvatarEdit" title="换个头像">换</button>
+          </div>
+          <div class="ph-info">
+            <div class="ph-nick-row">
+              <input class="ph-nick-input" id="profileNickname" placeholder="历练者" maxlength="12" />
+              <span class="ph-nick-save-tip">回车保存</span>
+            </div>
+            <div class="ph-sub">每完成一项任务，经验条都会往前走一格</div>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <div class="pc-head">
+            <div class="pc-level-icon" id="profileLevelIcon"></div>
+            <div class="pc-level-text">
+              <div class="pc-level-name" id="profileLevelName">历练学徒</div>
+              <div class="pc-level-title" id="profileLevelTitle">敢开始，就已经赢了一半</div>
+            </div>
+            <div class="pc-points">
+              <div class="pc-points-num" id="profilePointsNum">0</div>
+              <div class="pc-points-label">总积分</div>
+            </div>
+          </div>
+          <div class="pc-exp-row">
+            <div class="pc-exp-bar"><div class="pc-exp-fill" id="profileExpFill" style="width:0%"></div></div>
+            <div class="pc-exp-hint" id="profileExpHint">距下一级 0 分</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">连接</div>
+          <div class="setting-row">
+            <label>配对状态</label>
+            <span class="hint" id="profilePairStatus">未配对</span>
+          </div>
+          <div class="setting-row">
+            <button class="small-btn" id="profileGoSettings">去连接手机端</button>
+            <span class="hint">在 设置-连接与外观 里扫描或输入手机地址</span>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -262,48 +329,12 @@
           <div class="setting-row">
             <label>次数任务默认次数</label>
             <input type="number" id="setCountDefault" min="1" max="999" />
-            <span class="hint">次（默认 1）</span>
-          </div>
-          <div class="setting-row">
-            <label>每日任务自动刷新</label>
-            <label class="switch"><input type="checkbox" id="setDailyRefresh" /><span class="slider"></span></label>
-            <span class="hint">每 0 点自动出现在列表</span>
+            <span class="hint">次（默认 5）</span>
           </div>
           <div class="setting-row">
             <label>22:00 未完成弹窗</label>
             <label class="switch"><input type="checkbox" id="setNightNotify" /><span class="slider"></span></label>
-            <span class="hint">每日任务未完成提醒</span>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="ss-title">个人信息</div>
-          <div class="setting-row">
-            <label>当前等级</label>
-            <span class="hint" id="setCurrentLevel">历练学徒</span>
-          </div>
-          <div class="setting-row">
-            <label>总积分</label>
-            <span class="hint" id="setTotalPoints">0</span>
-          </div>
-          <div class="setting-row level-exp-row">
-            <label>经验条</label>
-            <div class="exp-box">
-              <div class="exp-bar"><div class="exp-fill" id="setLevelFill" style="width:0%"></div></div>
-              <div class="exp-hint" id="setLevelHint">距下一级还差 0 分</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="ss-title">进度显示</div>
-          <div class="setting-row">
-            <label>进度条样式</label>
-            <select id="setProgressStyle">
-              <option value="bar">条形</option>
-              <option value="circle">圆形</option>
-              <option value="dots">点状</option>
-            </select>
+            <span class="hint">每日任务未完成时弹窗提醒</span>
           </div>
         </div>
 
@@ -317,17 +348,17 @@
           <div class="setting-row">
             <label>紧急提醒</label>
             <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
-            <span class="hint">即将超时的任务</span>
+            <span class="hint">即将超时的任务主动弹</span>
           </div>
           <div class="setting-row">
-            <label>≤48h 提醒阈值</label>
+            <label>≤48h 任务阈值</label>
             <input type="number" id="setEtaShort" min="1" max="100" />
-            <span class="hint">% 总时长（默认 30）</span>
+            <span class="hint">% 总时长（默认 30，距离截止只剩 30% 就提醒）</span>
           </div>
           <div class="setting-row">
             <label>&gt;48h 提前提醒</label>
             <input type="number" id="setEtaLong" min="1" max="240" />
-            <span class="hint">小时（默认 36）</span>
+            <span class="hint">小时（默认 36，长任务提前多少小时先知会你）</span>
           </div>
         </div>
 
@@ -358,7 +389,7 @@
           </div>
           <div class="setting-row">
             <label>关于</label>
-            <span class="hint">任务栏 · 桌面任务追踪 v4.6</span>
+            <span class="hint">任务栏 · 桌面任务追踪 v4.10</span>
           </div>
         </div>
 
@@ -396,7 +427,8 @@
         </div>
 
         <label class="label">次数（仅次数任务）</label>
-        <input type="number" id="addCount" min="1" max="999" value="1" style="max-width:120px" />
+        <input type="number" id="addCount" min="1" max="999" value="5" style="max-width:120px" />
+        <span class="hint">默认 5，可在设置里改</span>
 
         <label class="label">优先级</label>
         <div class="prio-row" id="addPrioRow">
@@ -423,7 +455,7 @@
 
         <div class="json-example">
           <div class="json-example-head">
-            <span>示例（发给任意免费 AI，让它照着拆你的任务）</span>
+            <span>示例（发给任意 AI，让它照着拆你的任务）</span>
             <button class="json-copy-btn" id="jsonCopyExample">复制示例</button>
           </div>
           <pre id="jsonExampleText">{
@@ -432,7 +464,9 @@
     { "title": "整理笔记" },
     { "title": "做自测题", "attr_label": "结果", "attr_value": "90 分以上" }
   ]
-}</pre>
+}
+
+— 帮我根据以上 json 格式拆解我的任务：</pre>
         </div>
 
         <span class="hint" id="jsonHint"></span>
