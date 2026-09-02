@@ -149,16 +149,16 @@ object ReminderStrength {
 
 // ==================== 等级体系（与桌面端 preview-server.js / Rust 端口径一致） ====================
 /**
- * 等级配色：每级一套主题色，等级越高越华丽（撞色更复杂、渐变更精致、装饰更多）
- * 告别黑金——v5.0 全撞色方案下做层级递进：冰川蓝→玉青→蓝紫→紫金→三色撞
+ * 等级配色：暗色金属阶（原神冒险等阶风）——每级一条"金属色阶"，等级越高越亮越华丽。
+ * 结构：深色底（不是亮彩渐变横幅）+ 金属细描边 + 顶部光带 + 水印等级数字。
+ * 金属阶：锡铜 → 青铜 → 玫瑰金 → 黄金 → 炽金（高级感随等级递进）。
  */
 data class LevelPalette(
-    val primary: androidx.compose.ui.graphics.Color,      // 主色（边框+渐变起点）
-    val secondary: androidx.compose.ui.graphics.Color,    // 辅色（渐变终点）
-    val accent: androidx.compose.ui.graphics.Color,       // 强调（Lv5 才有：第三色）
-    val onPrimary: androidx.compose.ui.graphics.Color,     // 等级名文字色
-    val onSecondary: androidx.compose.ui.graphics.Color,   // 副文字色
-    val border: androidx.compose.ui.graphics.Color        // 边框色
+    val metal: androidx.compose.ui.graphics.Color,        // 金属主色（描边/光带/大字）
+    val metalLight: androidx.compose.ui.graphics.Color,   // 金属高光（光带渐变尾/进度条/数字亮部）
+    val bgDeep: androidx.compose.ui.graphics.Color,        // 卡底色（深色近黑，带色相）
+    val onDeep: androidx.compose.ui.graphics.Color,        // 卡上主文字（近白）
+    val onDeepSoft: androidx.compose.ui.graphics.Color     // 卡上次级文字（米灰）
 )
 
 data class LevelInfo(
@@ -176,46 +176,41 @@ data class LevelInfo(
 )
 
 object Levels {
-    // 5 级主题色（v5.4 暖土撞色：赤陶+桃黏土+鼠尾草绿+浓缩咖啡，等级越高越华丽）
-    private val P1 = LevelPalette(  // Lv1 历练学徒：赤陶单色，新手温暖
-        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
-        secondary = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFFFF0E8),
-        border = androidx.compose.ui.graphics.Color(0xFFE8A87C)
+    // 5 级金属阶：锡铜 → 青铜 → 玫瑰金 → 黄金 → 炽金（暗底随等级由冷灰渐入暖黑）
+    private val P1 = LevelPalette(  // Lv1 历练学徒：锡铜（暗灰底，朴素沉稳）
+        metal = androidx.compose.ui.graphics.Color(0xFFA99E8E),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFD6CDBF),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF201C17),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFF2EDE4),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFB5AC9E)
     )
-    private val P2 = LevelPalette(  // Lv2 风华游侠：鼠尾草绿+桃黏土，活力初成
-        primary = androidx.compose.ui.graphics.Color(0xFF5B8A66),
-        secondary = androidx.compose.ui.graphics.Color(0xFF7D9B76),
-        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFEBF3E8),
-        border = androidx.compose.ui.graphics.Color(0xFFA0BC97)
+    private val P2 = LevelPalette(  // Lv2 风华游侠：青铜（暖灰绿调底）
+        metal = androidx.compose.ui.graphics.Color(0xFFBFA257),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFE8D491),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF241F14),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFF4EFE2),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFBBAF8C)
     )
-    private val P3 = LevelPalette(  // Lv3 破浪骑士：赤陶+鼠尾草绿撞色横渐变
-        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
-        secondary = androidx.compose.ui.graphics.Color(0xFF5B8A66),
-        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFFAF1E8),
-        border = androidx.compose.ui.graphics.Color(0xFFD08B5E)
+    private val P3 = LevelPalette(  // Lv3 破浪骑士：玫瑰金（紫咖底）
+        metal = androidx.compose.ui.graphics.Color(0xFFCE8A6E),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFF0BEa5),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF251913),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFF5ECE5),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFC0AA9E)
     )
-    private val P4 = LevelPalette(  // Lv4 群星行者：深咖啡+赤陶撞色，浓郁沉稳
-        primary = androidx.compose.ui.graphics.Color(0xFF8E4424),
-        secondary = androidx.compose.ui.graphics.Color(0xFF3B2A20),
-        accent = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFF5E0CE),
-        border = androidx.compose.ui.graphics.Color(0xFFC1603F)
+    private val P4 = LevelPalette(  // Lv4 群星行者：黄金（深咖底，金辉初显）
+        metal = androidx.compose.ui.graphics.Color(0xFFD9A94C),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFF4D97E),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF241A0E),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFF6EFDF),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFC6B28C)
     )
-    private val P5 = LevelPalette(  // Lv5 传奇勇者：赤陶+桃黏土+浓缩咖啡三色撞（最华丽神话）
-        primary = androidx.compose.ui.graphics.Color(0xFFC1603F),
-        secondary = androidx.compose.ui.graphics.Color(0xFFE8A87C),
-        accent = androidx.compose.ui.graphics.Color(0xFF3B2A20),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-        onSecondary = androidx.compose.ui.graphics.Color(0xFFFFF1E6),
-        border = androidx.compose.ui.graphics.Color(0xFFFFC4A8)
+    private val P5 = LevelPalette(  // Lv5 传奇勇者：炽金（最亮最华丽，黑金光带）
+        metal = androidx.compose.ui.graphics.Color(0xFFEAC66A),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFFFE9A8),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF201705),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF7E2),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFD9C492)
     )
 
     private val LEVELS = listOf(

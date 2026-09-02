@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,77 +52,130 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
-        // 等级卡（每级独立配色，等级越高越华丽）
-        val palette = level.palette
-        // Lv5 用三色撞（赤陶→冰川蓝→紫罗兰 横渐变）；其他用主→辅渐变
-        val bgBrush = if (level.lv >= 5) {
-            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                listOf(palette.primary, palette.secondary, palette.accent)
-            )
-        } else {
-            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                listOf(palette.primary, palette.secondary)
-            )
-        }
-        Column(
+        // 等级卡（暗色金属高级卡：深底 + 金属描边 + 顶部光带 + 水印等级数字）
+        val p = level.palette
+        Box(
             Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(brush = bgBrush)
-                .border(1.5.dp, palette.border, RoundedCornerShape(14.dp))
-                .padding(14.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(p.bgDeep)
+                .then(
+                    if (level.lv >= 4) {
+                        // Lv4+ 加外圈微光描边（金辉更显）
+                        Modifier.border(1.dp, p.metal.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+                    } else {
+                        Modifier.border(1.dp, p.metal.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                    }
+                )
+                .shadow(10.dp, RoundedCornerShape(16.dp))
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Lv.${level.lv} ${level.name}",
-                        color = palette.onPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+            // 左上→右下的微妙金属光泽（不是亮彩，是暗底上的光线）
+            Box(
+                Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                p.metal.copy(alpha = 0.10f),
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f)
+                            )
+                        )
                     )
-                    Text(
-                        level.title,
-                        color = palette.onSecondary.copy(alpha = 0.85f),
-                        fontSize = 12.sp
+            )
+            // 顶部细光带（金属高光线，随等级变亮）
+            Box(
+                Modifier.fillMaxWidth().height(2.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                p.metalLight.copy(alpha = if (level.lv >= 3) 0.9f else 0.55f),
+                                androidx.compose.ui.graphics.Color.Transparent
+                            )
+                        )
                     )
-                }
-                Column(horizontalAlignment = Alignment.End) {
+            )
+            // 右侧超大水印等级数字
+            Text(
+                "Lv.${level.lv}",
+                color = p.metal.copy(alpha = if (level.lv >= 4) 0.14f else 0.08f),
+                fontSize = if (level.lv >= 4) 74.sp else 64.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp)
+            )
+            Column(Modifier.padding(16.dp)) {
+                // 徽章行：菱形色标 + "历练学徒" 小字
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(
+                                Brush.linearGradient(listOf(p.metalLight, p.metal)),
+                                androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
+                            )
+                    )
+                    Spacer(Modifier.width(7.dp))
                     Text(
-                        "$points / ${level.max}",
-                        color = palette.onPrimary,
-                        fontSize = 13.sp,
+                        "ADVENTURER LV.${level.lv}",
+                        color = p.metal.copy(alpha = 0.75f),
+                        fontSize = 9.sp,
+                        letterSpacing = 2.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    if (level.toNext > 0) {
-                        Text(
-                            "距 ${nextLevelName(level.lv)} 还差 ${level.toNext} 分",
-                            color = palette.onSecondary.copy(alpha = 0.75f),
-                            fontSize = 11.sp
+                }
+                Spacer(Modifier.height(10.dp))
+                // 等级名大字（金属渐变感：用金属色）
+                Text(
+                    level.name,
+                    color = p.metalLight,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    level.title,
+                    color = p.onDeepSoft,
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                // 进度条（暗底 + 金属渐变填充）
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.weight(1f).height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f))
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(level.progress.coerceIn(0f, 1f))
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(p.metal, p.metalLight)
+                                    )
+                                )
                         )
-                    } else {
-                        Text("已是最高等级", color = palette.onPrimary, fontSize = 11.sp)
                     }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "$points / ${level.max}",
+                        color = p.onDeep,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                if (level.toNext > 0) {
+                    Text(
+                        "距「${nextLevelName(level.lv)}」还差 ${level.toNext} 分",
+                        color = p.onDeepSoft.copy(alpha = 0.8f),
+                        fontSize = 11.sp
+                    )
+                } else {
+                    Text("已登顶 · 所有荣誉加身", color = p.metalLight.copy(alpha = 0.9f), fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            // 进度条：白条高对比（在彩底上最显眼）
-            Box(
-                Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
-                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.32f))
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(level.progress.coerceIn(0f, 1f))
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(androidx.compose.ui.graphics.Color.White)
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "完成任务可获得积分，积分升级等级",
-                color = palette.onSecondary.copy(alpha = 0.6f),
-                fontSize = 11.sp
-            )
         }
 
         Spacer(Modifier.height(10.dp))
