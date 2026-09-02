@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -60,59 +61,88 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
-        // ===== 等级卡：黑金（墨黑底 + 金沙 + 金属反光描边），Lv 越高越亮 =====
-        val particleCount = 6 + level.lv * 2
-        val rimGlow = (level.lv - 1) / 4f
-        Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(14.dp))) {
+        // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====
+        val gloss = 0.30f + (level.lv - 1) * 0.06f   // 镜面光泽强度随等级（克制，不挡字）
+        Box(Modifier.fillMaxWidth().height(108.dp).clip(RoundedCornerShape(14.dp))) {
             Canvas(Modifier.fillMaxSize()) {
                 val w = size.width; val h = size.height; val r = 14.dp.toPx()
+                // 1) 底层：深咖→金 斜向渐变（金属板底色）
                 drawRoundRect(
-                    brush = Brush.verticalGradient(listOf(Color(0xFF0B0805), Color(0xFF14100A), Color(0xFF201809))),
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF1A1206),   // 左上暗
+                            Color(0xFF4A3510),   // 
+                            Color(0xFF8A6A20),   // 金
+                            Color(0xFF3A2A0C)    // 右下回暗
+                        ),
+                        start = Offset(0f, 0f), end = Offset(w, h)
+                    ),
                     cornerRadius = CornerRadius(r, r)
                 )
-                drawRect(
-                    brush = Brush.horizontalGradient(listOf(Color.Transparent, TGColors.GoldLight.copy(alpha = 0.28f + 0.4f * rimGlow), Color.Transparent)),
-                    topLeft = Offset(0f, 0f), size = Size(w, 1.4.dp.toPx())
-                )
-                for (i in 0 until particleCount) {
-                    val fx = ((i * 137L) % 1000L) / 1000f
-                    val fy = ((i * 271L) % 1000L) / 1000f * 0.6f
-                    val px = fx * w; val py = 4.dp.toPx() + fy * h
-                    val rad = (1.0 + (i % 3) * 0.5).dp.toPx()
-                    val al = (0.9f - fy) * (0.35f + 0.5f * rimGlow)
-                    drawCircle(TGColors.GoldLight.copy(alpha = al.coerceIn(0.04f, 1f)), radius = rad, center = Offset(px, py))
-                }
-                drawCircle(TGColors.GoldLight.copy(alpha = 0.15f + 0.25f * rimGlow), radius = 3.dp.toPx(), center = Offset(w - 22.dp.toPx(), 10.dp.toPx()))
+                // 2) 斜扫高光带（真正的"镜面金属"感：一道 45° 亮白带从左上扫到右下）
+                //    中心亮带 + 两侧渐暗，模拟灯光在金属表面反射
                 drawRoundRect(
-                    brush = Brush.verticalGradient(listOf(
-                        TGColors.GoldLight.copy(alpha = 0.55f + 0.4f * rimGlow),
-                        TGColors.Gold.copy(alpha = 0.2f),
-                        TGColors.Gold.copy(alpha = 0.28f),
-                        TGColors.GoldLight.copy(alpha = 0.75f + 0.25f * rimGlow))),
-                    topLeft = Offset(0.6.dp.toPx(), 0.6.dp.toPx()),
-                    size = Size(w - 1.2.dp.toPx(), h - 1.2.dp.toPx()),
+                    brush = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color(0xFF6B5220).copy(alpha = 0.0f),
+                            0.32f to Color(0xFFFFFFFF).copy(alpha = 0.05f * gloss),
+                            0.45f to Color(0xFFFFFFFF).copy(alpha = 0.40f * gloss),  // 高光最亮点（克制）
+                            0.52f to Color(0xFFFFF3C0).copy(alpha = 0.28f * gloss),
+                            0.62f to Color(0xFFFFFFFF).copy(alpha = 0.15f * gloss),
+                            0.78f to Color(0xFFFFE9A8).copy(alpha = 0.05f * gloss),
+                            1.00f to Color(0xFF3A2A0C).copy(alpha = 0.0f)
+                        ),
+                        start = Offset(0f, 0f), end = Offset(w, h)
+                    ),
+                    cornerRadius = CornerRadius(r, r)
+                )
+                // 3) 底部镜面反光（金属卡下缘常见的一道微弱反光）
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        listOf(Color.Transparent, Color(0xFFFFF0C0).copy(alpha = 0.10f * gloss), Color.Transparent)
+                    ),
+                    topLeft = Offset(0f, h * 0.82f),
+                    size = Size(w, h * 0.18f),
+                    cornerRadius = CornerRadius(r, r)
+                )
+                // 4) 细金描边（镜面+描边立体感）
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        listOf(TGColors.GoldLight.copy(alpha = 0.8f), TGColors.Gold.copy(alpha = 0.35f), TGColors.GoldLight.copy(alpha = 0.9f)),
+                        start = Offset(0f, 0f), end = Offset(0f, h)
+                    ),
+                    topLeft = Offset(0.8f.dp.toPx(), 0.8f.dp.toPx()),
+                    size = Size(w - 1.6f.dp.toPx(), h - 1.6f.dp.toPx()),
                     cornerRadius = CornerRadius(r, r), style = Stroke(width = 1.dp.toPx())
                 )
             }
-            Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 内容层：文字用深咖（金底上比白字更贵气）+ 阴影托底
+            Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(9.dp).background(Brush.verticalGradient(listOf(TGColors.GoldLight, TGColors.Gold)), RoundedCornerShape(2.dp)).graphicsLayer { rotationZ = 45f })
+                        Box(Modifier.size(8.dp).background(Color(0xFF2A1D08), RoundedCornerShape(2.dp)).graphicsLayer { rotationZ = 45f })
                         Spacer(Modifier.width(8.dp))
-                        Text("Lv.${level.lv} · ${level.name}", color = TGColors.GoldLight, fontSize = 17.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                        Text(
+                            "Lv.${level.lv} · ${level.name}",
+                            color = Color(0xFF241703),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp,
+                            style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0xFFFFF3C0).copy(alpha = 0.6f), Offset(0f, 1f), 0f))
+                        )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(level.title, color = TGColors.Gold.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(10.dp))
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(TGColors.GoldLight.copy(alpha = 0.14f))) {
-                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(TGColors.GoldDeep, TGColors.GoldLight))))
+                    Spacer(Modifier.height(3.dp))
+                    Text(level.title, color = Color(0xFF3D2C0E), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(9.dp))
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF241703).copy(alpha = 0.18f))) {
+                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF5C430F), Color(0xFF2A1D08)))))
                     }
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$points / ${level.max}", color = TGColors.GoldLight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(if (level.toNext > 0) "距下一级差 ${level.toNext}" else "已登顶", color = TGColors.Gold.copy(alpha = 0.65f), fontSize = 10.sp)
+                    Text("$points / ${level.max}", color = Color(0xFF241703), fontSize = 15.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.height(3.dp))
+                    Text(if (level.toNext > 0) "距下一级差 ${level.toNext}" else "已登顶", color = Color(0xFF3D2C0E), fontSize = 10.sp)
                 }
             }
         }
