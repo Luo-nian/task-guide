@@ -1,36 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 仓库（层叠卡片：表达"多个任务堆放在一起"，更贴"任务库"语义） -->
+<!-- 仓库（3x3 圆点矩阵：boss 选 2 号，"所有任务"通用语义，类 iOS App Library 风格） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 底层卡片（最浅、最后） -->
+    <!-- 第 1 行 -->
     <path
-        android:pathData="M4,15 L4,20 L18,20 L18,15"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 中间层卡片 -->
+        android:pathData="M5,5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
     <path
-        android:pathData="M6,11 L6,16 L20,16 L20,11"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 顶层卡片（最前，含勾选标记，象征"当前选中/查看的任务"） -->
+        android:pathData="M12,5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
     <path
-        android:pathData="M3,5 L3,10 L17,10 L17,5 Z"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 顶层勾选 -->
+        android:pathData="M19,5 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <!-- 第 2 行 -->
     <path
-        android:pathData="M6,7.5 L8,9 L11,6"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:pathData="M5,12 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M12,12 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M19,12 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <!-- 第 3 行 -->
+    <path
+        android:pathData="M5,19 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M12,19 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M19,19 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"
+        android:fillColor="#FF000000" />
 </vector>

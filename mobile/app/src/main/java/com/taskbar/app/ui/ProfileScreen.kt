@@ -50,37 +50,86 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
-        // 等级卡 黑金招牌：墨黑底 + 金色等级名 + 金边
+        // 等级卡（每级独立配色，等级越高越华丽）
+        val palette = level.palette
+        // Lv5 用三色撞（赤陶→冰川蓝→紫罗兰 横渐变）；其他用主→辅渐变
+        val bgBrush = if (level.lv >= 5) {
+            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(palette.primary, palette.secondary, palette.accent)
+            )
+        } else {
+            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(palette.primary, palette.secondary)
+            )
+        }
         Column(
             Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(TGColors.Black)
-                .border(1.5.dp, TGColors.Gold, RoundedCornerShape(14.dp))
+                .background(brush = bgBrush)
+                .border(1.5.dp, palette.border, RoundedCornerShape(14.dp))
                 .padding(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Lv.${level.lv} ${level.name}", color = TGColors.Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(level.title, color = TGColors.GoldLight.copy(alpha = 0.8f), fontSize = 12.sp)
+                    Text(
+                        "Lv.${level.lv} ${level.name}",
+                        color = palette.onPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        level.title,
+                        color = palette.onSecondary.copy(alpha = 0.85f),
+                        fontSize = 12.sp
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$points / ${level.max}", color = TGColors.GoldLight, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "$points / ${level.max}",
+                        color = palette.onPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                     if (level.toNext > 0) {
-                        Text("距 ${nextLevelName(level.lv)} 还差 ${level.toNext} 分", color = TGColors.GoldLight.copy(alpha = 0.7f), fontSize = 11.sp)
+                        Text(
+                            "距 ${nextLevelName(level.lv)} 还差 ${level.toNext} 分",
+                            color = palette.onSecondary.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
                     } else {
-                        Text("已是最高等级", color = TGColors.Gold, fontSize = 11.sp)
+                        Text("已是最高等级", color = palette.onPrimary, fontSize = 11.sp)
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { level.progress },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                color = TGColors.Gold,
-                trackColor = TGColors.GoldLight.copy(alpha = 0.2f)
-            )
+            // 进度条：Lv5 用三色撞，其他用主→辅渐变
+            val trackBrush = if (level.lv >= 5) {
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(palette.primary, palette.secondary, palette.accent)
+                )
+            } else {
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(palette.primary, palette.secondary)
+                )
+            }
+            Box(
+                Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+                    .background(palette.border.copy(alpha = 0.25f))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(level.progress.coerceIn(0f, 1f))
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush = trackBrush)
+                )
+            }
             Spacer(Modifier.height(4.dp))
-            Text("完成任务可获得积分，积分升级等级", color = TGColors.GoldLight.copy(alpha = 0.6f), fontSize = 11.sp)
+            Text(
+                "完成任务可获得积分，积分升级等级",
+                color = palette.onSecondary.copy(alpha = 0.6f),
+                fontSize = 11.sp
+            )
         }
 
         Spacer(Modifier.height(10.dp))

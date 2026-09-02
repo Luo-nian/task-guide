@@ -148,6 +148,19 @@ object ReminderStrength {
 }
 
 // ==================== 等级体系（与桌面端 preview-server.js / Rust 端口径一致） ====================
+/**
+ * 等级配色：每级一套主题色，等级越高越华丽（撞色更复杂、渐变更精致、装饰更多）
+ * 告别黑金——v5.0 全撞色方案下做层级递进：冰川蓝→玉青→蓝紫→紫金→三色撞
+ */
+data class LevelPalette(
+    val primary: androidx.compose.ui.graphics.Color,      // 主色（边框+渐变起点）
+    val secondary: androidx.compose.ui.graphics.Color,    // 辅色（渐变终点）
+    val accent: androidx.compose.ui.graphics.Color,       // 强调（Lv5 才有：第三色）
+    val onPrimary: androidx.compose.ui.graphics.Color,     // 等级名文字色
+    val onSecondary: androidx.compose.ui.graphics.Color,   // 副文字色
+    val border: androidx.compose.ui.graphics.Color        // 边框色
+)
+
 data class LevelInfo(
     val lv: Int,
     val name: String,
@@ -157,16 +170,60 @@ data class LevelInfo(
     /** 0f~1f 本级进度 */
     val progress: Float,
     /** 距离下一级还差多少分 */
-    val toNext: Int
+    val toNext: Int,
+    /** 该等级主题色 */
+    val palette: LevelPalette
 )
 
 object Levels {
+    // 5 级主题色：青蓝 → 玉青 → 蓝紫撞 → 紫金撞 → 三色撞（等级越高撞色越复杂）
+    private val P1 = LevelPalette(  // Lv1 历练学徒：冰川蓝单色，新手淡雅
+        primary = androidx.compose.ui.graphics.Color(0xFF4A8FB5),
+        secondary = androidx.compose.ui.graphics.Color(0xFF7CB8D9),
+        accent = androidx.compose.ui.graphics.Color(0xFF4A8FB5),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFEEF6FB),
+        border = androidx.compose.ui.graphics.Color(0xFF7CB8D9)
+    )
+    private val P2 = LevelPalette(  // Lv2 风华游侠：玉青活力，初成绿意
+        primary = androidx.compose.ui.graphics.Color(0xFF4F8A6A),
+        secondary = androidx.compose.ui.graphics.Color(0xFF7AB395),
+        accent = androidx.compose.ui.graphics.Color(0xFF7AB395),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFE8F4ED),
+        border = androidx.compose.ui.graphics.Color(0xFF7AB395)
+    )
+    private val P3 = LevelPalette(  // Lv3 破浪骑士：冰川蓝+紫罗兰撞色横渐变
+        primary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
+        secondary = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
+        accent = androidx.compose.ui.graphics.Color(0xFF7CB8D9),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFEDEAF5),
+        border = androidx.compose.ui.graphics.Color(0xFF9B7FB5)
+    )
+    private val P4 = LevelPalette(  // Lv4 群星行者：紫罗兰主+冰川蓝撞色，巅峰感
+        primary = androidx.compose.ui.graphics.Color(0xFF7E5DA0),
+        secondary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
+        accent = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFEAE4F2),
+        border = androidx.compose.ui.graphics.Color(0xFFC4A5E0)
+    )
+    private val P5 = LevelPalette(  // Lv5 传奇勇者：赤陶+冰川蓝+紫罗兰三色撞（最华丽）
+        primary = androidx.compose.ui.graphics.Color(0xFFD4795A),
+        secondary = androidx.compose.ui.graphics.Color(0xFF3F7BA8),
+        accent = androidx.compose.ui.graphics.Color(0xFF9B7FB5),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFFFFF0E8),
+        border = androidx.compose.ui.graphics.Color(0xFFFFC4A8)  // 浅赤陶描边
+    )
+
     private val LEVELS = listOf(
-        LevelInfo(1, "历练学徒", "敢开始，就已经赢了一半", 0, 20, 0f, 0),
-        LevelInfo(2, "风华游侠", "汗水从不会辜负你", 20, 60, 0f, 0),
-        LevelInfo(3, "破浪骑士", "风浪越大，越显本色", 60, 120, 0f, 0),
-        LevelInfo(4, "群星行者", "你走过的每一步都算数", 120, 200, 0f, 0),
-        LevelInfo(5, "传奇勇者", "你就是自己的传说", 200, 999, 0f, 0)
+        LevelInfo(1, "历练学徒", "敢开始，就已经赢了一半", 0, 20, 0f, 0, P1),
+        LevelInfo(2, "风华游侠", "汗水从不会辜负你", 20, 60, 0f, 0, P2),
+        LevelInfo(3, "破浪骑士", "风浪越大，越显本色", 60, 120, 0f, 0, P3),
+        LevelInfo(4, "群星行者", "你走过的每一步都算数", 120, 200, 0f, 0, P4),
+        LevelInfo(5, "传奇勇者", "你就是自己的传说", 200, 999, 0f, 0, P5)
     )
 
     /** 按积分算当前等级。
