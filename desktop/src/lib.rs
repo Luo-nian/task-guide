@@ -1,7 +1,7 @@
 // 任务栏 桌面端 Rust 后端 v4
 // Tauri 2 + rusqlite + 同步客户端
 // v4: 补齐前端实际调用但后端缺失的命令（get_level / get_daily_progress /
-//     add_step / ai_breakdown），修正 advance_step、add_task 参数契约，
+//     add_step / import_steps），修正 advance_step、add_task 参数契约，
 //     22:00 未完成提醒改为后端 tick + 按日去重（原前端 setInterval 会漏触发）
 #![allow(dead_code)]
 
@@ -435,124 +435,58 @@ fn get_habits_status(state: tauri::State<AppState>) -> Vec<serde_json::Value> {
     }).unwrap().filter_map(|r| r.ok()).collect()
 }
 
-// 手动新增步骤（前端「点此手动添加」与 AI 拆解都走这里）
+// 手动新增步骤（前端「点此手动添加」）
 #[tauri::command]
 fn add_step(state: tauri::State<AppState>, task_uuid: String, title: String) -> serde_json::Value {
     let now = Local::now().timestamp_millis();
-    let step_uuid = uuid::Uuid::new_v4().to_string();
-    {
+    let step_uuid = {
         let db = state.db.lock().unwrap();
-        let sort: i64 = db.query_row(
-            "SELECT COALESCE(MAX(sort_order),0)+1 FROM steps WHERE task_uuid=?1",
-            params![&task_uuid], |r| r.get(0)
-        ).unwrap_or(0);
-        db.execute(
-            "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,done_at,created_at,updated_at,deleted) \
-             VALUES (?1,?2,?3,'todo','','',?4,NULL,?5,?5,0)",
-            params![&step_uuid, &task_uuid, &title, sort, now]
-        ).ok();
-    }
+        insert_step(&db, &task_uuid, &title, "", "", now)
+    };
     sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
     serde_json::json!({ "status": "ok", "uuid": step_uuid })
 }
 
-// AI 任务拆解：配了 DeepSeek Key 走云端，失败/未配置回落到本地模板（0 成本）
-// 返回 source 字段（"cloud" / "local"）让前端能提示用户实际走了哪条链路
+// 批量导入步骤（任务详情卡「添加 JSON」= 粘贴外部 AI 拆解结果）：
+// 每步支持可选 attr_label/attr_value（显示为金橙色小标签），空 title 的步骤被跳过
 #[tauri::command]
-fn ai_breakdown(state: tauri::State<AppState>, title: String) -> serde_json::Value {
-    let key = {
-        let db = state.db.lock().unwrap();
-        read_setting(&db, "ai_api_key", "")
-    };
-    let mut source = "local";
-    let mut steps: Vec<String> = Vec::new();
-
-    if !key.trim().is_empty() {
-        match call_deepseek(key.trim(), &title) {
-            Ok(v) if !v.is_empty() => { steps = v; source = "cloud"; }
-            Ok(_) => log::warn!("[ai] DeepSeek 返回空，回落本地模板"),
-            Err(e) => log::warn!("[ai] DeepSeek 调用失败（{}），回落本地模板", e),
-        }
+fn import_steps(
+    state: tauri::State<AppState>,
+    task_uuid: String,
+    steps: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    let now = Local::now().timestamp_millis();
+    let mut added: i64 = 0;
+    let mut uuids: Vec<String> = Vec::new();
+    for s in &steps {
+        let title = s.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        if title.is_empty() { continue; }
+        let attr_label = s.get("attr_label").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let attr_value = s.get("attr_value").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let step_uuid = {
+            let db = state.db.lock().unwrap();
+            insert_step(&db, &task_uuid, &title, &attr_label, &attr_value, now)
+        };
+        sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
+        uuids.push(step_uuid);
+        added += 1;
     }
-    if steps.is_empty() { steps = local_breakdown(&title); }
-
-    serde_json::json!({ "steps": steps, "source": source })
+    serde_json::json!({ "status": "ok", "added": added, "uuids": uuids })
 }
 
-fn call_deepseek(key: &str, title: &str) -> Result<Vec<String>, String> {
-    // 12 秒超时：key 填错或网络不通时，前端不能一直卡在「拆解中…」
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(12))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let body = serde_json::json!({
-        "model": "deepseek-chat",
-        "messages": [
-            { "role": "system", "content": "你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，直接输出步骤列表，每行一步，不要序号和解释。" },
-            { "role": "user", "content": title }
-        ],
-        "temperature": 0.3,
-        "max_tokens": 300
-    });
-    let resp = client.post("https://api.deepseek.com/chat/completions")
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", key))
-        .json(&body)
-        .send()
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
-    }
-    let data: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    let text = data.get("choices").and_then(|c| c.get(0))
-        .and_then(|c| c.get("message")).and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str()).unwrap_or("");
-    Ok(parse_step_lines(text))
-}
-
-// 从模型输出里挑出步骤行：去序号/项目符号，长度过滤，最多 6 条
-fn parse_step_lines(text: &str) -> Vec<String> {
-    text.lines()
-        .map(|l| l.trim())
-        .map(|l| {
-            let mut s = l;
-            // 去掉 "1." "1、" "1)" "- " "* " 等前缀
-            s = s.trim_start_matches(|c: char| c.is_ascii_digit());
-            s = s.trim_start_matches(['.', '、', ')', '）', ']', ' ']);
-            s = s.trim_start_matches(['-', '*', '•', '·', ' ']);
-            s.trim()
-        })
-        .filter(|s| s.chars().count() >= 2 && s.chars().count() <= 30)
-        .take(6)
-        .map(|s| s.to_string())
-        .collect()
-}
-
-// 本地模板拆解（未配置 Key 或云端失败时的兜底）
-fn local_breakdown(title: &str) -> Vec<String> {
-    let has = |kw: &str| title.contains(kw);
-    if has("看") || has("读") || has("书") || has("背") {
-        return vec!["通读核心内容", "划重点记笔记", "做一遍自测题", "总结复盘"]
-            .into_iter().map(String::from).collect();
-    }
-    if has("复习") || has("学") || has("练") {
-        return vec!["整理知识点框架", "重点章节精读", "做配套练习题", "错题回顾总结"]
-            .into_iter().map(String::from).collect();
-    }
-    if has("写") || has("交") || has("报告") || has("作业") || has("论文") {
-        return vec!["收集所需资料", "列出大纲初稿", "完成正文内容", "检查格式并提交"]
-            .into_iter().map(String::from).collect();
-    }
-    if has("买") || has("购") || has("快递") || has("取") {
-        return vec!["列清单确认需求", "比价下单", "确认收货"]
-            .into_iter().map(String::from).collect();
-    }
-    if has("锻炼") || has("运动") || has("跑") || has("健身") {
-        return vec!["热身 5 分钟", "完成主体训练", "拉伸放松 5 分钟"]
-            .into_iter().map(String::from).collect();
-    }
-    vec!["明确目标范围", "列出执行步骤", "逐项推进完成"]
-        .into_iter().map(String::from).collect()
+// 步骤插入公共逻辑：自动排 sort_order，返回新 uuid
+fn insert_step(db: &Connection, task_uuid: &str, title: &str, attr_label: &str, attr_value: &str, now: i64) -> String {
+    let step_uuid = uuid::Uuid::new_v4().to_string();
+    let sort: i64 = db.query_row(
+        "SELECT COALESCE(MAX(sort_order),0)+1 FROM steps WHERE task_uuid=?1",
+        params![task_uuid], |r| r.get(0)
+    ).unwrap_or(0);
+    db.execute(
+        "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,done_at,created_at,updated_at,deleted) \
+         VALUES (?1,?2,?3,'todo',?4,?5,?6,NULL,?7,?7,0)",
+        params![&step_uuid, task_uuid, title, attr_label, attr_value, sort, now]
+    ).ok();
+    step_uuid
 }
 
 #[tauri::command]
@@ -1021,6 +955,8 @@ pub fn run() {
     let conn = Connection::open(&db_path).expect("打开数据库失败");
     conn.execute_batch(include_str!("../db/schema.sql")).expect("建表失败");
     migrate(&conn);
+    // 清理已废弃的内置 AI 设置（外部 AI 改用「添加 JSON」粘贴导入）
+    conn.execute("DELETE FROM settings WHERE key IN ('ai_api_key','ai_cloud_enabled')", []).ok();
     let _ = conn.execute_batch(
         "INSERT OR IGNORE INTO settings(key,value) VALUES \
          ('theme','frosted'),('track_limit','3'),('tracking_max','3'),\
@@ -1069,8 +1005,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,
             get_habits_status, get_task_detail, get_total_points,
-            get_level, get_daily_progress, ai_breakdown, check_night_notify, dismiss_night_notify,
-            advance_step, add_step, complete_task, delete_task, add_task, start_tracking, stop_tracking,
+            get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
+            advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             set_display_mode, set_window_size,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,

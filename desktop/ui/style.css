@@ -780,7 +780,7 @@ body::after {
 .goal-item.done .g-text { text-decoration: line-through; color: var(--ink-mute); }
 .goal-item.done .g-play { background: var(--jade); color: #fff; border-color: var(--jade); box-shadow: 0 0 6px rgba(74, 139, 111, 0.5); }
 .goal-tools { display: flex; gap: 8px; margin-top: 6px; }
-.goal-add, .goal-ai {
+.goal-add, .goal-ai, .goal-json {
   flex: 1;
   color: var(--ink-soft); font-size: 11px;
   cursor: pointer;
@@ -792,8 +792,60 @@ body::after {
   transition: all .2s;
   background: rgba(255, 255, 255, 0.35);
 }
-.goal-add:hover, .goal-ai:hover { opacity: 1; background: rgba(201, 162, 39, 0.12); }
-.goal-ai { border-style: solid; border-color: rgba(138, 107, 201, 0.35); color: var(--violet); }
+.goal-add:hover, .goal-ai:hover, .goal-json:hover { opacity: 1; background: rgba(201, 162, 39, 0.12); }
+.goal-json { border-style: solid; border-color: rgba(212, 175, 55, 0.45); color: var(--gold); }
+
+/* JSON 导入弹窗 */
+.json-modal { max-width: 560px; width: min(600px, calc(100vw - 60px)); }
+.json-modal .json-area {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  font-family: "Cascadia Code", Consolas, "Noto Sans Mono CJK SC", monospace;
+  font-size: 12px; line-height: 1.55;
+  color: var(--ink);
+  background: rgba(11, 14, 22, 0.55);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+  margin: 4px 0 10px;
+}
+.json-modal .json-area:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px var(--glow-gold); }
+.json-modal .json-example {
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: rgba(11, 14, 22, 0.35);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.json-modal .json-example-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--ink-mute); font-size: 11px;
+}
+.json-modal .json-copy-btn {
+  border: 1px solid var(--border-mid);
+  background: transparent;
+  color: var(--gold-light);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.json-modal .json-copy-btn:hover { background: rgba(212, 175, 55, 0.14); }
+.json-modal pre {
+  margin: 0;
+  font-family: "Cascadia Code", Consolas, "Noto Sans Mono CJK SC", monospace;
+  font-size: 11px; line-height: 1.55;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+.json-modal .json-ok { color: var(--jade); }
+.json-modal .json-err { color: var(--crimson); }
 
 /* 进度摘要条 */
 .dv-progress-summary {

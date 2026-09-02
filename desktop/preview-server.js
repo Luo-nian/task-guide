@@ -318,41 +318,19 @@ async function handleApi(cmd, q, req, res) {
       return ok(res, { status:'ok', uuid: stepUuid });
     }
 
-    case 'ai_breakdown': {
-      const title = q.title || '';
-      // 有 API key → 转发 DeepSeek；失败或没有 → 本地模板兜底（0 成本）
-      const key = (mockState.settings.ai_api_key || '').trim();
-      let steps = [];
-      let source = 'local';
-      if (key) {
-        try {
-          const r = await fetch('https://api.deepseek.com/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-            body: JSON.stringify({
-              model: 'deepseek-chat',
-              messages: [
-                { role: 'system', content: '你是任务拆解助手。把用户的任务拆成 3-6 个具体可执行的小步骤，每步 5-15 个字，每行一步，不要序号和解释。' },
-                { role: 'user', content: title }
-              ],
-              temperature: 0.3,
-              max_tokens: 300
-            }),
-            // 12 秒超时：Key 填错或网络不通时，前端不能一直卡在「拆解中…」
-            signal: AbortSignal.timeout(12000)
-          });
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          const data = await r.json();
-          const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-          steps = parseStepLines(text);
-          if (steps.length > 0) source = 'cloud';
-          else console.warn('[ai] DeepSeek 返回空，回落本地模板');
-        } catch (e) {
-          console.warn('[ai] DeepSeek 调用失败（' + e.message + '），回落本地模板');
-        }
+    case 'import_steps': {
+      const taskUuid = q.taskUuid;
+      const list = Array.isArray(q.steps) ? q.steps : [];
+      const steps = mockStepState[taskUuid] || (mockStepState[taskUuid] = []);
+      const uuids = [];
+      for (const s of list) {
+        const title = String((s && s.title) || '').trim();
+        if (!title) continue;
+        const stepUuid = 's-' + Math.random().toString(36).slice(2, 6);
+        steps.push({ uuid: stepUuid, title, status: 'todo', attr_label: String((s && s.attr_label) || ''), attr_value: String((s && s.attr_value) || ''), sort_order: steps.length, done_at: null, created_at: nowMs(), updated_at: nowMs(), deleted: 0 });
+        uuids.push(stepUuid);
       }
-      if (steps.length === 0) steps = localBreakdown(title);
-      return ok(res, { steps, source });
+      return ok(res, { status: 'ok', added: uuids.length, uuids });
     }
 
     // 22:00 未完成提醒判定（按本地日期去重，与 Rust 侧口径一致）
@@ -410,41 +388,6 @@ async function handleApi(cmd, q, req, res) {
 }
 
 function ok(res, obj) { res.writeHead(200); res.end(JSON.stringify(obj)); }
-
-// 从模型输出里挑出步骤行：去序号/项目符号，长度过滤，最多 6 条
-// 与 Rust 侧 parse_step_lines 保持同一口径，避免预览和真客户端结果不一致
-function parseStepLines(text) {
-  return String(text || '').split(/\r?\n+/)
-    .map(l => l.trim())
-    .map(l => l
-      .replace(/^\d+\s*[.、)）\]]\s*/, '')   // 1. / 1、/ 1) / 1）
-      .replace(/^[-*•·]\s*/, '')             // - / * / • / ·
-      .trim())
-    .filter(s => s.length >= 2 && s.length <= 30)
-    .slice(0, 6);
-}
-
-// 本地模板拆解（未配置 API key 时的 0 成本兜底）
-function localBreakdown(title) {
-  const t = title || '';
-  const has = (kw) => t.includes(kw);
-  if (has('看') || has('读') || has('书') || has('背')) {
-    return ['通读核心内容', '划重点记笔记', '做一遍自测题', '总结复盘'];
-  }
-  if (has('复习') || has('学') || has('练')) {
-    return ['整理知识点框架', '重点章节精读', '做配套练习题', '错题回顾总结'];
-  }
-  if (has('写') || has('交') || has('报告') || has('作业') || has('论文')) {
-    return ['收集所需资料', '列出大纲初稿', '完成正文内容', '检查格式并提交'];
-  }
-  if (has('买') || has('购') || has('快递') || has('取')) {
-    return ['列清单确认需求', '比价下单', '确认收货'];
-  }
-  if (has('锻炼') || has('运动') || has('跑') || has('健身')) {
-    return ['热身 5 分钟', '完成主体训练', '拉伸放松 5 分钟'];
-  }
-  return ['明确目标范围', '列出执行步骤', '逐项推进完成'];
-}
 
 server.listen(PORT, () => {
   console.log('════════════════════════════════════════');

@@ -308,25 +308,6 @@
         </div>
 
         <div class="settings-section">
-          <div class="ss-title">AI 任务拆解</div>
-          <div class="setting-row">
-            <label>DeepSeek Key</label>
-            <input type="password" id="setAiKey" placeholder="sk-…（留空用本地模板）" />
-          </div>
-          <div class="setting-row">
-            <label>启用云端拆解</label>
-            <label class="switch"><input type="checkbox" id="setAiCloudEnabled"><span></span></label>
-          </div>
-          <div class="setting-row">
-            <label>说明</label>
-            <span class="hint">
-              <b>默认关闭</b>，开启后点"AI 拆解"会弹确认提示（防止误触扣费）<br>
-              单次约 0.0002 元；关闭时一律走本地模板（0 成本）
-            </span>
-          </div>
-        </div>
-
-        <div class="settings-section">
           <div class="ss-title">追踪与提醒</div>
           <div class="setting-row">
             <label>同时追踪上限</label>
@@ -432,6 +413,37 @@
     </div>
   </div>
 
+  <!-- ===== 添加 JSON 步骤（外部 AI 拆解后粘贴导入） ===== -->
+  <div class="overlay" id="jsonOverlay" style="display:none">
+    <div class="modal json-modal">
+      <div class="m-head"><span>添加 JSON 步骤</span><button class="m-close" data-close-overlay="jsonOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
+      <div class="m-body">
+        <label class="label">把外部 AI 拆好的 JSON 粘进来，自动生成步骤</label>
+        <textarea id="jsonArea" class="json-area" rows="7" spellcheck="false" placeholder='{"steps":[{"title":"步骤一"},{"title":"步骤二","attr_label":"用时","attr_value":"30 分钟"}]}'></textarea>
+
+        <div class="json-example">
+          <div class="json-example-head">
+            <span>示例（发给任意免费 AI，让它照着拆你的任务）</span>
+            <button class="json-copy-btn" id="jsonCopyExample">复制示例</button>
+          </div>
+          <pre id="jsonExampleText">{
+  "steps": [
+    { "title": "通读第 1 章", "attr_label": "用时", "attr_value": "30 分钟" },
+    { "title": "整理笔记" },
+    { "title": "做自测题", "attr_label": "结果", "attr_value": "90 分以上" }
+  ]
+}</pre>
+        </div>
+
+        <span class="hint" id="jsonHint"></span>
+        <div class="action-row">
+          <button class="ghost" data-close-overlay="jsonOverlay">取消</button>
+          <button class="primary" id="jsonApply">解析并添加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 上下文菜单 ===== -->
   <div class="ctx-menu" id="ctxMenu" style="display:none">
     <button data-cmd="track">开始追踪</button>
@@ -441,6 +453,6 @@
   </div>
 
 </div>
-<script src="app.js?v=v46"></script>
+<script src="app.js?v=v47"></script>
 </body>
 </html>

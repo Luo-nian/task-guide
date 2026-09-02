@@ -33,8 +33,6 @@ let settings = {
   count_default: 1,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   night_notify: true,              // 22:00 未完成弹窗
-  ai_api_key: '',                  // DeepSeek API key（留空则永远走本地模板）
-  ai_cloud_enabled: false,         // 云端 AI 拆解总开关（默认关，开启后按次计费，且会弹确认）
   pairing: null
 };
 let selectedUuid = null;
@@ -96,6 +94,7 @@ const ICONS = {
   dots:     '<circle cx="5.2" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="18.8" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
   search:   '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>',
   ai:       '<path d="M12 3.6l1.8 4.6 4.6 1.8-4.6 1.8L12 16.4l-1.8-4.6L5.6 10l4.6-1.8L12 3.6Z"/><path d="M18.6 16.2l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8.8-2.1Z"/>',
+  code:     '<path d="M8.6 6.4 3 12l5.6 5.6"/><path d="M15.4 6.4 21 12l-5.6 5.6"/><path d="M13.4 5.2l-2.8 13.6"/>',
   ring:     '<circle cx="12" cy="12" r="8.4"/>',
   clock:    '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.1 1.9"/>',
   coin:     '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.4v9.2M14.5 9.5a2.7 2.7 0 0 0-2.5-1.5c-1.5 0-2.5.9-2.5 2.1 0 2.9 5.2 1.5 5.2 4.3 0 1.3-1.1 2.2-2.7 2.2a3 3 0 0 1-2.6-1.4"/>',
@@ -183,8 +182,6 @@ function applySettingsToUi() {
   document.getElementById('setDailyRefresh').checked = settings.daily_refresh;
   document.getElementById('setNightNotify').checked = settings.night_notify;
   document.getElementById('setProgressStyle').value = settings.progress_style;
-  document.getElementById('setAiKey').value = settings.ai_api_key || '';
-  document.getElementById('setAiCloudEnabled').checked = !!settings.ai_cloud_enabled;
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
   // 进度条样式 tab 高亮
   document.querySelectorAll('.style-tab').forEach(t => {
@@ -202,9 +199,7 @@ async function persistSettingsServer() {
       time_limit_min: settings.time_limit_min,
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
-      night_notify: settings.night_notify ? '1' : '0',
-      ai_api_key: settings.ai_api_key || '',
-      ai_cloud_enabled: settings.ai_cloud_enabled ? '1' : '0'
+      night_notify: settings.night_notify ? '1' : '0'
     };
     for (const [k, v] of Object.entries(map)) {
       await call('set_setting', { key: k, value: String(v) });
@@ -577,7 +572,7 @@ window.openDetail = async function(uuid) {
         </div>`).join('')}
       <div class="goal-tools">
         <div class="goal-add" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
-        <div class="goal-ai" onclick="aiBreakdown('${t.uuid}')">${svgIcon('ai',13,1.9)} AI 拆解</div>
+        <div class="goal-json" onclick="openJsonImport('${t.uuid}')" title="粘贴外部 AI 拆好的 JSON，批量生成步骤">${svgIcon('code',13,1.9)} 添加 JSON</div>
       </div>
     </div>
 
@@ -670,50 +665,79 @@ window.addStep = async function(taskUuid) {
   render();
 };
 
-// AI 拆解：有 API key 且开启云端开关走云端（preview-server 转发 DeepSeek），
-// 否则用本地模板兜底（0 成本、不调用 API）。云端需要双重确认避免误触扣费。
-// title 不通过 onclick 内嵌传参（单引号会破坏 JS 字符串），函数内按 uuid 从 tasks 查。
-window.aiBreakdown = async function(taskUuid) {
-  const btn = event && event.target;
-  const t = tasks.find(x => x.uuid === taskUuid);
-  const title = (t && t.title) || '';
-  const hasKey = !!(settings.ai_api_key || '').trim();
-  const cloudEnabled = !!settings.ai_cloud_enabled;   // 默认关，开启后才走云端
-  const willUseCloud = hasKey && cloudEnabled;
+// 添加 JSON（外部 AI 拆解导入）：详情卡点「添加 JSON」→ 弹窗里粘贴外部 AI 生成的 JSON，
+// 示例可一键复制、发给任意免费 AI 照着拆，粘回来后解析成步骤批量添加（支持 attr）。不再内置 AI。
+let jsonImportTaskUuid = null;
+function openJsonImport(taskUuid) {
+  jsonImportTaskUuid = taskUuid;
+  const area = document.getElementById('jsonArea');
+  area.value = '';
+  const hint = document.getElementById('jsonHint');
+  hint.textContent = '';
+  hint.className = 'hint';
+  document.getElementById('jsonOverlay').style.display = '';
+  setTimeout(() => area.focus(), 50);
+}
+function closeJsonImport() { document.getElementById('jsonOverlay').style.display = 'none'; }
+document.querySelectorAll('[data-close-overlay="jsonOverlay"]').forEach(b => b.addEventListener('click', closeJsonImport));
 
-  if (willUseCloud) {
-    const ok = confirm(
-      '将调用 DeepSeek 云端 API（按次计费，约 0.0002 元/次）\n\n' +
-      '任务：' + title + '\n\n' +
-      '继续？\n（点"取消"可继续使用本地免费模板）'
-    );
-    if (!ok) return;
+// 解析步骤 JSON（容错语义对齐手机端 parseStepsJson）：
+// 顶层 title 可省（桌面端只往已有任务加步骤）；steps 必须是数组；
+// 步骤缺 title / 空 title 的丢弃；attr 缺省为空串
+function parseJsonImport(raw) {
+  let obj;
+  try { obj = JSON.parse(raw); } catch (e) { return null; }
+  if (!obj || typeof obj !== 'object' || !Array.isArray(obj.steps)) return null;
+  const steps = [];
+  for (const s of obj.steps) {
+    if (!s || typeof s !== 'object') continue;
+    const title = String(s.title == null ? '' : s.title).trim();
+    if (!title) continue;
+    steps.push({
+      title,
+      attr_label: s.attr_label == null ? '' : String(s.attr_label),
+      attr_value: s.attr_value == null ? '' : String(s.attr_value)
+    });
   }
+  return { title: obj.title == null ? null : String(obj.title), steps };
+}
 
-  if (btn) { btn.textContent = '拆解中…'; btn.style.opacity = '0.6'; }
+document.getElementById('jsonApply').addEventListener('click', async () => {
+  const raw = document.getElementById('jsonArea').value;
+  const hint = document.getElementById('jsonHint');
+  const taskUuid = jsonImportTaskUuid;
+  if (!taskUuid) return;
+  const parsed = parseJsonImport(raw);
+  if (!parsed || parsed.steps.length === 0) {
+    hint.textContent = 'JSON 格式不对，或里面没有可用步骤 —— 点「复制示例」对照格式';
+    hint.className = 'hint json-err';
+    return;
+  }
+  const applyBtn = document.getElementById('jsonApply');
+  applyBtn.disabled = true;
   try {
-    const r = await call('ai_breakdown', { title });
-    const steps = (r && r.steps) || [];
-    if (steps.length === 0) { alert('拆解失败，请稍后重试'); return; }
-    for (const s of steps) {
-      await call('add_step', { taskUuid, title: s });
-    }
+    await call('import_steps', { taskUuid, steps: parsed.steps });
+    closeJsonImport();
     openDetail(taskUuid);
     render();
-    // 让用户知道实际走了哪条链路：填了 Key 却走本地模板 = 云端调用失败或开关未开
-    if (btn) {
-      const usedCloud = r.source === 'cloud';
-      btn.innerHTML = svgIcon(usedCloud ? 'sparkle' : 'ai', 13, 1.9) + ' 已拆 ' + steps.length + ' 步'
-        + (usedCloud ? ' · 云端' : (hasKey ? ' · 模板' : ' · 本地模板'));
-      btn.style.opacity = '';
-      setTimeout(() => { btn.innerHTML = svgIcon('ai',13,1.9) + ' AI 拆解'; }, 2600);
-    }
   } catch (e) {
-    alert('AI 拆解失败：' + e.message);
+    hint.textContent = '添加失败：' + e.message;
+    hint.className = 'hint json-err';
   } finally {
-    if (btn) { btn.style.opacity = ''; }
+    applyBtn.disabled = false;
   }
-};
+});
+
+document.getElementById('jsonCopyExample').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById('jsonExampleText').textContent);
+    const btn = document.getElementById('jsonCopyExample');
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => { btn.textContent = '复制示例'; }, 1600);
+  } catch (e) {
+    alert('复制失败，请手动选中示例文字复制');
+  }
+});
 
 // 上下文菜单
 const ctxMenu = document.getElementById('ctxMenu');
@@ -834,8 +858,6 @@ bindSetting('setCountDefault', 'count_default', v => Math.max(1, Math.min(999, p
 bindSetting('setDailyRefresh', 'daily_refresh');
 bindSetting('setNightNotify', 'night_notify');
 bindSetting('setProgressStyle', 'progress_style');
-bindSetting('setAiKey', 'ai_api_key', v => String(v).trim());
-bindSetting('setAiCloudEnabled', 'ai_cloud_enabled');
 
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();
