@@ -1853,3 +1853,145 @@ input::placeholder, textarea::placeholder, input::-webkit-input-placeholder {
 }
 /* 经验条去掉 ::after 引导文案（现在用 JS 控制，按 points 显示） */
 .pc-exp-bar::after { display: none !important; }
+
+/* ========== v4.10.5 全弹窗/按钮深色玻璃浅色化（boss 截图反馈） ==========
+   之前覆盖层只盯了 chip / profile，前几版忘了检查 modal、按钮、输入区、设置小标签。
+   这次一次性补齐：cat-btn / ddl-btn / prio-btn / arc-tab / settings-section .ss-title /
+   json-area / ghost / add-modal / settings-modal / json-modal / profile-modal 全部翻浅 */
+.settings-modal, .add-modal, .json-modal {
+  background: rgba(255, 254, 250, 0.98) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+.profile-modal { background: rgba(255, 254, 250, 0.98); }
+/* 弹窗遮罩浅色 */
+.overlay { background: rgba(70, 58, 34, 0.32) !important; }
+/* 添加弹窗：任务分类/限时/优先级按钮 */
+.cat-btn, .ddl-btn, .prio-btn {
+  background: rgba(255, 254, 250, 0.85) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+  font-weight: 600;
+}
+.cat-btn:hover, .ddl-btn:hover, .prio-btn:hover {
+  background: rgba(212, 175, 55, 0.18) !important;
+  border-color: var(--gold) !important;
+}
+.cat-btn.active, .ddl-btn.active, .prio-btn.active {
+  background: rgba(201, 162, 39, 0.32) !important;
+  color: var(--gold-deep) !important;
+  border-color: var(--gold) !important;
+}
+.prio-btn[data-prio=high].active { background: var(--crimson) !important; color: #fff !important; border-color: var(--crimson) !important; }
+/* 历史任务分类 tab */
+.arc-tab {
+  background: rgba(255, 254, 250, 0.85) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+  font-weight: 600;
+}
+.arc-tab.active { background: rgba(201, 162, 39, 0.85) !important; color: #fff !important; border-color: var(--gold) !important; }
+/* 设置章节小标签 */
+.ss-title {
+  background: transparent !important;
+  color: var(--gold-deep) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  padding: 6px 4px 6px 10px !important;
+  border-left: 3px solid var(--gold) !important;
+  border-radius: 0 !important;
+  display: block !important;
+  margin: 14px 0 8px !important;
+}
+/* JSON 输入框 */
+.json-area {
+  background: rgba(255, 254, 250, 0.96) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+.json-example-head, .json-example { background: rgba(248, 243, 231, 0.7) !important; }
+/* ghost 取消按钮 */
+button.ghost {
+  background: rgba(255, 254, 250, 0.85) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+/* 顶栏 + 等级卡：等级图标 SVG path 实心填充 + 等级 icon 加 white 描边让浅底可见 */
+.topbar .level-icon svg path, #levelIcon svg path {
+  fill: var(--gold-deep) !important;
+  stroke: none !important;
+}
+.level-card .level-character svg path, .pc-level-icon svg path {
+  fill: var(--gold-deep) !important;
+  stroke: none !important;
+}
+/* 进度条：底色加深让浅色主题下也清晰可见 */
+.progress-bar {
+  background: rgba(201, 162, 39, 0.32) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+.bar-fill { background: linear-gradient(90deg, #D4AF37, #F0D68A) !important; }
+/* 奖励卡 svgIcon：实心填充让图标可辨 */
+.reward-ico svg svg, .reward-ico svg { fill: var(--gold-deep) !important; stroke: none !important; color: var(--gold-deep) !important; }
+.reward-ico svg { color: var(--gold-deep) !important; }
+.reward-ico svg path { fill: var(--gold-deep) !important; stroke: none !important; }
+/* 总览卡里的倒计时小角标——让它别嵌入任务卡显眼位置 */
+.cat-task .ct-meta, .list-task .ct-meta {
+  background: rgba(255, 254, 250, 0.9);
+  border: 1px solid var(--border-soft);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+/* v4.10.5 补强：进度条宽度塌缩（flex:1 不生效）+ 等级图标仍 stroke-only */
+.progress-bar { width: 100% !important; min-width: 120px; display: block; }
+.progress-body { display: flex !important; align-items: center; gap: 10px; width: 100%; }
+.progress-stat { flex: 1; }
+/* 等级图标 SVG path：直接打全选 [data-icon] 或 svg path fill（防止 stroke-only 漏掉） */
+.level-icon svg path, .pc-level-icon svg path,
+.profile-hero .ph-avatar svg path, #levelChar svg path,
+.topbar .level-icon svg svg, .level-icon svg svg {
+  fill: var(--gold-deep) !important;
+  stroke: none !important;
+}
+/* svg 本身强制 fill=visible：覆盖 svg fill="none" 默认 */
+.level-icon svg, .pc-level-icon svg, .level-character svg,
+.profile-hero .ph-avatar svg, #levelChar svg {
+  fill: var(--gold-deep) !important;
+  stroke: none !important;
+}
+
+/* v4.10.5 补 2：等级图标 fill=gold-deep 同色融合看不见，改深色（深棕 in 金底/白底都对比可见） */
+.level-icon svg path, .level-character svg path,
+.pc-level-icon svg path, #levelChar svg path,
+.profile-hero .ph-avatar svg path {
+  fill: var(--ink-black) !important;   /* #3A362E 深棕在金徽章/白底圆上都清晰 */
+  stroke: none !important;
+}
+.level-icon svg, .level-character svg,
+.pc-level-icon svg, #levelChar svg,
+.profile-hero .ph-avatar svg {
+  fill: var(--ink-black) !important;
+}
+/* 等级卡容器背景：金色渐变也改浅色（防 v4.10.2 之前同色隐藏问题复发） */
+.level-card {
+  background: linear-gradient(135deg, #FFFFFF, #F0E8D6) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+.level-card .level-character { background: linear-gradient(135deg, #F0E8D6, #E5D6B0) !important; border: 2px solid var(--gold) !important; }
+/* 等级徽章底色也改浅（让深色图标清晰） */
+.topbar .level-badge {
+  background: rgba(255, 254, 250, 0.9) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-mid) !important;
+}
+
+/* v4.10.5 补 3：奖励卡 + 顶栏 win-btn 在金底上深棕（防同色融合） */
+.reward-ico svg path, .reward-item svg svg { fill: var(--ink-black) !important; stroke: none !important; }
+.reward-ico svg, .reward-item svg { color: var(--ink-black) !important; fill: var(--ink-black) !important; }
+/* 奖励卡字 +12 积分 字色 */
+.reward-num { color: var(--ink-black) !important; font-weight: 700; }
+/* 顶栏三键在浅底徽章旁保留可见 */
+.win-btn { color: var(--ink) !important; background: rgba(255, 254, 250, 0.85) !important; border: 1px solid var(--border-soft) !important; }
+.win-btn.close { color: var(--crimson) !important; }
