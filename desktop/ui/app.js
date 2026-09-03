@@ -451,10 +451,19 @@ function renderDashboard() {
 
 function renderLevelBadge() {
   const lv = level || levelOf(points);
-  // 徽章里放等级 SVG 图标（不再放数字 "3"，也不重复显示分数）
+  // boss E：顶栏徽章左侧 .level-icon 优先显示用户头像（settings.avatar_img），
+  // 没有头像则降级显示等级 SVG 图标
   const ic = document.getElementById('levelIcon');
-  ic.innerHTML = svgIcon(lv.ico || 'lv1', 13, 2);
-  // 徽章只显示等级名，分数只在设置-个人信息里看（避免多处重复）
+  if (settings.avatar_img) {
+    ic.innerHTML = '';
+    ic.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
+    ic.style.backgroundSize = 'cover';
+    ic.style.backgroundPosition = 'center';
+    ic.style.backgroundRepeat = 'no-repeat';
+  } else {
+    ic.style.backgroundImage = '';
+    ic.innerHTML = svgIcon(lv.ico || 'lv1', 13, 2);
+  }
   document.getElementById('levelText').textContent = lv.name;
 }
 function renderLevelCard() {
@@ -527,6 +536,10 @@ window.openDetail = async function(uuid) {
   const doneSteps = steps.filter(s => s.status === 'done').length;
   const totalSteps = steps.length;
   const stepPct = totalSteps > 0 ? Math.round((doneSteps / totalSteps) * 100) : 0;
+  // boss B：详情底部"完成任务"按钮与步骤完成互斥——有步骤且未全完成时禁用并提示剩余步数
+  const hasStep = totalSteps > 0;
+  const allStepDone = hasStep && doneSteps === totalSteps;
+  const remainingSteps = hasStep ? totalSteps - doneSteps : 0;
 
   document.getElementById('detailName').textContent = t.title;
   document.getElementById('detailSub').innerHTML = `${CAT_LABEL[catOf(t)] || '未分类'}${t.due_at ? ' · 截止 ' + fmtDue(t.due_at) : ''}${t.deadline && t.deadline !== t.due_at ? ' · 期限 ' + fmtDue(t.deadline) : ''}`;
@@ -577,7 +590,12 @@ window.openDetail = async function(uuid) {
       <button class="track-btn ${isTrk?'tracking':''}" onclick="${isTrk ? `untrackTask('${t.uuid}')` : `trackTask('${t.uuid}')`}" ${(!isTrk && canTrack)?'disabled':''}>
         <span class="btn-ico">${svgIcon(isTrk ? 'check' : 'plus', 12, 2.4)}</span>${isTrk ? '停止追踪' : (canTrack ? '已达上限' : '追踪任务')}
       </button>
-      <button class="complete-btn" onclick="completeTask('${t.uuid}')"><span class="btn-ico">${svgIcon('check', 12, 2.6)}</span>完成任务</button>
+      <button class="complete-btn ${hasStep && !allStepDone ? 'locked' : ''}" 
+              onclick="${(hasStep && !allStepDone) ? '' : `completeTask('${t.uuid}')`}" 
+              ${(hasStep && !allStepDone) ? 'disabled' : ''}
+              title="${(hasStep && !allStepDone) ? '还有 ' + remainingSteps + ' 个步骤未完成，请先完成所有步骤' : ''}">
+        <span class="btn-ico">${svgIcon((hasStep && !allStepDone) ? 'lock' : 'check', 12, 2.6)}</span>${(hasStep && !allStepDone) ? '还需 ' + remainingSteps + ' 步' : '完成任务'}
+      </button>
     </div>
   `;
 };
@@ -619,6 +637,13 @@ window.completeTask = async function(uuid) {
   if (r && r.partial === false) {
     const habitPts = (r.habit && points === 0) ? 5 : points;
     showBless({ mode: 'reward', title: title, points: habitPts });
+    // boss D：把今日奖励存 sessionStorage，设置页"查看今日奖励"可回放
+    try {
+      const key = 'todayRewards_' + new Date().toDateString();
+      const list = JSON.parse(sessionStorage.getItem(key) || '[]');
+      list.push({ title, points: habitPts, at: Date.now() });
+      sessionStorage.setItem(key, JSON.stringify(list));
+    } catch(e) {}
   }
   // partial 路径（次数任务累计中）：不弹窗打断节奏，仅在控制台
   else if (r && r.partial === true && r.done_count !== undefined) {
@@ -1097,25 +1122,26 @@ _profileAvatarFile.addEventListener('change', e => {
   e.target.value = '';
 });
 
-// ===== 头像裁剪器 =====
+// ===== 头像裁剪器 v4.13.2 专业版（参考 Instagram/微信/Discord） =====
 let _cropState = null, _cropDrag = null;
+
 function openCropper(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
     const img = new Image();
     img.onload = () => {
-      // 初始 scale：让图片短边 ≈ 圆直径，便于覆盖圆
-      const s0 = 128 / Math.min(img.width, img.height);
-      _cropState = { img, scale: s0, x: 0, y: 0, rot: 0 };
+      // 初始 scale：让图片短边 = 圆形取景框直径 280px（保证初始覆盖圆）
+      const s0 = 280 / Math.min(img.width, img.height);
+      _cropState = { img, scale: s0, x: 0, y: 0 };
       renderCrop();
-      const z = document.getElementById('cropZoom'); if (z) z.value = 100;
-      const ov = document.getElementById('cropOverlay'); if (ov) ov.style.display = 'flex';
+      document.getElementById('cropOverlay').classList.add('show');
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
+
 function renderCrop() {
   const c = _cropState; if (!c || !c.img) return;
   const el = document.getElementById('cropImg');
@@ -1125,32 +1151,41 @@ function renderCrop() {
   const h = c.img.height * c.scale;
   el.style.width = w + 'px';
   el.style.height = h + 'px';
-  // boss #20 fix：外层 wrap 居中 stage 中心 (140,140)，transform-origin 50% 50% 让旋转绕中心正确
-  // img 在 wrap 内 left:50% top:50% translate(-50%,-50%) 始终居中；wrap 负责位移+旋转
-  wrap.style.transform = `translate(140px, 140px) translate(${c.x}px, ${c.y}px) rotate(${c.rot}deg)`;
+  // 双层 div wrap：img 居中，wrap 负责位移（去旋转：保留简单的平移操作）
+  wrap.style.transform = `translate(-50%, -50%) translate(${c.x}px, ${c.y}px)`;
 }
+
 function commitCrop() {
   const c = _cropState; if (!c || !c.img) return;
   const size = 128;
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d');
+  // 截图：圆形取景框 stage 280px → canvas 128px（缩小 0.457）
+  // canvas 中心 = stage (140,140)；图片中心在 stage (140+c.x, 140+c.y)
+  // 缩放 stage 坐标 → canvas 坐标用 ctx.scale
+  const ratio = size / 280;
   ctx.translate(size/2, size/2);
-  ctx.rotate(c.rot * Math.PI / 180);
+  ctx.scale(ratio, ratio);
+  // 在 stage 坐标下画图（wrap 中心 = stage 140,140 + 偏移 x,y；img 在 wrap 内居中 = 中心）
   const w = c.img.width * c.scale;
   const h = c.img.height * c.scale;
-  ctx.drawImage(c.img, -w/2 + c.x, -h/2 + c.y, w, h);
+  ctx.drawImage(c.img, c.x - w/2, c.y - h/2, w, h);
   settings.avatar_img = cv.toDataURL('image/png');
   saveSettings();
   renderProfileAvatar();
   closeCrop();
 }
+
 function closeCrop() {
-  const ov = document.getElementById('cropOverlay'); if (ov) ov.style.display = 'none';
+  const ov = document.getElementById('cropOverlay'); if (ov) ov.classList.remove('show');
   _cropState = null;
+  _cropDrag = null;
 }
-const _cropStage = document.getElementById('cropStage');
-if (_cropStage) _cropStage.addEventListener('mousedown', e => {
+
+// 拖拽平移（在 stage frame 上 mousedown）
+const _cropFrame = document.getElementById('cropFrame');
+if (_cropFrame) _cropFrame.addEventListener('mousedown', e => {
   if (!_cropState) return;
   e.preventDefault();
   _cropDrag = { mx: e.clientX, my: e.clientY, sx: _cropState.x, sy: _cropState.y };
@@ -1162,23 +1197,51 @@ window.addEventListener('mousemove', e => {
   renderCrop();
 });
 window.addEventListener('mouseup', () => _cropDrag = null);
-const _cropZoom = document.getElementById('cropZoom');
-if (_cropZoom) _cropZoom.addEventListener('input', e => {
+
+// 双击放大 1.5×
+if (_cropFrame) _cropFrame.addEventListener('dblclick', e => {
   if (!_cropState || !_cropState.img) return;
-  const base = 128 / Math.min(_cropState.img.width, _cropState.img.height);
-  _cropState.scale = base * (e.target.value / 100);
+  e.preventDefault();
+  _cropState.scale *= 1.5;
   renderCrop();
 });
-const _cropRotate = document.getElementById('cropRotate');
-if (_cropRotate) _cropRotate.addEventListener('click', () => {
-  if (!_cropState) return;
-  _cropState.rot = (_cropState.rot + 90) % 360;
+
+// 滚轮缩放（上滑放大、下滑缩小，步进 1.1×）
+if (_cropFrame) _cropFrame.addEventListener('wheel', e => {
+  if (!_cropState || !_cropState.img) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+  _cropState.scale = Math.max(0.3, Math.min(4, _cropState.scale * factor));
   renderCrop();
+}, { passive: false });
+
+// 比例切换按钮（自由 / 1:1 / 4:3）：当前默认 1:1 圆形，比例按钮做高亮即可
+document.querySelectorAll('.crop-btn.ratio').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.crop-btn.ratio').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // 比例效果在 CSS 中体现（1:1=圆形；4:3=椭圆）—— 简化版：1:1 时 frame 100% 圆，4:3 时切换为椭圆遮罩
+    const ratio = btn.dataset.ratio;
+    const frame = document.getElementById('cropFrame');
+    const wrap = document.querySelector('.crop-stage-wrap');
+    if (ratio === '1:1') { frame.style.borderRadius = '50%'; wrap.style.borderRadius = '50%'; }
+    else if (ratio === '4:3') { frame.style.borderRadius = '50%'; wrap.style.borderRadius = '37%'; }
+    else { frame.style.borderRadius = '50%'; wrap.style.borderRadius = '50%'; }
+  });
 });
+
+// 操作按钮
 const _cropCancel = document.getElementById('cropCancel');
 if (_cropCancel) _cropCancel.addEventListener('click', closeCrop);
 const _cropConfirm = document.getElementById('cropConfirm');
 if (_cropConfirm) _cropConfirm.addEventListener('click', commitCrop);
+
+// ESC 取消 / Enter 确定（专业软件常见快捷键）
+window.addEventListener('keydown', e => {
+  if (!_cropState) return;
+  if (e.key === 'Escape') closeCrop();
+  else if (e.key === 'Enter') commitCrop();
+});
 
 // 跳转到"设置"页（连接手机端）
 document.getElementById('profileGoSettings').addEventListener('click', () => {
@@ -1242,6 +1305,44 @@ document.getElementById('setUnpair').addEventListener('click', async () => {
   await call('disconnect_server', {});
   persistSettingsServer();
 });
+
+// boss D：今日奖励回放入口（设置页"查看今日奖励"按钮 + rewardsOverlay 弹窗列表）
+function getTodayRewards() {
+  try {
+    const key = 'todayRewards_' + new Date().toDateString();
+    return JSON.parse(sessionStorage.getItem(key) || '[]');
+  } catch(e) { return []; }
+}
+function refreshTodayRewardsHint() {
+  const list = getTodayRewards();
+  const hint = document.getElementById('setTodayRewardsHint');
+  if (!hint) return;
+  const total = list.reduce((s, r) => s + (r.points || 0), 0);
+  hint.textContent = list.length === 0 ? '今天还没完成任务' : ('今日已完成 ' + list.length + ' 项 · 累计 +' + total + ' 经验');
+}
+document.getElementById('setViewTodayRewards').addEventListener('click', () => {
+  const list = getTodayRewards();
+  const body = document.getElementById('rewardsList');
+  if (!body) return;
+  if (list.length === 0) {
+    body.innerHTML = '<div class="rewards-empty">今天还没完成任务记录<br><span style="font-size:11px;opacity:0.7">完成任务后会自动记录在这里</span></div>';
+  } else {
+    const total = list.reduce((s, r) => s + (r.points || 0), 0);
+    let html = '<div style="text-align:center;padding:8px 0 14px;color:var(--ink-soft);font-size:13px;border-bottom:1px solid var(--border-soft);margin-bottom:6px;">今日累计 <b style="color:var(--gold-deep);">+' + total + ' 经验</b> · ' + list.length + ' 项任务</div>';
+    html += list.slice().reverse().map(r => {
+      const t = new Date(r.at);
+      const hh = String(t.getHours()).padStart(2, '0');
+      const mm = String(t.getMinutes()).padStart(2, '0');
+      return '<div class="reward-row"><div class="ic">+</div><div class="title">' + esc(r.title || '任务') + '<div class="time">' + hh + ':' + mm + '</div></div><div class="pts">+' + (r.points || 0) + '</div></div>';
+    }).join('');
+    body.innerHTML = html;
+  }
+  document.getElementById('rewardsOverlay').style.display = '';
+});
+// 进入设置页时刷新 hint 文字
+document.getElementById('settingsBtn').addEventListener('click', refreshTodayRewardsHint);
+// 也启动时刷一次
+setTimeout(refreshTodayRewardsHint, 1500);
 document.getElementById('setWidgetMode').addEventListener('click', () => {
   document.getElementById('settingsOverlay').style.display = 'none';
   const app = document.getElementById('app');

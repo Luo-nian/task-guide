@@ -386,6 +386,17 @@
             <button class="small-btn" id="setWidgetMode">开启挂件</button>
             <span class="hint">挂件显示今日进度</span>
           </div>
+          <div class="settings-section">
+          <div class="ss-title">今日奖励回放</div>
+          <div class="setting-row">
+            <label>今日完成任务</label>
+            <button class="small-btn primary" id="setViewTodayRewards">查看今日奖励</button>
+            <span class="hint" id="setTodayRewardsHint">今天还没完成任务</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">关于</div>
           <div class="setting-row">
             <label>关于</label>
             <span class="hint">任务栏 · 桌面任务追踪 v4.10</span>
@@ -393,6 +404,14 @@
         </div>
 
       </div>
+    </div>
+  </div>
+
+  <!-- ===== 今日奖励回放弹窗 ===== -->
+  <div class="overlay" id="rewardsOverlay" style="display:none">
+    <div class="modal rewards-modal">
+      <div class="m-head"><span>今日奖励</span><button class="m-close" data-close-overlay="rewardsOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="1.9"></span></button></div>
+      <div class="rewards-body" id="rewardsList"></div>
     </div>
   </div>
 
@@ -502,25 +521,32 @@
 
 </div>
 
-<!-- 头像裁剪器（boss #20：上传后用户可调圆形区域，自定义头像位置） -->
-<div class="crop-overlay" id="cropOverlay" style="display:none">
+<!-- 头像裁剪器 v4.13.2 专业版（参考 Instagram/微信/Discord）：
+     圆形 frame + box-shadow 暗遮罩 + 三分辅助线 + 底部工具栏（取消 + 比例 + 完成）
+     去 slider/旋转：拖动 + 双击缩放 + 滚轮缩放 + 比例切换 -->
+<div class="crop-overlay" id="cropOverlay">
   <div class="crop-card">
-    <div class="crop-title">调整头像 · 拖动 / 缩放 / 旋转</div>
-    <div class="crop-stage" id="cropStage">
-      <div class="crop-img-wrap" id="cropImgWrap"><img class="crop-img" id="cropImg" /></div>
-      <div class="crop-ring"></div>
+    <div class="crop-title">调整头像位置</div>
+    <div class="crop-hint">拖动图片 · 双击或滚轮缩放 · 选比例</div>
+    <div class="crop-stage-wrap">
+      <div class="crop-frame" id="cropFrame">
+        <div class="crop-img-wrap" id="cropImgWrap"><img class="crop-img" id="cropImg" /></div>
+      </div>
     </div>
-    <div class="crop-controls">
-      <label class="crop-zoom-label"><span>缩放</span><input type="range" id="cropZoom" min="50" max="300" value="100" /></label>
-      <button class="crop-btn-sm" id="cropRotate">旋转 90°</button>
-    </div>
-    <div class="crop-actions">
-      <button class="crop-btn cancel" id="cropCancel">取消</button>
-      <button class="crop-btn confirm" id="cropConfirm">使用</button>
+    <div class="crop-toolbar">
+      <div class="left">
+        <button class="crop-btn" id="cropCancel">取消</button>
+      </div>
+      <div class="right">
+        <button class="crop-btn ratio active" data-ratio="free">自由</button>
+        <button class="crop-btn ratio" data-ratio="1:1">1:1</button>
+        <button class="crop-btn ratio" data-ratio="4:3">4:3</button>
+        <button class="crop-btn primary" id="cropConfirm">使用</button>
+      </div>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=v66"></script>
+<script src="app.js?v=v68"></script>
 </body>
 </html>

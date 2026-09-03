@@ -1753,3 +1753,42 @@ input::placeholder { color: var(--ink-faint); }
 .crop-btn { padding: 8px 22px; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; border: 1px solid; }
 .crop-btn.cancel { background: rgba(255, 254, 250, 0.85); color: var(--ink); border-color: var(--border-mid); }
 .crop-btn.confirm { background: var(--gold); color: #fff; border-color: var(--gold-deep); }
+
+/* ===== v4.13.2 头像裁剪器 专业版（参考 Instagram/微信） =====
+   关键变化：去掉 slider 缩放条 + 旋转按钮；改为
+   - 拖动图片
+   - 双击缩放 / 滚轮缩放
+   - 底部工具栏：取消 + 比例切换（自由/1:1/4:3）+ 完成
+   - 圆形 frame 外整体 dim 暗色（box-shadow 0 0 0 9999px）
+   - 中心十字辅助线 */
+.crop-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(20, 14, 4, 0.78); display: none; align-items: center; justify-content: center; flex-direction: column; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.crop-overlay.show { display: flex; }
+.crop-card { display: flex; flex-direction: column; align-items: center; padding: 18px 14px 14px; }
+.crop-title { font-size: 14px; font-weight: 600; color: rgba(255, 254, 250, 0.95); margin-bottom: 4px; letter-spacing: 0.5px; }
+.crop-hint  { font-size: 11.5px; color: rgba(255, 254, 250, 0.55); margin-bottom: 12px; }
+.crop-stage-wrap { width: 280px; height: 280px; padding: 0; position: relative; overflow: hidden; border-radius: 50%; background: #000; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); }
+.crop-frame  { width: 100%; height: 100%; position: relative; overflow: hidden; border-radius: 50%; }
+.crop-frame::before, .crop-frame::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.35); pointer-events: none; }
+.crop-frame::before { left: 33.33%; top: 0; bottom: 0; width: 1px; }    /* 竖三分线 */
+.crop-frame::after  { top: 33.33%; left: 0; right: 0; height: 1px; }   /* 横三分线 */
+.crop-img-wrap { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; pointer-events: none; }
+.crop-img { display: block; user-select: none; }
+.crop-toolbar { margin-top: 18px; display: flex; gap: 10px; align-items: center; justify-content: space-between; width: 320px; }
+.crop-toolbar .left, .crop-toolbar .right { display: flex; gap: 8px; }
+.crop-btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; border: 1px solid; background: transparent; color: rgba(255, 254, 250, 0.95); border-color: rgba(255, 254, 250, 0.25); }
+.crop-btn.primary { background: var(--gold); color: #fff; border-color: var(--gold-deep); }
+.crop-btn.ratio { padding: 6px 12px; font-size: 12px; }
+.crop-btn.ratio.active { background: rgba(201, 162, 39, 0.18); color: var(--gold); border-color: var(--gold); }
+/* 详情"完成任务"按钮锁定态：有步骤未全完成时禁用+置灰+提示剩余步数 */
+.complete-btn.locked, .complete-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.35); }
+
+/* 今日奖励回放弹窗（boss D） */
+.rewards-modal { background: rgba(255, 254, 250, 0.98); border-radius: 14px; border: 1.5px solid var(--gold); width: 420px; max-width: 92vw; max-height: 80vh; display: flex; flex-direction: column; }
+.rewards-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+.reward-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px dashed var(--border-soft); }
+.reward-row:last-child { border-bottom: 0; }
+.reward-row .ic { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--gold-light), var(--gold)); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-weight: 700; font-size: 13px; }
+.reward-row .title { flex: 1; color: var(--ink); font-weight: 600; font-size: 14px; }
+.reward-row .pts { color: var(--gold-deep); font-weight: 700; font-size: 14px; }
+.reward-row .time { color: var(--ink-mute); font-size: 11px; margin-left: 6px; }
+.rewards-empty { text-align: center; color: var(--ink-mute); padding: 30px 16px; font-size: 13px; }
