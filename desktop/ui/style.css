@@ -8,45 +8,43 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  /* === 原神 HUD 深色主题：墨蓝黑底 + 鎏金描边 + 米白文字 ===
-     v4.10.1：boss 反馈「太白太亮、字看不清」（老花眼）——
-     半透明玻璃太透（壁纸透入显亮），小号灰字对比不足。收敛如下：
-     玻璃几乎不透明、文字色全部提亮一档、关键字号提大 */
-  --bg-paper:        #0E121C;          /* 主背景 墨蓝黑（略加深，防透亮） */
-  --bg-paper-deep:   #0A0D15;          /* 更深处 */
-  --panel:           rgba(13, 17, 27, 0.97);   /* 面板 近实色墨蓝（几乎不透壁纸） */
-  --panel-solid:     #11161F;          /* 面板实色 */
-  --bar:             rgba(36, 48, 71, 0.88);   /* 任务条（提不透明） */
-  --bar-hover:       rgba(52, 66, 96, 0.94);   /* 任务条 hover */
-  --card:            rgba(21, 28, 43, 0.94);   /* 卡片 近实色深蓝 */
-  --selected:        rgba(48, 62, 92, 0.96);   /* 选中状态 */
+  /* === 原神风浅色主题（重构版，不再依赖覆盖层）：暖亚麻纸底 + 鎏金描边 + 墨褐文字 ===
+     要点：全界面统一走变量；浅底深字保证可读（老花眼友好）；鎏金只做描边/点缀不铺底 */
+  --bg-paper:        #F0E9DB;          /* 主背景 暖亚麻纸 */
+  --bg-paper-deep:   #E7DEC9;          /* 更深亚麻 */
+  --panel:           rgba(255, 253, 248, 0.92);  /* 面板 暖白玻璃 */
+  --panel-solid:     #FAF6EE;          /* 面板实色 */
+  --bar:             rgba(255, 254, 251, 0.88);  /* 任务条 暖白 */
+  --bar-hover:       rgba(250, 245, 233, 1);     /* 任务条 hover 微暖 */
+  --card:            rgba(255, 255, 252, 0.96);  /* 卡片 白 */
+  --selected:        rgba(214, 178, 98, 0.30);   /* 选中 淡金 */
 
-  /* === 文字（米白/暖白系，全部提亮保对比） === */
-  --ink:             #F7F3E9;          /* 主文字 亮米白 */
-  --ink-soft:        #D9DEE9;          /* 副文字 */
-  --ink-mute:        #B4BDCF;          /* 三级文字（原 #8E96A8 太暗） */
-  --ink-faint:       #98A2B8;          /* 四级文字/分隔（原 #5D6678 深底上不可读） */
+  /* === 文字（墨褐系，浅底可读性优先） === */
+  --ink:             #3A362C;          /* 主文字 墨褐 */
+  --ink-soft:        #6C6555;          /* 副文字 */
+  --ink-mute:        #938B79;          /* 三级文字 */
+  --ink-faint:       #B1A993;          /* 四级/占位 */
 
-  /* === 鎏金元素（原神主色） === */
-  --ink-black:       #0B0E16;          /* 深底(按钮字) */
-  --ink-black-soft:  #141A28;          /* 黑灰 面板底 */
-  --gold:            #D4AF37;          /* 鎏金 */
-  --gold-light:      #F0D68A;          /* 浅金 */
-  --gold-deep:       #A8842A;          /* 深金 */
-  --orange:          #D88A3F;          /* 暖橘 */
-  --jade:            #7DB89A;          /* 玉青 完成 */
-  --crimson:         #D05A42;          /* 朱砂 紧急 */
-  --azure:           #7FB3D9;          /* 蓝 追踪 */
-  --violet:          #B49BE0;          /* 紫 光晕 */
-  --border-soft:     rgba(212, 175, 55, 0.25);
-  --border-mid:      rgba(212, 175, 55, 0.42);
-  --border-strong:   rgba(240, 214, 138, 0.62);
+  /* === 鎏金（原神主色，用于描边/点缀/按钮） === */
+  --ink-black:       #262116;          /* 最深文字 / 金底按钮字 */
+  --ink-black-soft:  #57503D;          /* 面板深字 */
+  --gold:            #C3912F;          /* 鎏金主 */
+  --gold-light:      #E8CB7F;          /* 浅金（渐变亮端） */
+  --gold-deep:       #8A6A1C;          /* 深金（渐变暗端/文字） */
+  --orange:          #C07A35;          /* 暖橘 */
+  --jade:            #4C8A66;          /* 玉青 完成 */
+  --crimson:         #BC4A34;          /* 朱砂 紧急 */
+  --azure:           #47739C;          /* 靛蓝 追踪 */
+  --violet:          #7E62A6;          /* 紫 光晕 */
+  --border-soft:     rgba(160, 128, 55, 0.30);
+  --border-mid:      rgba(160, 128, 55, 0.48);
+  --border-strong:   rgba(130, 96, 24, 0.62);
 
-  --glow-gold:       rgba(212, 175, 55, 0.35);
-  --glow-azure:      rgba(127, 179, 217, 0.45);
-  --glow-violet:     rgba(180, 155, 224, 0.5);
-  --shadow-card:     0 2px 10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(212, 175, 55, 0.12);
-  --shadow-hover:    0 8px 22px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(212, 175, 55, 0.25);
+  --glow-gold:       rgba(201, 154, 48, 0.22);
+  --glow-azure:      rgba(71, 115, 156, 0.28);
+  --glow-violet:     rgba(126, 98, 166, 0.3);
+  --shadow-card:     0 2px 8px rgba(90, 70, 30, 0.12), 0 0 0 1px rgba(160, 128, 55, 0.12);
+  --shadow-hover:    0 8px 22px rgba(80, 62, 30, 0.24), 0 0 0 1px rgba(212, 175, 55, 0.25);
 }
 
 html, body {
@@ -60,20 +58,20 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 模拟桌面背景（预览模式）—— 暖光 */
+/* 模拟桌面背景（预览模式）—— 暖亚麻光 */
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: -2;
   background:
-    radial-gradient(90% 70% at 78% 12%, rgba(212, 175, 55, 0.16), transparent 52%),
-    radial-gradient(70% 60% at 12% 85%, rgba(127, 179, 217, 0.10), transparent 58%),
-    radial-gradient(60% 50% at 88% 88%, rgba(180, 155, 224, 0.08), transparent 55%),
-    linear-gradient(170deg, #171D2E 0%, #10141F 40%, #0B0E16 100%);
+    radial-gradient(90% 70% at 78% 12%, rgba(232, 203, 127, 0.28), transparent 55%),
+    radial-gradient(70% 60% at 12% 85%, rgba(120, 160, 200, 0.14), transparent 60%),
+    radial-gradient(60% 50% at 88% 88%, rgba(190, 170, 220, 0.12), transparent 55%),
+    linear-gradient(170deg, #F5EEDF 0%, #F0E9DB 45%, #E7DEC9 100%);
 }
 body::after {
   content: "";
   position: fixed; inset: 0; z-index: -1;
-  background: linear-gradient(175deg, rgba(212, 175, 55, 0.06) 0%, rgba(0, 0, 0, 0.28) 100%);
+  background: linear-gradient(175deg, rgba(232, 203, 127, 0.14) 0%, rgba(140, 115, 60, 0.10) 100%);
 }
 
 /* ============================================================
@@ -118,7 +116,7 @@ body::after {
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 14px;
-  background: linear-gradient(180deg, rgba(30, 40, 60, 0.9), rgba(24, 33, 52, 0.85));
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(247, 241, 228, 0.92));
   border-bottom: 1px solid var(--border-soft);
   grid-row: 1; grid-column: 1 / span 3;
   position: relative;
@@ -163,13 +161,13 @@ body::after {
 .points {
   color: var(--gold-deep); font-size: 11.5px; font-weight: 600;
   padding: 2px 8px;
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   border-radius: 10px;
   text-shadow: 0 0 4px var(--glow-gold);
 }
 .ico-btn {
-  background: rgba(22, 31, 50, 0.6);
+  background: rgba(255, 254, 251, 0.95);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
   width: 22px; height: 22px; border-radius: 6px;
@@ -177,7 +175,7 @@ body::after {
   display: flex; align-items: center; justify-content: center;
   transition: all .2s;
 }
-.ico-btn:hover { background: rgba(46, 58, 84, 0.9); color: var(--gold-deep); box-shadow: 0 0 6px var(--glow-gold); }
+.ico-btn:hover { background: rgba(224, 186, 104, 0.38); color: var(--gold-deep); box-shadow: 0 0 6px var(--glow-gold); }
 
 /* ============================================================
    侧栏 7%
@@ -185,7 +183,7 @@ body::after {
 .side-nav {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 12px 0;
-  background: linear-gradient(180deg, rgba(24, 33, 52, 0.85), rgba(18, 26, 44, 0.8));
+  background: linear-gradient(180deg, rgba(248, 243, 231, 0.96), rgba(243, 235, 219, 0.92));
   border-right: 1px solid var(--border-soft);
   grid-row: 2; grid-column: 1;
 }
@@ -199,10 +197,10 @@ body::after {
   border: 1px solid transparent;
   transition: all .2s;
 }
-.nav-item:hover { color: var(--gold-deep); background: rgba(46, 58, 84, 0.55); transform: translateY(-1px); }
+.nav-item:hover { color: var(--gold-deep); background: rgba(224, 186, 104, 0.20); transform: translateY(-1px); }
 .nav-item.active {
   color: var(--gold-deep);
-  background: linear-gradient(160deg, rgba(52, 66, 94, 0.95), rgba(52, 66, 94, 0.9));
+  background: linear-gradient(160deg, rgba(224, 186, 104, 0.55), rgba(224, 186, 104, 0.30));
   box-shadow: 0 3px 10px rgba(110, 80, 30, 0.18), inset 0 0 0 1px var(--border-mid);
   border-color: rgba(154, 123, 26, 0.3);
 }
@@ -256,7 +254,7 @@ body::after {
   grid-row: 2; grid-column: 2;
   display: flex; flex-direction: column;
   min-height: 0; min-width: 0;
-  background: rgba(24, 33, 52, 0.4);
+  background: rgba(203, 179, 118, 0.38);
   border-right: 1px solid var(--border-soft);
   overflow: hidden;
   position: relative;
@@ -278,7 +276,7 @@ body::after {
 .vh-hint { color: var(--ink-mute); font-size: 10.5px; }
 .vh-spacer { flex: 1; }
 .search {
-  background: rgba(26, 36, 56, 0.82);
+  background: rgba(255, 254, 251, 0.98);
   border: 1px solid var(--border-soft);
   border-radius: 6px; color: var(--ink);
   padding: 3px 8px; font-size: 11.5px; outline: none;
@@ -490,14 +488,14 @@ body::after {
   border: 1px solid var(--border-soft);
   border-radius: 5px;
   color: var(--ink-mute); font-size: 11px;
-  background: rgba(22, 31, 50, 0.6);
+  background: rgba(255, 254, 251, 0.95);
   cursor: pointer;
   transition: all .15s;
 }
 .style-tab:hover { color: var(--gold-deep); }
 .style-tab.active {
   color: var(--gold-deep);
-  background: linear-gradient(160deg, rgba(46, 58, 84, 0.9), rgba(240, 220, 165, 0.7));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--border-mid);
   box-shadow: 0 0 6px var(--glow-gold);
 }
@@ -542,7 +540,7 @@ body::after {
   height: calc(100% + 4px);
   background: linear-gradient(90deg, var(--jade), var(--jade));
   border-radius: 8px;
-  box-shadow: 0 0 12px rgba(74, 139, 111, 0.6), 0 0 0 1px rgba(26, 36, 56, 0.8);
+  box-shadow: 0 0 12px rgba(74, 139, 111, 0.6), 0 0 0 1px rgba(160, 128, 55, 0.30);
   opacity: 0.95;
   display: none;
 }
@@ -613,7 +611,7 @@ body::after {
 
 /* 角色卡（等级 + 当前角色，简洁版：名字 + 问号） */
 .level-card {
-  background: linear-gradient(135deg, rgba(30, 40, 60, 0.9), rgba(245, 230, 190, 0.85));
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
   border: 1px solid var(--border-mid);
   border-radius: 10px;
   padding: 12px 14px;
@@ -696,7 +694,7 @@ body::after {
   background: linear-gradient(180deg, rgba(255, 250, 225, 0.65), transparent);
 }
 .dv-back {
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   color: var(--gold-deep);
   width: 26px; height: 26px; border-radius: 50%;
@@ -715,7 +713,7 @@ body::after {
 .chip {
   font-size: 10.5px; padding: 2px 9px; border-radius: 10px;
   border: 1px solid var(--border-soft);
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   color: var(--ink-soft);
   letter-spacing: 0.5px;
 }
@@ -808,7 +806,7 @@ body::after {
   font-family: "Cascadia Code", Consolas, "Noto Sans Mono CJK SC", monospace;
   font-size: 12px; line-height: 1.55;
   color: var(--ink);
-  background: rgba(11, 14, 22, 0.55);
+  background: rgba(90, 72, 40, 0.30);
   border: 1px solid var(--border-mid);
   border-radius: 6px;
   padding: 8px 10px;
@@ -819,7 +817,7 @@ body::after {
 .json-modal .json-example {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
-  background: rgba(11, 14, 22, 0.35);
+  background: rgba(90, 72, 40, 0.16);
   padding: 8px 10px;
   margin-bottom: 6px;
 }
@@ -868,7 +866,7 @@ body::after {
 
 .detail-desc {
   color: var(--ink-soft); font-size: 12px; line-height: 1.7;
-  background: rgba(22, 31, 50, 0.5);
+  background: rgba(255, 254, 251, 0.9);
   border-left: 2px solid var(--gold-light);
   padding: 8px 12px;
   border-radius: 0 6px 6px 0;
@@ -902,7 +900,7 @@ body::after {
 .reward-ico { font-size: 22px; }
 .reward-num { color: var(--ink); font-size: 11.5px; font-weight: 600; text-align: center; }
 .reward-item.hl {
-  background: linear-gradient(160deg, rgba(46, 58, 84, 0.9), rgba(240, 220, 165, 0.85));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--border-mid);
   box-shadow: 0 0 10px var(--glow-gold);
 }
@@ -947,7 +945,7 @@ body::after {
   grid-row: 1 / span 2; grid-column: 1 / span 3;
   width: 100%; height: 100%;
   padding: 8px 10px;
-  background: linear-gradient(90deg, rgba(30, 40, 60, 0.9), rgba(245, 230, 190, 0.85));
+  background: linear-gradient(90deg, var(--gold-light), var(--gold));
   border-radius: 14px;
 }
 .folded-bar {
@@ -978,7 +976,7 @@ body::after {
 .fb-btn {
   width: 22px; height: 22px;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(22, 31, 50, 0.6);
+  background: rgba(255, 254, 251, 0.95);
   border: 1px solid var(--border-mid);
   border-radius: 5px;
   color: var(--gold-deep);
@@ -988,7 +986,7 @@ body::after {
   transition: opacity .2s, background .2s, color .2s;
 }
 .fb-bar:hover .fb-btn { opacity: 0.85; }
-.fb-btn:hover { opacity: 1 !important; background: rgba(46, 58, 84, 0.9); color: var(--gold-deep); box-shadow: 0 0 6px var(--glow-gold); }
+.fb-btn:hover { opacity: 1 !important; background: rgba(224, 186, 104, 0.38); color: var(--gold-deep); box-shadow: 0 0 6px var(--glow-gold); }
 .fb-btn.complete:hover { color: var(--jade); border-color: var(--jade); box-shadow: 0 0 6px rgba(74, 139, 111, 0.4); }
 
 /* ============================================================
@@ -1033,7 +1031,7 @@ body::after {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--gold-deep); font-size: 14px; font-weight: 700; letter-spacing: 1.5px;
-  background: linear-gradient(180deg, rgba(26, 36, 56, 0.82), rgba(245, 235, 210, 0.55));
+  background: linear-gradient(180deg, rgba(255, 254, 251, 0.98), rgba(248, 241, 224, 0.92));
 }
 .m-close {
   background: transparent; border: none;
@@ -1056,7 +1054,7 @@ body::after {
 .settings-section .ss-title {
   display: flex; align-items: center; gap: 6px;
   padding: 9px 14px;
-  background: linear-gradient(90deg, rgba(46, 58, 84, 0.55), rgba(255, 250, 225, 0.35));
+  background: linear-gradient(90deg, rgba(224, 186, 104, 0.22), rgba(255, 250, 225, 0.55));
   border-bottom: 1px solid var(--border-soft);
   color: var(--gold-deep); font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px;
 }
@@ -1076,7 +1074,7 @@ body::after {
 .setting-row select { flex: 1; max-width: 160px; }
 
 input[type=text], input[type=number], select {
-  background: rgba(26, 36, 56, 0.82);
+  background: rgba(255, 254, 251, 0.98);
   border: 1px solid var(--border-soft);
   color: var(--ink);
   padding: 6px 10px; font-size: 12.5px;
@@ -1087,7 +1085,7 @@ input:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 6px var(-
 input::placeholder { color: var(--ink-faint); }
 
 .small-btn {
-  background: rgba(26, 36, 56, 0.82);
+  background: rgba(255, 254, 251, 0.98);
   border: 1px solid var(--border-mid);
   color: var(--gold-deep);
   padding: 5px 12px;
@@ -1095,7 +1093,7 @@ input::placeholder { color: var(--ink-faint); }
   cursor: pointer; font-size: 11.5px; font-weight: 600;
   transition: all .2s;
 }
-.small-btn:hover { background: rgba(46, 58, 84, 0.9); box-shadow: 0 0 6px var(--glow-gold); }
+.small-btn:hover { background: rgba(224, 186, 104, 0.38); box-shadow: 0 0 6px var(--glow-gold); }
 .small-btn.primary { background: linear-gradient(160deg, var(--gold-light), var(--gold-deep)); color: #fff; border-color: var(--gold-deep); }
 .small-btn.primary:hover { box-shadow: 0 2px 10px var(--glow-gold); }
 .small-btn.danger { color: var(--crimson); border-color: var(--crimson); }
@@ -1114,7 +1112,7 @@ input::placeholder { color: var(--ink-faint); }
 .label .must { color: var(--orange); }
 .cat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .cat-btn {
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
   padding: 7px 10px;
@@ -1125,7 +1123,7 @@ input::placeholder { color: var(--ink-faint); }
 .cat-btn:hover { color: var(--ink); border-color: var(--border-mid); }
 .cat-btn.active {
   color: var(--gold-deep);
-  background: linear-gradient(160deg, rgba(46, 58, 84, 0.9), rgba(240, 220, 165, 0.7));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--gold-deep);
   box-shadow: 0 0 8px var(--glow-gold);
   font-weight: 700;
@@ -1133,7 +1131,7 @@ input::placeholder { color: var(--ink-faint); }
 
 .ddl-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .ddl-btn {
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
   padding: 6px 4px;
@@ -1142,7 +1140,7 @@ input::placeholder { color: var(--ink-faint); }
 }
 .ddl-btn.active {
   color: var(--gold-deep);
-  background: linear-gradient(160deg, rgba(46, 58, 84, 0.9), rgba(240, 220, 165, 0.7));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--gold);
   font-weight: 600;
   box-shadow: 0 0 6px var(--glow-gold);
@@ -1150,14 +1148,14 @@ input::placeholder { color: var(--ink-faint); }
 
 .prio-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
 .prio-btn {
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
   padding: 6px 10px;
   font-size: 12px;
   border-radius: 5px; cursor: pointer;
 }
-.prio-btn.active { color: var(--gold-deep); background: rgba(46, 58, 84, 0.9); border-color: var(--gold); font-weight: 600; }
+.prio-btn.active { color: var(--gold-deep); background: rgba(224, 186, 104, 0.38); border-color: var(--gold); font-weight: 600; }
 .prio-btn[data-prio=high].active   { color: #fff; background: var(--crimson); border-color: var(--crimson); }
 
 .hint { color: var(--ink-mute); font-size: 10.5px; }
@@ -1171,8 +1169,8 @@ input::placeholder { color: var(--ink-faint); }
   font-size: 12.5px; font-weight: 700;
   transition: all .2s;
 }
-.action-row .ghost { background: rgba(24, 33, 52, 0.7); color: var(--ink-soft); }
-.action-row .ghost:hover { background: rgba(46, 58, 84, 0.9); }
+.action-row .ghost { background: rgba(255, 254, 251, 0.92); color: var(--ink-soft); }
+.action-row .ghost:hover { background: rgba(224, 186, 104, 0.38); }
 .action-row .primary { background: linear-gradient(160deg, var(--gold-light), var(--gold-deep)); color: #fff; border-color: var(--gold-deep); box-shadow: 0 0 8px var(--glow-gold); }
 .action-row button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
@@ -1208,13 +1206,13 @@ input::placeholder { color: var(--ink-faint); }
 .em-count { color: var(--crimson); font-size: 16px; font-weight: 700; }
 .em-foot { display: flex; gap: 8px; padding: 10px 14px 14px; justify-content: flex-end; }
 .em-btn { padding: 7px 16px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 700; border: 1px solid transparent; }
-.em-btn.secondary { background: rgba(26, 36, 56, 0.82); color: var(--ink-soft); border-color: var(--border-soft); }
+.em-btn.secondary { background: rgba(255, 254, 251, 0.98); color: var(--ink-soft); border-color: var(--border-soft); }
 .em-btn.primary { background: linear-gradient(160deg, var(--orange), var(--crimson)); color: #fff; box-shadow: 0 0 8px rgba(216, 138, 63, 0.4); }
 
 /* 完成祝福弹窗（参考原神 抽奖 / 成就） */
 .bless-overlay {
   position: absolute; inset: 0; z-index: 60;
-  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.28), rgba(8, 11, 18, 0.94));
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.22), rgba(90, 72, 40, 0.42));
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(8px);
   animation: blessFade 0.4s ease-out;
@@ -1223,7 +1221,7 @@ input::placeholder { color: var(--ink-faint); }
 .bless-card {
   width: calc(100% - 60px);
   max-width: 320px;
-  background: linear-gradient(160deg, rgba(30, 39, 58, 0.8), rgba(212, 175, 55, 0.16));
+  background: linear-gradient(160deg, rgba(255, 254, 251, 0.98), rgba(224, 186, 104, 0.28));
   border: 2px solid var(--gold);
   border-radius: 16px;
   overflow: hidden;
@@ -1275,12 +1273,12 @@ input::placeholder { color: var(--ink-faint); }
 
 /* ===== 22:00 未完成提醒弹窗（复用祝福弹窗布局，改夜色警示调） ===== */
 .night-overlay {
-  background: radial-gradient(circle at center, rgba(230, 236, 248, 0.94), rgba(38, 46, 72, 0.55));
+  background: radial-gradient(circle at center, rgba(240, 238, 244, 0.95), rgba(130, 120, 150, 0.5));
 }
 .night-card {
-  background: linear-gradient(160deg, rgba(30, 42, 62, 0.9), rgba(46, 58, 84, 0.6));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--azure, #4F86B5);
-  box-shadow: 0 0 60px rgba(79, 134, 181, 0.35), 0 12px 40px rgba(30, 40, 66, 0.3);
+  box-shadow: 0 0 60px rgba(79, 134, 181, 0.28), 0 12px 40px rgba(90, 72, 40, 0.28);
 }
 .night-card::before { border-color: rgba(79, 134, 181, 0.35); }
 .night-top { background: linear-gradient(180deg, rgba(214, 228, 246, 0.9), transparent); }
@@ -1333,7 +1331,7 @@ input::placeholder { color: var(--ink-faint); }
   text-align: left; cursor: pointer;
   font-size: 12px;
 }
-.ctx-menu button:hover { background: rgba(46, 58, 84, 0.45); color: var(--gold-deep); }
+.ctx-menu button:hover { background: rgba(224, 186, 104, 0.16); color: var(--gold-deep); }
 .ctx-menu button.danger:hover { background: rgba(184, 86, 56, 0.12); color: var(--crimson); }
 
 /* 滚动条（米色调） */
@@ -1362,7 +1360,7 @@ input::placeholder { color: var(--ink-faint); }
   background: linear-gradient(180deg, rgba(255, 250, 232, 0.8), transparent);
 }
 .arc-tab {
-  background: rgba(24, 33, 52, 0.7);
+  background: rgba(255, 254, 251, 0.92);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
   padding: 4px 12px;
@@ -1374,14 +1372,14 @@ input::placeholder { color: var(--ink-faint); }
 .arc-tab:hover { color: var(--gold-deep); border-color: var(--border-mid); }
 .arc-tab.active {
   color: var(--gold-deep); font-weight: 700;
-  background: linear-gradient(160deg, rgba(46, 58, 84, 0.9), rgba(240, 220, 165, 0.7));
+  background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--gold);
   box-shadow: 0 0 6px var(--glow-gold);
 }
 .arc-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
 .arc-item {
   display: flex; align-items: center; gap: 10px;
-  background: linear-gradient(90deg, rgba(52, 66, 94, 0.88), rgba(255, 245, 215, 0.6));
+  background: linear-gradient(90deg, rgba(255, 254, 251, 0.95), rgba(240, 232, 214, 0.8));
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   padding: 9px 12px;
@@ -1477,14 +1475,14 @@ input::placeholder { color: var(--ink-faint); }
   opacity: 0.7;
 }
 .win-btn { width: 26px; height: 22px; border-radius: 6px; font-size: 0; padding: 0; }
-.win-btn:hover { background: rgba(46, 58, 84, 0.9); color: var(--gold-deep); }
+.win-btn:hover { background: rgba(224, 186, 104, 0.38); color: var(--gold-deep); }
 .win-btn.close:hover { background: rgba(208, 90, 66, 0.85); color: #fff; }
 .win-btn svg { display: block; }
 .top-right { gap: 4px; }
 
 /* 历史弹窗：搜索框 + 放大镜按钮 */
 .arc-search-row { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.arc-search-row .search { width: 130px; padding: 5px 10px; border: 1px solid var(--border-soft); border-radius: 6px; background: rgba(22, 31, 50, 0.5); color: var(--ink); font-size: 12px; }
+.arc-search-row .search { width: 130px; padding: 5px 10px; border: 1px solid var(--border-soft); border-radius: 6px; background: rgba(255, 254, 251, 0.9); color: var(--ink); font-size: 12px; }
 .arc-search-row .search:focus { outline: 0; border-color: var(--gold); }
 .arc-search-btn { width: 26px; height: 26px; border-radius: 6px; background: rgba(212, 175, 55, 0.14); border: 1px solid var(--border-soft); color: var(--gold-deep); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .arc-search-btn:hover { background: rgba(212, 175, 55, 0.28); color: var(--gold-light); }
@@ -1495,7 +1493,7 @@ input::placeholder { color: var(--ink-faint); }
   display: flex; gap: 18px; align-items: center;
   padding: 18px 16px 14px;
   border-radius: 12px;
-  background: linear-gradient(160deg, rgba(28, 36, 54, 0.85), rgba(18, 26, 44, 0.85));
+  background: linear-gradient(160deg, rgba(255, 253, 248, 0.98), rgba(246, 240, 226, 0.94));
   border: 1px solid var(--border-soft);
   margin-bottom: 14px;
 }
@@ -1512,7 +1510,7 @@ input::placeholder { color: var(--ink-faint); }
 .ph-avatar-edit {
   position: absolute; right: -4px; bottom: -4px;
   width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(22, 31, 50, 0.92); border: 1px solid var(--gold);
+  background: rgba(255, 254, 251, 0.98); border: 1px solid var(--gold);
   color: var(--gold-light); font-size: 11px; font-weight: 600;
   cursor: pointer;
 }
@@ -1520,7 +1518,7 @@ input::placeholder { color: var(--ink-faint); }
 .ph-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .ph-nick-input {
   flex: 1; min-width: 0;
-  background: rgba(22, 31, 50, 0.6); border: 1px solid var(--border-soft);
+  background: rgba(255, 254, 251, 0.95); border: 1px solid var(--border-soft);
   color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: 1px;
   padding: 6px 10px; border-radius: 8px;
 }
@@ -1530,7 +1528,7 @@ input::placeholder { color: var(--ink-faint); }
 
 .profile-card {
   border: 1px solid var(--border-soft); border-radius: 12px;
-  background: linear-gradient(160deg, rgba(28, 36, 54, 0.7), rgba(18, 26, 44, 0.7));
+  background: linear-gradient(160deg, rgba(255, 253, 248, 0.97), rgba(246, 240, 226, 0.92));
   padding: 14px 16px; margin-bottom: 14px;
 }
 .pc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -1547,7 +1545,7 @@ input::placeholder { color: var(--ink-faint); }
 .pc-points-num { color: var(--gold); font-size: 24px; font-weight: 700; line-height: 1; }
 .pc-points-label { color: var(--ink-mute); font-size: 11px; }
 .pc-exp-row { display: flex; align-items: center; gap: 10px; }
-.pc-exp-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(22, 31, 50, 0.7); overflow: hidden; border: 1px solid var(--border-soft); }
+.pc-exp-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 254, 251, 0.9); overflow: hidden; border: 1px solid var(--border-soft); }
 .pc-exp-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold-deep)); transition: width .35s; }
 .pc-exp-hint { color: var(--ink-mute); font-size: 11px; }
 
@@ -1622,75 +1620,7 @@ input::placeholder { color: var(--ink-faint); }
 .search, .arc-search { font-size: 13.5px; }
 .arc-tab { font-size: 13px; }
 
-/* ========== v4.10.2 浅色主题（boss：不要黑底；保留鎏金 HUD 味） ==========
-   底部 :root 覆盖头部深色变量：浅色纸感底 + 深咖啡字 + 鎏金描边加深保留。
-   其后针对性修正深色时代遗留的硬编码白字/亮底。 */
-:root{
-  --bg-paper: #F1ECE2;
-  --bg-paper-deep: #E9E2D3;
-  --panel: rgba(250, 247, 240, 0.9);
-  --panel-solid: #FAF7F0;
-  --bar: rgba(255, 255, 255, 0.78);
-  --bar-hover: rgba(250, 244, 230, 0.98);
-  --card: rgba(255, 254, 250, 0.94);
-  --selected: rgba(212, 175, 55, 0.2);
-  --ink: #322F28;
-  --ink-soft: #5C564A;
-  --ink-mute: #837B6B;
-  --ink-faint: #A49B88;
-  --ink-black: #3A362E;
-  --ink-black-soft: #5C564A;
-  --gold: #C3911B;
-  --gold-light: #E0BC57;
-  --gold-deep: #9C7210;
-  --orange: #C97A33;
-  --jade: #3E8E6B;
-  --crimson: #C2503A;
-  --azure: #3E7FB4;
-  --violet: #8A6FC0;
-  --border-soft: rgba(156, 120, 25, 0.32);
-  --border-mid: rgba(156, 120, 25, 0.52);
-  --border-strong: rgba(122, 88, 12, 0.66);
-  --glow-gold: rgba(201, 151, 31, 0.22);
-  --glow-azure: rgba(62, 127, 180, 0.25);
-  --glow-violet: rgba(138, 111, 192, 0.28);
-  --shadow-card: 0 2px 8px rgba(90, 70, 28, 0.14), 0 0 0 1px rgba(156, 120, 25, 0.14);
-  --shadow-hover: 0 8px 20px rgba(90, 70, 28, 0.2), 0 0 0 1px rgba(156, 120, 25, 0.24);
-}
-html, body { background: #ECE7DB; color: var(--ink); }
-body::before {
-  background:
-    radial-gradient(90% 70% at 78% 12%, rgba(224, 188, 87, 0.22), transparent 55%),
-    radial-gradient(70% 60% at 12% 85%, rgba(62, 127, 180, 0.10), transparent 58%),
-    radial-gradient(60% 50% at 88% 88%, rgba(138, 111, 192, 0.08), transparent 55%),
-    linear-gradient(170deg, #F6F1E5 0%, #EFE9DA 45%, #E6DECC 100%);
-}
-body::after { background: linear-gradient(175deg, rgba(224, 188, 87, 0.10), rgba(140, 105, 40, 0.10)); }
-.widget { box-shadow: 0 10px 40px rgba(90, 70, 28, 0.18); }
-.topbar { background: linear-gradient(180deg, rgba(255, 252, 244, 0.96), rgba(248, 243, 231, 0.94)); }
-/* 弹窗遮罩：浅色下用更浅的暖褐 */
-.overlay { background: rgba(70, 58, 34, 0.32); }
-/* 深色时代金色渐变按钮上的白字 → 改深字（浅底金上白字不可读） */
-.primary, .track-btn, .complete-btn, .em-btn.primary, .small-btn.primary,
-.ddl-btn.active, .prio-btn.active, .json-copy-btn, .gh-progress, .level-badge,
-.arc-search-btn, .nav-item.active .nav-tip {
-  color: var(--ink-black);
-}
-/* 彩色实底按钮保留白字（绿/红/蓝仍是深饱和底） */
-.goal-item.done .g-play { color: #fff; }
-.prio-btn[data-prio=high].active, .chip.prio-h, .chip.cat-daily { color: #fff; }
-.track-btn.tracking { color: #fff; }
-/* 选中态任务描边在浅底上明显些 */
-.nav-item.active { border-color: var(--border-strong); }
-/* tracking 任务淡蓝底 → 浅色可读化 */
-.cat-task.tracking, .list-task.tracking {
-  background: rgba(62, 127, 180, 0.12);
-  border-color: rgba(62, 127, 180, 0.4);
-}
-/* 进度条扫光浅底几乎无用，去掉动画白闪 */
-.progress-bar .bar-fill::after { display: none; }
 
-/* ========== v4.10.2 添加弹窗增强：次数"默认·修改" + 限时"自定义" ========== */
 .hidden { display: none !important; }
 .count-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; }
 .count-default-text { font-size: 13.5px; color: var(--ink); }
@@ -1705,91 +1635,7 @@ body::after { background: linear-gradient(175deg, rgba(224, 188, 87, 0.10), rgba
   border: 1px solid var(--border-mid); border-radius: 6px; padding: 6px 8px; font-size: 14px;
 }
 
-/* ========== v4.10.3 浅色主题细节修复（boss 截图反馈 P0/P1） ==========
-   1. .chip 默认底：深蓝玻璃 → 浅色半透白
-   2. .chip.cat-time-limited + .chip.prio-l CSS 漏规则 → 补齐
-   3. 各 chip 字色对比提档：金底金字 → 金底深棕字
-   4. 全局 input 深蓝玻璃 → 浅色面板
-   5. 等级图标加白底圆让"身份"感清晰
-   6. 经验条空态加引导文案
-   7. 小提示/hint/placeholder 字色提档 */
-.chip {
-  background: rgba(255, 254, 250, 0.78);
-  color: var(--ink-soft);
-  border: 1px solid var(--border-mid);
-  font-size: 12px;
-  padding: 3px 10px;
-}
-.chip.cat-daily   { color: #2E5F8C; background: rgba(62, 127, 180, 0.18); border-color: rgba(62, 127, 180, 0.45); }
-.chip.cat-goal    { color: #6A4FA0; background: rgba(138, 107, 201, 0.18); border-color: rgba(138, 107, 201, 0.45); }
-.chip.cat-lim     { color: #B56025; background: rgba(216, 138, 63, 0.22); border-color: rgba(216, 138, 63, 0.5); }
-/* 之前 CSS 漏定义：限时任务 chip 走 fallback（深蓝玻璃）— 修 */
-.chip.cat-time-limited { color: #B56025; background: rgba(216, 138, 63, 0.22); border-color: rgba(216, 138, 63, 0.5); }
-.chip.cat-once    { color: var(--ink-mute); background: rgba(140, 120, 60, 0.14); border-color: rgba(140, 120, 60, 0.35); }
-.chip.prio-h      { color: #fff; background: var(--crimson); border-color: var(--crimson); }
-.chip.prio-m      { color: #6B5310; background: rgba(201, 162, 39, 0.25); border-color: rgba(156, 120, 25, 0.5); }
-/* 之前 CSS 漏定义：低优先级 chip 走 fallback — 修 */
-.chip.prio-l      { color: var(--ink-mute); background: rgba(140, 140, 140, 0.18); border-color: rgba(140, 140, 140, 0.4); }
-.chip.tracking    { color: #2E5F8C; background: rgba(62, 127, 180, 0.18); border-color: rgba(62, 127, 180, 0.45); }
 
-/* 全局 input：深蓝玻璃 → 浅色面板 */
-input[type=text], input[type=number], input[type=search], select, textarea {
-  background: rgba(255, 254, 250, 0.96);
-  color: var(--ink);
-  border: 1px solid var(--border-mid);
-  padding: 6px 10px;
-  font-size: 13px;
-  border-radius: 6px;
-  outline: none;
-}
-input:focus, select:focus, textarea:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(201, 151, 31, 0.22);
-}
-input::placeholder, textarea::placeholder, input::-webkit-input-placeholder {
-  color: var(--ink-mute);
-  opacity: 1;
-  font-weight: 400;
-}
-
-/* 昵称 input：深蓝玻璃 → 浅色面板 + 加大字号 */
-.ph-nick-input {
-  background: rgba(255, 254, 250, 0.96);
-  color: var(--ink);
-  border: 1px solid var(--border-mid);
-  font-size: 16px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
-}
-.ph-nick-input:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(201, 151, 31, 0.25);
-  outline: none;
-}
-.ph-nick-save-tip { color: var(--ink-mute); font-size: 12px; }
-.ph-sub { color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
-
-/* 等级图标 + 头像：加白底圆让"身份"感清晰（之前纯金渐变看不出是等级还是装饰） */
-.level-character, .profile-hero .ph-avatar {
-  background: linear-gradient(135deg, #FFFFFF, #F0E8D6) !important;
-  color: var(--gold-deep);
-  border: 2px solid var(--gold);
-  box-shadow: 0 2px 10px rgba(201, 151, 31, 0.3);
-}
-/* 经验条空态引导（0 分时不只是一根黑条） */
-.pc-exp-bar { background: rgba(0, 0, 0, 0.08); position: relative; min-height: 14px; border: 1px dashed var(--border-soft); }
-.pc-exp-bar::after {
-  content: "开始你的第一项任务吧";
-  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-  text-align: center; font-size: 11px; color: var(--ink-mute);
-  pointer-events: none;
-}
-.pc-exp-fill { z-index: 1; position: relative; }
-/* 小提示字色提档 + 详情副标题 */
-.setting-row .hint, .hint, .dv-sub, .ss-title { color: var(--ink-soft) !important; }
-
-/* 头像：自定义图 / 上传按钮 */
 .ph-avatar-wrap { position: relative; }
 .ph-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .ph-avatar-upload {
@@ -1805,193 +1651,45 @@ input::placeholder, textarea::placeholder, input::-webkit-input-placeholder {
 }
 .ph-avatar-upload:hover { transform: scale(1.08); background: #4F8FB8; }
 
-/* v4.10.3 追加：个人信息弹窗深色玻璃块浅色化 */
-.profile-hero {
-  background: linear-gradient(160deg, #FFFFFF, #F0E8D6) !important;
-  border: 1px solid var(--border-mid) !important;
-  box-shadow: 0 4px 16px rgba(90, 70, 28, 0.1);
-}
-.ph-avatar-edit {
-  background: rgba(255, 254, 250, 0.95) !important;
-  color: var(--gold-deep) !important;
-  border: 1px solid var(--gold) !important;
-}
-.profile-card {
-  background: linear-gradient(160deg, rgba(255, 254, 250, 0.96), rgba(240, 232, 214, 0.85)) !important;
-  border: 1px solid var(--border-mid) !important;
-}
-.pc-level-icon {
-  background: linear-gradient(135deg, #FFFFFF, #F0E8D6) !important;
-  color: var(--gold-deep) !important;
-  border: 2px solid var(--gold);
-  box-shadow: 0 2px 10px var(--glow-gold);
-}
-.pc-level-name { color: var(--gold-deep) !important; }
-.pc-level-title { color: var(--ink-soft) !important; }
-.pc-points-num { color: #6B5310 !important; font-weight: 800; }
-.pc-points-label { color: var(--ink-mute) !important; }
 
-/* v4.10.4 等级图标语义化（boss："看不出代表学徒"）*/
-/* SVG path 实心填充（金色） + 移 stroke，让图标像"徽章/标识"不像"线条画" */
-.level-character svg path, .pc-level-icon svg path, .profile-hero .pc-level-icon svg path {
-  fill: var(--gold-deep) !important;
-  stroke: none !important;
-}
-.level-character svg circle, .pc-level-icon svg circle {
-  fill: none !important;
-  stroke: var(--gold-deep) !important;
-  stroke-width: 1.5;
-}
-/* 等级圈加大 + 加金色边让"身份"感更明显 */
-.level-character {
-  width: 52px !important; height: 52px !important;
-  border: 2px solid var(--gold) !important;
-}
-.pc-level-icon {
-  width: 52px !important; height: 52px !important;
-  border: 2px solid var(--gold) !important;
-}
-/* 经验条去掉 ::after 引导文案（现在用 JS 控制，按 points 显示） */
-.pc-exp-bar::after { display: none !important; }
+/* ========== v4.11 原神浅色主题 补充规则（重构后本体收尾，无 !important） ========== */
 
-/* ========== v4.10.5 全弹窗/按钮深色玻璃浅色化（boss 截图反馈） ==========
-   之前覆盖层只盯了 chip / profile，前几版忘了检查 modal、按钮、输入区、设置小标签。
-   这次一次性补齐：cat-btn / ddl-btn / prio-btn / arc-tab / settings-section .ss-title /
-   json-area / ghost / add-modal / settings-modal / json-modal / profile-modal 全部翻浅 */
-.settings-modal, .add-modal, .json-modal {
-  background: rgba(255, 254, 250, 0.98) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
+/* 1. 图标实心深色（等级/奖励/顶栏徽章/进度等 svg path）：原版全是 stroke-only 线条 */
+.level-icon svg path, .level-character svg path, .pc-level-icon svg path,
+.profile-hero .ph-avatar svg path, #levelChar svg path, #profileLevelIcon svg path,
+.reward-ico svg path, .reward-item svg path {
+  fill: var(--ink-black-soft);
+  stroke: none;
 }
-.profile-modal { background: rgba(255, 254, 250, 0.98); }
-/* 弹窗遮罩浅色 */
-.overlay { background: rgba(70, 58, 34, 0.32) !important; }
-/* 添加弹窗：任务分类/限时/优先级按钮 */
-.cat-btn, .ddl-btn, .prio-btn {
-  background: rgba(255, 254, 250, 0.85) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
-  font-weight: 600;
-}
-.cat-btn:hover, .ddl-btn:hover, .prio-btn:hover {
-  background: rgba(212, 175, 55, 0.18) !important;
-  border-color: var(--gold) !important;
-}
-.cat-btn.active, .ddl-btn.active, .prio-btn.active {
-  background: rgba(201, 162, 39, 0.32) !important;
-  color: var(--gold-deep) !important;
-  border-color: var(--gold) !important;
-}
-.prio-btn[data-prio=high].active { background: var(--crimson) !important; color: #fff !important; border-color: var(--crimson) !important; }
-/* 历史任务分类 tab */
-.arc-tab {
-  background: rgba(255, 254, 250, 0.85) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
-  font-weight: 600;
-}
-.arc-tab.active { background: rgba(201, 162, 39, 0.85) !important; color: #fff !important; border-color: var(--gold) !important; }
-/* 设置章节小标签 */
-.ss-title {
-  background: transparent !important;
-  color: var(--gold-deep) !important;
-  font-size: 14px !important;
-  font-weight: 700 !important;
-  padding: 6px 4px 6px 10px !important;
-  border-left: 3px solid var(--gold) !important;
-  border-radius: 0 !important;
-  display: block !important;
-  margin: 14px 0 8px !important;
-}
-/* JSON 输入框 */
-.json-area {
-  background: rgba(255, 254, 250, 0.96) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
-}
-.json-example-head, .json-example { background: rgba(248, 243, 231, 0.7) !important; }
-/* ghost 取消按钮 */
-button.ghost {
-  background: rgba(255, 254, 250, 0.85) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
-}
-/* 顶栏 + 等级卡：等级图标 SVG path 实心填充 + 等级 icon 加 white 描边让浅底可见 */
-.topbar .level-icon svg path, #levelIcon svg path {
-  fill: var(--gold-deep) !important;
-  stroke: none !important;
-}
-.level-card .level-character svg path, .pc-level-icon svg path {
-  fill: var(--gold-deep) !important;
-  stroke: none !important;
-}
-/* 进度条：底色加深让浅色主题下也清晰可见 */
-.progress-bar {
-  background: rgba(201, 162, 39, 0.32) !important;
-  border: 1px solid var(--border-mid) !important;
-}
-.bar-fill { background: linear-gradient(90deg, #D4AF37, #F0D68A) !important; }
-/* 奖励卡 svgIcon：实心填充让图标可辨 */
-.reward-ico svg svg, .reward-ico svg { fill: var(--gold-deep) !important; stroke: none !important; color: var(--gold-deep) !important; }
-.reward-ico svg { color: var(--gold-deep) !important; }
-.reward-ico svg path { fill: var(--gold-deep) !important; stroke: none !important; }
-/* 总览卡里的倒计时小角标——让它别嵌入任务卡显眼位置 */
+
+/* 2. 顶栏 win-btn 独立可见（原 .level-badge 撑宽会挤掉） */
+.win-btn { color: var(--ink); }
+.win-btn:hover { background: rgba(224, 186, 104, 0.25); color: var(--gold-deep); }
+
+/* 3. 进度条宽度：本体 flex:1 在非 flex 父容器失效 → 显式宽 */
+.progress-bar { width: 100%; min-width: 120px; }
+.progress-body { display: flex; align-items: center; gap: 10px; width: 100%; }
+
+/* 4. chip 补充缺失类别（cat-time-limited / prio-l 本体漏定义） */
+.chip.cat-time-limited { color: var(--orange); background: rgba(216, 150, 70, 0.16); border-color: rgba(216, 150, 70, 0.42); }
+.chip.prio-l { color: var(--ink-mute); background: rgba(150, 150, 150, 0.16); }
+
+/* 5. 总览/列表任务行里的到期小角标：圆角底让阅读不打架 */
 .cat-task .ct-meta, .list-task .ct-meta {
-  background: rgba(255, 254, 250, 0.9);
+  background: rgba(255, 254, 251, 0.95);
   border: 1px solid var(--border-soft);
-  padding: 1px 6px;
-  border-radius: 8px;
-  font-size: 11px;
+  padding: 1px 7px; border-radius: 9px; font-size: 11.5px;
 }
 
-/* v4.10.5 补强：进度条宽度塌缩（flex:1 不生效）+ 等级图标仍 stroke-only */
-.progress-bar { width: 100% !important; min-width: 120px; display: block; }
-.progress-body { display: flex !important; align-items: center; gap: 10px; width: 100%; }
-.progress-stat { flex: 1; }
-/* 等级图标 SVG path：直接打全选 [data-icon] 或 svg path fill（防止 stroke-only 漏掉） */
-.level-icon svg path, .pc-level-icon svg path,
-.profile-hero .ph-avatar svg path, #levelChar svg path,
-.topbar .level-icon svg svg, .level-icon svg svg {
-  fill: var(--gold-deep) !important;
-  stroke: none !important;
-}
-/* svg 本身强制 fill=visible：覆盖 svg fill="none" 默认 */
-.level-icon svg, .pc-level-icon svg, .level-character svg,
-.profile-hero .ph-avatar svg, #levelChar svg {
-  fill: var(--gold-deep) !important;
-  stroke: none !important;
-}
+/* 6. 个人信息经验条底色：本体被替换成白 → 空态用浅灰显形 */
+.pc-exp-bar { background: rgba(120, 100, 60, 0.12); }
 
-/* v4.10.5 补 2：等级图标 fill=gold-deep 同色融合看不见，改深色（深棕 in 金底/白底都对比可见） */
-.level-icon svg path, .level-character svg path,
-.pc-level-icon svg path, #levelChar svg path,
-.profile-hero .ph-avatar svg path {
-  fill: var(--ink-black) !important;   /* #3A362E 深棕在金徽章/白底圆上都清晰 */
-  stroke: none !important;
-}
-.level-icon svg, .level-character svg,
-.pc-level-icon svg, #levelChar svg,
-.profile-hero .ph-avatar svg {
-  fill: var(--ink-black) !important;
-}
-/* 等级卡容器背景：金色渐变也改浅色（防 v4.10.2 之前同色隐藏问题复发） */
-.level-card {
-  background: linear-gradient(135deg, #FFFFFF, #F0E8D6) !important;
-  border: 1px solid var(--border-mid) !important;
-}
-.level-card .level-character { background: linear-gradient(135deg, #F0E8D6, #E5D6B0) !important; border: 2px solid var(--gold) !important; }
-/* 等级徽章底色也改浅（让深色图标清晰） */
-.topbar .level-badge {
-  background: rgba(255, 254, 250, 0.9) !important;
-  color: var(--ink) !important;
-  border: 1px solid var(--border-mid) !important;
-}
+/* 7. 弹窗内 icon 关闭/缩放等按钮深字可见 */
+.ico-btn { color: var(--ink-soft); }
 
-/* v4.10.5 补 3：奖励卡 + 顶栏 win-btn 在金底上深棕（防同色融合） */
-.reward-ico svg path, .reward-item svg svg { fill: var(--ink-black) !important; stroke: none !important; }
-.reward-ico svg, .reward-item svg { color: var(--ink-black) !important; fill: var(--ink-black) !important; }
-/* 奖励卡字 +12 积分 字色 */
-.reward-num { color: var(--ink-black) !important; font-weight: 700; }
-/* 顶栏三键在浅底徽章旁保留可见 */
-.win-btn { color: var(--ink) !important; background: rgba(255, 254, 250, 0.85) !important; border: 1px solid var(--border-soft) !important; }
-.win-btn.close { color: var(--crimson) !important; }
+/* 8. 等级卡片底色：本体 profile 渐变已脚本化，此处确保金描边可见 */
+.level-card, .profile-card, .profile-hero { border-color: var(--border-mid); }
+
+/* 9. 卡片/模态底部背景随 body 亚麻暖光（mainPane 原 var(--panel) 在 body 上，保持半透明层次） */
+.widget { background: transparent; }
+.topbar { background: rgba(255, 253, 248, 0.88); }
