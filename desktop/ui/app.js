@@ -944,9 +944,9 @@ function openProfileModal() {
   // 经验条
   let pct = 100;
   if (next) {
-    pct = Math.min(100, Math.max(0, ((points - lv.min) / (lv.max - lv.min)) * 100));
+    pct = Math.min(100, Math.max(0, ((points - lv.min) / Math.max(1, lv.max - lv.min)) * 100));
     document.getElementById('profileExpHint').textContent =
-      '距下一级（' + next.name + '）还差 ' + (lv.max - points) + ' 分';
+      '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
   } else {
     pct = 100;
     document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';
@@ -957,10 +957,9 @@ function openProfileModal() {
     settings.pairing ? ('已配对：' + settings.pairing.url) : '未配对';
   // 昵称
   document.getElementById('profileNickname').value = settings.nickname || '历练者';
-  // 头像字符
+  // 头像：先用用户自定义图，没有再回退字符
   avatarIdx = (settings.avatar_idx != null) ? settings.avatar_idx : 0;
-  const av = document.getElementById('profileAvatar');
-  av.textContent = pickAvatarGlyph();
+  renderProfileAvatar();
   document.getElementById('profileOverlay').style.display = '';
 }
 function closeProfileModal() { document.getElementById('profileOverlay').style.display = 'none'; }
@@ -981,18 +980,64 @@ function commitNickname() {
 _profileNick.addEventListener('change', commitNickname);
 _profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _profileNick.blur(); } });
 
-// 换头像
+// 头像：自定义图（base64）优先；没有则用字符。字符模式下"换"按钮切下一个字符；
+// 有图时"换"按钮切回字符模式（清除图片 + 回到当前 avatarIdx 的字符）。
+function renderProfileAvatar() {
+  const av = document.getElementById('profileAvatar');
+  if (!av) return;
+  if (settings.avatar_img) {
+    av.innerHTML = '<img class="ph-avatar-img" src="' + settings.avatar_img + '" alt="头像" />';
+  } else {
+    av.textContent = pickAvatarGlyph();
+  }
+}
+// 字符切换
 document.getElementById('profileAvatarEdit').addEventListener('click', () => {
-  avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
-  settings.avatar_idx = avatarIdx;
-  document.getElementById('profileAvatar').textContent = pickAvatarGlyph();
+  if (settings.avatar_img) {
+    delete settings.avatar_img;     // 有图时按"换"→ 退回字符模式（保留 avatarIdx）
+  } else {
+    avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
+    settings.avatar_idx = avatarIdx;
+  }
   saveSettings();
+  renderProfileAvatar();
 });
+// 头像本身点击：换字符（兼容旧行为）
 document.getElementById('profileAvatar').addEventListener('click', () => {
+  if (settings.avatar_img) return;        // 有图时点击不切（避免误清除）
   avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
   settings.avatar_idx = avatarIdx;
-  document.getElementById('profileAvatar').textContent = pickAvatarGlyph();
   saveSettings();
+  renderProfileAvatar();
+});
+// 上传自己的图片：选文件 → 缩放到 96×96 → base64 存 settings.avatar_img
+const _profileAvatarFile = document.getElementById('profileAvatarFile');
+document.getElementById('profileAvatarUpload').addEventListener('click', () => _profileAvatarFile && _profileAvatarFile.click());
+_profileAvatarFile.addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      // 等比缩放到 ≤96px，居中画到 96×96 透明画布
+      const size = 96;
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      const s = Math.min(size / img.width, size / img.height);
+      const w = img.width * s, h = img.height * s;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      settings.avatar_img = c.toDataURL('image/png');
+      saveSettings();
+      renderProfileAvatar();
+    };
+    img.onerror = () => alert('图片加载失败，换一张试试');
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+  // 重置 file input，允许重新选同一张图
+  e.target.value = '';
 });
 
 // 跳转到"设置"页（连接手机端）
