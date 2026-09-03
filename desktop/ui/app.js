@@ -1112,11 +1112,15 @@ function openCropper(file) {
 function renderCrop() {
   const c = _cropState; if (!c || !c.img) return;
   const el = document.getElementById('cropImg');
+  const wrap = document.getElementById('cropImgWrap');
+  if (!el || !wrap) return;
   const w = c.img.width * c.scale;
   const h = c.img.height * c.scale;
   el.style.width = w + 'px';
   el.style.height = h + 'px';
-  el.style.transform = `translate(${-w/2 + c.x}px, ${-h/2 + c.y}px) rotate(${c.rot}deg)`;
+  // boss #20 fix：外层 wrap 居中 stage 中心 (140,140)，transform-origin 50% 50% 让旋转绕中心正确
+  // img 在 wrap 内 left:50% top:50% translate(-50%,-50%) 始终居中；wrap 负责位移+旋转
+  wrap.style.transform = `translate(140px, 140px) translate(${c.x}px, ${c.y}px) rotate(${c.rot}deg)`;
 }
 function commitCrop() {
   const c = _cropState; if (!c || !c.img) return;

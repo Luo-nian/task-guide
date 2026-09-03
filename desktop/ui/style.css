@@ -1742,7 +1742,8 @@ input::placeholder { color: var(--ink-faint); }
 .crop-title { font-size: 14px; font-weight: 700; color: var(--gold-deep); margin-bottom: 12px; text-align: center; letter-spacing: 0.5px; }
 .crop-stage { width: 280px; height: 280px; position: relative; margin: 0 auto; background: #1a1a1a; border-radius: 12px; overflow: hidden; cursor: grab; user-select: none; }
 .crop-stage:active { cursor: grabbing; }
-.crop-img { position: absolute; left: 140px; top: 140px; transform-origin: 0 0; user-select: none; pointer-events: none; }
+.crop-img-wrap { position: absolute; left: 0; top: 0; pointer-events: none; transform: translate(140px, 140px); transform-origin: 50% 50%; }
+.crop-img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; user-select: none; }
 .crop-ring { position: absolute; width: 128px; height: 128px; left: 76px; top: 76px; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), inset 0 0 0 2px var(--gold); pointer-events: none; }
 .crop-controls { margin-top: 14px; display: flex; gap: 14px; align-items: center; }
 .crop-zoom-label { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
