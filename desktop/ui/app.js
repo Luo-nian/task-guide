@@ -79,7 +79,7 @@ const ICONS = {
   // —— 等级角色 ——
   lv1: '<circle cx="12" cy="6.5" r="1.5"/><path d="M12 8v13"/><path d="M8.5 13c2-1 3.2-2.2 3.5-5"/><path d="M15.5 13c-2-1-3.2-2.2-3.5-5"/>',
   lv2: '<path d="M12 4l8 9c-2 5-5 8-8 8s-6-3-8-8l8-9z"/>',
-  lv3: '<path d="M12 4v8.5"/><path d="M9.4 6.6 12 4l2.6 2.6"/><path d="M2.8 16.5c2.1-2.6 4.6-2.6 6.7 0s4.6 2.6 6.7 0"/><path d="M2.8 20.5c2.1-2.6 4.6-2.6 6.7 0s4.6 2.6 6.7 0"/>',
+  lv3: '<path d="M12 3l2.4 2.6M12 3 9.6 5.6"/><path d="M12 5.6V13.5"/><path d="M9 8.6h6"/><path d="M3.2 15c2.1-2.4 4.3-2.4 6.4 0s4.3 2.4 6.4 0"/><path d="M3.2 19c2.1-2.4 4.3-2.4 6.4 0s4.3 2.4 6.4 0"/>',
   lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
   lv5: '<path d="M4.2 17.6h15.6M4.4 17.6 3 7.2l5.2 4L12 4.8l3.8 6.4L21 7.2l-1.4 10.4"/>',
   // —— 通用 ——
@@ -1055,8 +1055,15 @@ function renderProfileAvatar() {
   const av = document.getElementById('profileAvatar');
   if (!av) return;
   if (settings.avatar_img) {
-    av.innerHTML = '<img class="ph-avatar-img" src="' + settings.avatar_img + '" alt="头像" />';
+    // boss #20 fix：彻底改用 background-image + cover 方案，避免 img 在 flex 容器内对齐问题。
+    // 容器 border-radius:50% + overflow:hidden + background-size:cover 永远完美裁圆，不会溢出。
+    av.textContent = '';
+    av.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
+    av.style.backgroundSize = 'cover';
+    av.style.backgroundPosition = 'center';
+    av.style.backgroundRepeat = 'no-repeat';
   } else {
+    av.style.backgroundImage = '';
     av.textContent = pickAvatarGlyph();
   }
 }
