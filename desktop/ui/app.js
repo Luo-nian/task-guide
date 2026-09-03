@@ -473,14 +473,17 @@ function renderLevelCard() {
   // 个人信息 modal 的等级卡同步刷新（打开时即最新）
   const pn = document.getElementById('profileLevelName'); if (pn) pn.textContent = lv.name;
   const pt = document.getElementById('profileLevelTitle'); if (pt) pt.textContent = lv.title;
-  const pi = document.getElementById('profileLevelIcon'); if (pi) pi.innerHTML = svgIcon(lv.ico || 'lv1', 28, 1.8);
+  const pi = document.getElementById('profileLevelIcon'); if (pi) pi.innerHTML = svgIcon(lv.ico || 'lv1', 36, 1);
   const pnum = document.getElementById('profilePointsNum'); if (pnum) pnum.textContent = points;
   const pfill = document.getElementById('profileExpFill');
   const phint = document.getElementById('profileExpHint');
   if (next) {
     const pct = Math.min(100, Math.max(0, ((points - lv.min) / Math.max(1, lv.max - lv.min)) * 100));
     if (pfill) pfill.style.width = pct + '%';
-    if (phint) phint.textContent = '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
+    // 0 分时空态给引导文案；>0 时显示距下一级具体分数
+    if (phint) phint.textContent = points <= 0
+      ? '开始你的第一项任务吧'
+      : '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
   } else {
     if (pfill) pfill.style.width = '100%';
     if (phint) phint.textContent = '已至巅峰，满级成就达成';
@@ -937,7 +940,7 @@ function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.leng
 function openProfileModal() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
-  document.getElementById('profileLevelIcon').innerHTML = svgIcon(lv.ico || 'lv1', 28, 1.8);
+  document.getElementById('profileLevelIcon').innerHTML = svgIcon(lv.ico || 'lv1', 36, 1);
   document.getElementById('profileLevelName').textContent = lv.name;
   document.getElementById('profileLevelTitle').textContent = lv.title;
   document.getElementById('profilePointsNum').textContent = points;
@@ -945,8 +948,10 @@ function openProfileModal() {
   let pct = 100;
   if (next) {
     pct = Math.min(100, Math.max(0, ((points - lv.min) / Math.max(1, lv.max - lv.min)) * 100));
-    document.getElementById('profileExpHint').textContent =
-      '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
+    // 0 分时空态给引导文案；>0 时显示距下一级具体分数
+    document.getElementById('profileExpHint').textContent = points <= 0
+      ? '开始你的第一项任务吧'
+      : '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
   } else {
     pct = 100;
     document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';

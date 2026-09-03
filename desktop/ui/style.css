@@ -1830,3 +1830,26 @@ input::placeholder, textarea::placeholder, input::-webkit-input-placeholder {
 .pc-level-title { color: var(--ink-soft) !important; }
 .pc-points-num { color: #6B5310 !important; font-weight: 800; }
 .pc-points-label { color: var(--ink-mute) !important; }
+
+/* v4.10.4 等级图标语义化（boss："看不出代表学徒"）*/
+/* SVG path 实心填充（金色） + 移 stroke，让图标像"徽章/标识"不像"线条画" */
+.level-character svg path, .pc-level-icon svg path, .profile-hero .pc-level-icon svg path {
+  fill: var(--gold-deep) !important;
+  stroke: none !important;
+}
+.level-character svg circle, .pc-level-icon svg circle {
+  fill: none !important;
+  stroke: var(--gold-deep) !important;
+  stroke-width: 1.5;
+}
+/* 等级圈加大 + 加金色边让"身份"感更明显 */
+.level-character {
+  width: 52px !important; height: 52px !important;
+  border: 2px solid var(--gold) !important;
+}
+.pc-level-icon {
+  width: 52px !important; height: 52px !important;
+  border: 2px solid var(--gold) !important;
+}
+/* 经验条去掉 ::after 引导文案（现在用 JS 控制，按 points 显示） */
+.pc-exp-bar::after { display: none !important; }
