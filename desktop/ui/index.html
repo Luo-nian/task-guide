@@ -274,7 +274,7 @@
             </div>
             <span class="ph-nick-save-hint">回车</span>
             </div>
-            <div class="ph-sub">每完成一项任务，经验条都会往前走一格</div>
+            <div class="ph-sub"></div>
           </div>
         </div>
 
@@ -501,6 +501,26 @@
   </div>
 
 </div>
-<script src="app.js?v=v61"></script>
+
+<!-- 头像裁剪器（boss #20：上传后用户可调圆形区域，自定义头像位置） -->
+<div class="crop-overlay" id="cropOverlay" style="display:none">
+  <div class="crop-card">
+    <div class="crop-title">调整头像 · 拖动 / 缩放 / 旋转</div>
+    <div class="crop-stage" id="cropStage">
+      <img class="crop-img" id="cropImg" />
+      <div class="crop-ring"></div>
+    </div>
+    <div class="crop-controls">
+      <label class="crop-zoom-label"><span>缩放</span><input type="range" id="cropZoom" min="50" max="300" value="100" /></label>
+      <button class="crop-btn-sm" id="cropRotate">旋转 90°</button>
+    </div>
+    <div class="crop-actions">
+      <button class="crop-btn cancel" id="cropCancel">取消</button>
+      <button class="crop-btn confirm" id="cropConfirm">使用</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=v63"></script>
 </body>
 </html>

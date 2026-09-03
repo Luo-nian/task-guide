@@ -778,24 +778,41 @@ fn get_task_detail(state: tauri::State<AppState>, task_uuid: String) -> serde_js
 #[tauri::command]
 fn start_tracking(state: tauri::State<AppState>, task_uuid: String) -> Result<(), String> {
     let now = chrono::Local::now().timestamp_millis();
-    let db = state.db.lock().unwrap();
-    let max = tracking_max(&db);
-    let cur: i64 = db.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE track_status='tracking' AND deleted=0", [], |r| r.get(0)
-    ).unwrap_or(0);
+    // 同 complete_task 死锁修复：每段 db 操作独立 scope 让锁立即释放，
+    // sync::push_change 必须在完全无锁状态下调用（std::sync::Mutex 非可重入）
+    let max: i64 = {
+        let db = state.db.lock().unwrap();
+        tracking_max(&db)
+    }; // 锁释放
+    let cur: i64 = {
+        let db = state.db.lock().unwrap();
+        db.query_row(
+            "SELECT COUNT(*) FROM tasks WHERE track_status='tracking' AND deleted=0", [], |r| r.get(0)
+        ).unwrap_or(0)
+    }; // 锁释放
     if cur >= max {
         return Err(format!("已达追踪上限（{}）", max));
     }
-    db.execute("UPDATE tasks SET track_status='tracking', updated_at=?1 WHERE uuid=?2",
-        params![now, &task_uuid]).ok();
-    let next: Option<String> = db.query_row(
-        "SELECT uuid FROM steps WHERE task_uuid=?1 AND status!='done' AND deleted=0 ORDER BY sort_order LIMIT 1",
-        params![&task_uuid], |r| r.get(0)
-    ).ok();
+    {
+        let db = state.db.lock().unwrap();
+        db.execute("UPDATE tasks SET track_status='tracking', updated_at=?1 WHERE uuid=?2",
+            params![now, &task_uuid]).ok();
+    } // 锁释放
+    let next: Option<String> = {
+        let db = state.db.lock().unwrap();
+        db.query_row(
+            "SELECT uuid FROM steps WHERE task_uuid=?1 AND status!='done' AND deleted=0 ORDER BY sort_order LIMIT 1",
+            params![&task_uuid], |r| r.get(0)
+        ).ok()
+    }; // 锁释放
     if let Some(nu) = next {
-        db.execute("UPDATE steps SET status='doing', updated_at=?1 WHERE uuid=?2",
-            params![now, &nu]).ok();
+        {
+            let db = state.db.lock().unwrap();
+            db.execute("UPDATE steps SET status='doing', updated_at=?1 WHERE uuid=?2",
+                params![now, &nu]).ok();
+        } // 锁释放
     }
+    // 所有锁都已释放：安全 push_change
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
     Ok(())
 }

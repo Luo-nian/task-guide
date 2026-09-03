@@ -79,7 +79,7 @@ const ICONS = {
   // —— 等级角色 ——
   lv1: '<circle cx="12" cy="6.5" r="1.5"/><path d="M12 8v13"/><path d="M8.5 13c2-1 3.2-2.2 3.5-5"/><path d="M15.5 13c-2-1-3.2-2.2-3.5-5"/>',
   lv2: '<path d="M12 4l8 9c-2 5-5 8-8 8s-6-3-8-8l8-9z"/>',
-  lv3: '<path d="M12 3.2 5 5.7v5.8c0 4.3 2.9 7.3 7 8.8 4.1-1.5 7-4.5 7-8.8V5.7L12 3.2Z"/><path d="M9.2 11.9l2 2 3.6-3.9"/>',
+  lv3: '<path d="M12 4v8.5"/><path d="M9.4 6.6 12 4l2.6 2.6"/><path d="M2.8 16.5c2.1-2.6 4.6-2.6 6.7 0s4.6 2.6 6.7 0"/><path d="M2.8 20.5c2.1-2.6 4.6-2.6 6.7 0s4.6 2.6 6.7 0"/>',
   lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
   lv5: '<path d="M4.2 17.6h15.6M4.4 17.6 3 7.2l5.2 4L12 4.8l3.8 6.4L21 7.2l-1.4 10.4"/>',
   // —— 通用 ——
@@ -1008,6 +1008,47 @@ _profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preve
 const _profileNickSave = document.getElementById('profileNickSave');
 if (_profileNickSave) _profileNickSave.addEventListener('click', () => { if (_profileNick) _profileNick.blur(); });
 
+// ===== 自定义软件风 tooltip（替代系统黑底白字原生 title） =====
+// boss 反馈：系统 tooltip 黑底白字太丑 + 经常被旁边挡住。改为浅底金边深字的软件风格。
+// 排除 .nav-item（侧栏已有 .nav-tip 标签，避免双重显示）。
+// 排除 input/textarea（避免截获用户输入焦点）。
+(function installSoftTip() {
+  let el = document.getElementById('_softTip');
+  if (!el) { el = document.createElement('div'); el.id = '_softTip'; document.body.appendChild(el); }
+  function show(text, rect) {
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top  = (rect.bottom + 8) + 'px';
+    requestAnimationFrame(() => {
+      const er = el.getBoundingClientRect();
+      if (er.bottom > window.innerHeight - 6) el.style.top = (rect.top - er.height - 8) + 'px';
+      if (er.right > window.innerWidth - 6)   el.style.left = (window.innerWidth - er.width - 6) + 'px';
+      if (er.left < 6) el.style.left = '6px';
+    });
+  }
+  function hide() { el.style.display = 'none'; }
+  document.addEventListener('mouseover', function(e) {
+    const t = e.target.closest('[title]');
+    if (!t || t.classList.contains('nav-item') || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') { hide(); return; }
+    if (t.dataset.stHandled !== '1') {
+      t.dataset.stOrig = t.getAttribute('title') || '';
+      t.removeAttribute('title');
+      t.dataset.stHandled = '1';
+    }
+    if (t.dataset.stOrig) show(t.dataset.stOrig, t.getBoundingClientRect());
+  });
+  document.addEventListener('mouseout', function(e) {
+    const t = e.target.closest('[data-st-handled]');
+    if (t) {
+      t.setAttribute('title', t.dataset.stOrig || '');
+      delete t.dataset.stHandled;
+      delete t.dataset.stOrig;
+    }
+    hide();
+  });
+})();
+
 // 头像：自定义图（base64）优先；没有则用字符。字符模式下"换"按钮切下一个字符；
 // 有图时"换"按钮切回字符模式（清除图片 + 回到当前 avatarIdx 的字符）。
 function renderProfileAvatar() {
@@ -1041,32 +1082,92 @@ document.getElementById('profileAvatar').addEventListener('click', () => {
 // 上传自己的图片：选文件 → 缩放到 96×96 → base64 存 settings.avatar_img
 const _profileAvatarFile = document.getElementById('profileAvatarFile');
 document.getElementById('profileAvatarUpload').addEventListener('click', () => _profileAvatarFile && _profileAvatarFile.click());
+// boss #20：上传图片走裁剪器（参考社区软件头像裁剪），用户可调圆形区域再保存
 _profileAvatarFile.addEventListener('change', e => {
   const f = e.target.files && e.target.files[0];
   if (!f) return;
+  openCropper(f);
+  e.target.value = '';
+});
+
+// ===== 头像裁剪器 =====
+let _cropState = null, _cropDrag = null;
+function openCropper(file) {
+  if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
     const img = new Image();
     img.onload = () => {
-      // 等比缩放到 ≤96px，居中画到 96×96 透明画布
-      const size = 96;
-      const c = document.createElement('canvas');
-      c.width = c.height = size;
-      const ctx = c.getContext('2d');
-      const s = Math.min(size / img.width, size / img.height);
-      const w = img.width * s, h = img.height * s;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      settings.avatar_img = c.toDataURL('image/png');
-      saveSettings();
-      renderProfileAvatar();
+      // 初始 scale：让图片短边 ≈ 圆直径，便于覆盖圆
+      const s0 = 128 / Math.min(img.width, img.height);
+      _cropState = { img, scale: s0, x: 0, y: 0, rot: 0 };
+      renderCrop();
+      const z = document.getElementById('cropZoom'); if (z) z.value = 100;
+      const ov = document.getElementById('cropOverlay'); if (ov) ov.style.display = 'flex';
     };
-    img.onerror = () => alert('图片加载失败，换一张试试');
     img.src = ev.target.result;
   };
-  reader.readAsDataURL(f);
-  // 重置 file input，允许重新选同一张图
-  e.target.value = '';
+  reader.readAsDataURL(file);
+}
+function renderCrop() {
+  const c = _cropState; if (!c || !c.img) return;
+  const el = document.getElementById('cropImg');
+  const w = c.img.width * c.scale;
+  const h = c.img.height * c.scale;
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  el.style.transform = `translate(${-w/2 + c.x}px, ${-h/2 + c.y}px) rotate(${c.rot}deg)`;
+}
+function commitCrop() {
+  const c = _cropState; if (!c || !c.img) return;
+  const size = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  ctx.translate(size/2, size/2);
+  ctx.rotate(c.rot * Math.PI / 180);
+  const w = c.img.width * c.scale;
+  const h = c.img.height * c.scale;
+  ctx.drawImage(c.img, -w/2 + c.x, -h/2 + c.y, w, h);
+  settings.avatar_img = cv.toDataURL('image/png');
+  saveSettings();
+  renderProfileAvatar();
+  closeCrop();
+}
+function closeCrop() {
+  const ov = document.getElementById('cropOverlay'); if (ov) ov.style.display = 'none';
+  _cropState = null;
+}
+const _cropStage = document.getElementById('cropStage');
+if (_cropStage) _cropStage.addEventListener('mousedown', e => {
+  if (!_cropState) return;
+  e.preventDefault();
+  _cropDrag = { mx: e.clientX, my: e.clientY, sx: _cropState.x, sy: _cropState.y };
 });
+window.addEventListener('mousemove', e => {
+  if (!_cropDrag || !_cropState) return;
+  _cropState.x = _cropDrag.sx + (e.clientX - _cropDrag.mx);
+  _cropState.y = _cropDrag.sy + (e.clientY - _cropDrag.my);
+  renderCrop();
+});
+window.addEventListener('mouseup', () => _cropDrag = null);
+const _cropZoom = document.getElementById('cropZoom');
+if (_cropZoom) _cropZoom.addEventListener('input', e => {
+  if (!_cropState || !_cropState.img) return;
+  const base = 128 / Math.min(_cropState.img.width, _cropState.img.height);
+  _cropState.scale = base * (e.target.value / 100);
+  renderCrop();
+});
+const _cropRotate = document.getElementById('cropRotate');
+if (_cropRotate) _cropRotate.addEventListener('click', () => {
+  if (!_cropState) return;
+  _cropState.rot = (_cropState.rot + 90) % 360;
+  renderCrop();
+});
+const _cropCancel = document.getElementById('cropCancel');
+if (_cropCancel) _cropCancel.addEventListener('click', closeCrop);
+const _cropConfirm = document.getElementById('cropConfirm');
+if (_cropConfirm) _cropConfirm.addEventListener('click', commitCrop);
 
 // 跳转到"设置"页（连接手机端）
 document.getElementById('profileGoSettings').addEventListener('click', () => {

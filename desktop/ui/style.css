@@ -186,6 +186,8 @@ body::after {
   background: linear-gradient(180deg, rgba(248, 243, 231, 0.96), rgba(243, 235, 219, 0.92));
   border-right: 1px solid var(--border-soft);
   grid-row: 2; grid-column: 1;
+  position: relative;     /* boss: nav-tip 被"总览"栏挡住 → 让侧栏整体浮在 list-pane 之上 */
+  z-index: 10;
 }
 .nav-item {
   position: relative;
@@ -234,17 +236,8 @@ body::after {
 .ico-archive,
 .ico-clock    { background: linear-gradient(135deg, #C9A227, #8A6B30); }  /* boss #16：补历史任务图标 */
 .nav-item .nav-tip {
-  position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
-  margin-left: 8px;
-  background: var(--ink); color: var(--bg-paper);
-  font-size: 10.5px; padding: 3px 8px;
-  border-radius: 5px;
-  white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transition: opacity .15s;
-  z-index: 100;
+  display: none !important;            /* boss #22：隐藏旧 nav-tip，改用全局软件风 #_softTip */
 }
-.nav-item:hover .nav-tip { opacity: 1; }
 .nav-spacer { flex: 1; }
 /* 历史项：只用间距分隔（原来的 padding-top 会把图标压低 7px，与其它 4 项不对齐） */
 .nav-item.repo { margin-top: 8px; }
@@ -1527,11 +1520,11 @@ input::placeholder { color: var(--ink-faint); }
   cursor: pointer;
 }
 .ph-info { flex: 1; min-width: 0; }
-.ph-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ph-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .ph-nick-input {
-  flex: 1; min-width: 0;
+  flex: 1 1 140px; min-width: 140px;
   background: rgba(255, 254, 251, 0.95); border: 1px solid var(--border-soft);
-  color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: 1px;
+  color: var(--ink); font-size: 14px; font-weight: 600; letter-spacing: 0.5px;
   padding: 6px 10px; border-radius: 8px;
 }
 .ph-nick-input:focus { outline: 0; border-color: var(--gold); }
@@ -1721,3 +1714,41 @@ input::placeholder { color: var(--ink-faint); }
 /* 9. 卡片/模态底部背景随 body 亚麻暖光（mainPane 原 var(--panel) 在 body 上，保持半透明层次） */
 .widget { background: transparent; }
 .topbar { background: rgba(255, 253, 248, 0.88); }
+
+/* ===== v4.13 自定义软件风 tooltip（替代系统黑底白字原生 title） ===== */
+#_softTip {
+  position: fixed;
+  display: none;
+  transform: translateX(-50%);
+  background: rgba(250, 247, 240, 0.98);
+  color: var(--ink-black);
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 260px;
+  z-index: 99999;
+  box-shadow: 0 4px 14px rgba(90, 70, 28, 0.22);
+  pointer-events: none;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* ===== 头像裁剪器（boss #20） ===== */
+.crop-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(60, 45, 25, 0.55); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.crop-card { background: rgba(255, 254, 250, 0.98); border-radius: 14px; padding: 18px 18px 14px; box-shadow: 0 10px 40px rgba(70, 58, 34, 0.35); border: 1.5px solid var(--gold); width: 360px; max-width: 92vw; }
+.crop-title { font-size: 14px; font-weight: 700; color: var(--gold-deep); margin-bottom: 12px; text-align: center; letter-spacing: 0.5px; }
+.crop-stage { width: 280px; height: 280px; position: relative; margin: 0 auto; background: #1a1a1a; border-radius: 12px; overflow: hidden; cursor: grab; user-select: none; }
+.crop-stage:active { cursor: grabbing; }
+.crop-img { position: absolute; left: 140px; top: 140px; transform-origin: 0 0; user-select: none; pointer-events: none; }
+.crop-ring { position: absolute; width: 128px; height: 128px; left: 76px; top: 76px; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), inset 0 0 0 2px var(--gold); pointer-events: none; }
+.crop-controls { margin-top: 14px; display: flex; gap: 14px; align-items: center; }
+.crop-zoom-label { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.crop-zoom-label input[type=range] { flex: 1; accent-color: var(--gold); }
+.crop-btn-sm { background: rgba(255, 254, 250, 0.85); border: 1px solid var(--border-mid); padding: 6px 12px; border-radius: 6px; font-size: 12px; color: var(--ink); cursor: pointer; }
+.crop-actions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; }
+.crop-btn { padding: 8px 22px; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; border: 1px solid; }
+.crop-btn.cancel { background: rgba(255, 254, 250, 0.85); color: var(--ink); border-color: var(--border-mid); }
+.crop-btn.confirm { background: var(--gold); color: #fff; border-color: var(--gold-deep); }
