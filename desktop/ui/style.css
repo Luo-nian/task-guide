@@ -90,7 +90,7 @@ body::after {
   overflow: hidden;
   display: grid;
   grid-template-rows: 44px 1fr;
-  grid-template-columns: 7% 30% 1fr;   /* 7% / 30% / 63% */
+  grid-template-columns: 9% 30% 1fr;   /* boss #12：侧栏从 7% 加宽到 9%，加长 */
   transition: width .25s ease, height .25s ease;
 }
 /* 折叠态：仅占右下角 */
@@ -228,9 +228,11 @@ body::after {
 .nav-item.active .ico { box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.1), 0 0 10px var(--glow-gold); }
 .ico-overview { background: linear-gradient(135deg, #A78BFA, #5B3FB0); }
 .ico-daily    { background: linear-gradient(135deg, #5BA3D0, #2E6FA0); }
+.ico-goal     { background: linear-gradient(135deg, #B49BE0, #7E62A6); }  /* boss #16：补目标任务图标 */
 .ico-lim      { background: linear-gradient(135deg, #D88A3F, #A55F1A); }
 .ico-once     { background: linear-gradient(135deg, #4A8B6F, #2E6F58); }
-.ico-archive  { background: linear-gradient(135deg, #C9A227, #8A6B30); }
+.ico-archive,
+.ico-clock    { background: linear-gradient(135deg, #C9A227, #8A6B30); }  /* boss #16：补历史任务图标 */
 .nav-item .nav-tip {
   position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
   margin-left: 8px;
@@ -373,14 +375,17 @@ body::after {
 .cat-task.tracking::before { background: linear-gradient(90deg, var(--azure), transparent); opacity: 1; }
 
 .ct-diamond {
-  width: 8px; height: 8px;
+  width: 6px; height: 6px;            /* boss #5：菱形再小一点 */
   background: transparent;
-  border-radius: 2px;
+  border-radius: 1px;
   transform: rotate(45deg);
   display: none;
   position: relative;
-  flex: 0 0 8px;
+  flex: 0 0 6px;
   margin-left: auto;                 /* 靠右 */
+  /* 边缘光存在感增强：双层 box-shadow 模拟原神追踪态脉冲 */
+  box-shadow: 0 0 0 1.5px rgba(232, 203, 127, 0.95),  /* 内圈金边 */
+              0 0 6px 1px rgba(232, 203, 127, 0.55);   /* 外圈光晕 */
 }
 /* 只有追踪中才显示蓝色小菱形 + 涟漪呼吸金色边框（放最右侧） */
 .cat-task.tracking .ct-diamond,
@@ -611,7 +616,7 @@ body::after {
 
 /* 角色卡（等级 + 当前角色，简洁版：名字 + 问号） */
 .level-card {
-  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  background: linear-gradient(135deg, #FFFFFF, #F0E8D6);  /* 浅米底，破浪骑士 4 字清楚可见 */
   border: 1px solid var(--border-mid);
   border-radius: 10px;
   padding: 12px 14px;
@@ -624,7 +629,7 @@ body::after {
 .level-card::before {
   content: ""; position: absolute; right: -20px; top: -20px;
   width: 80px; height: 80px;
-  background: radial-gradient(circle, var(--glow-gold), transparent 70%);
+  background: radial-gradient(circle, rgba(232, 203, 127, 0.45), transparent 70%);
   opacity: 0.6;
 }
 .level-character {
@@ -637,7 +642,7 @@ body::after {
   flex: 0 0 52px;
 }
 .level-info { flex: 1; min-width: 0; }
-.level-name { color: var(--gold-deep); font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }  /* 深字，浅底上清晰 */
 .level-title { color: var(--ink-soft); font-size: 11.5px; margin-top: 3px; }
 /* 灰色问号图标（设计过：圆圈 + ？） */
 .level-q {
@@ -795,7 +800,7 @@ body::after {
   background: rgba(255, 255, 255, 0.35);
 }
 .goal-add:hover, .goal-ai:hover, .goal-json:hover { opacity: 1; background: rgba(201, 162, 39, 0.12); }
-.goal-json { border-style: solid; border-color: rgba(212, 175, 55, 0.45); color: var(--gold); }
+.goal-json { border-style: dashed; border-color: var(--border-soft); color: var(--ink-mute); }
 
 /* JSON 导入弹窗 */
 .json-modal { max-width: 560px; width: min(600px, calc(100vw - 60px)); }
@@ -1497,7 +1502,8 @@ input::placeholder { color: var(--ink-faint); }
   border: 1px solid var(--border-soft);
   margin-bottom: 14px;
 }
-.ph-avatar-wrap { position: relative; }
+/* 头像：自动裁圆（boss #9：上传图片应自动成圆，非矩形头像+圆框） */
+.ph-avatar-wrap { position: relative; border-radius: 50%; overflow: hidden; }
 .ph-avatar {
   width: 64px; height: 64px; border-radius: 50%;
   background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
@@ -1506,6 +1512,12 @@ input::placeholder { color: var(--ink-faint); }
   font-size: 28px; font-weight: 700;
   box-shadow: 0 0 14px var(--glow-gold), inset 0 0 0 2px rgba(255,255,255,0.2);
   cursor: pointer; user-select: none;
+  overflow: hidden;
+}
+.ph-avatar-img {
+  width: 100% !important; height: 100% !important;
+  border-radius: 50% !important; object-fit: cover !important;
+  display: block !important;
 }
 .ph-avatar-edit {
   position: absolute; right: -4px; bottom: -4px;
@@ -1523,7 +1535,23 @@ input::placeholder { color: var(--ink-faint); }
   padding: 6px 10px; border-radius: 8px;
 }
 .ph-nick-input:focus { outline: 0; border-color: var(--gold); }
-.ph-nick-save-tip { color: var(--ink-mute); font-size: 11px; }
+/* 昵称"保存"按钮 + 按钮下小字"回车"提示（boss #10） */
+.ph-nick-save-btn {
+  background: rgba(195, 145, 47, 0.18);
+  color: var(--gold-deep);
+  border: 1px solid var(--gold);
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .15s ease;
+}
+.ph-nick-save-btn:hover { background: rgba(195, 145, 47, 0.32); }
+.ph-nick-save-btn:active { background: rgba(195, 145, 47, 0.42); }
+.ph-nick-save-hint { color: var(--ink-mute); font-size: 11.5px; line-height: 1.4; display: inline-block; margin-left: 4px; }
 .ph-sub { color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
 
 .profile-card {
@@ -1580,7 +1608,7 @@ input::placeholder { color: var(--ink-faint); }
   box-shadow: 0 0 10px var(--glow-gold);
 }
 .level-info { flex: 1; min-width: 0; padding-left: 4px; }
-.level-name { color: var(--gold-light); font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+.level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }
 .level-title { color: var(--ink-soft); font-size: 12px; margin-top: 2px; line-height: 1.4; }
 
 /* 全局次要文字字号微调（之前 11/11.5 太小看不清） */

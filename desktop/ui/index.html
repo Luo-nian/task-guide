@@ -21,6 +21,10 @@
         <span class="level-icon" id="levelIcon"></span>
         <span class="level-text" id="levelText">历练学徒</span>
       </div>
+      <button class="ico-btn" id="settingsBtn" title="设置" data-tauri-drag-region-exclude>
+        <span class="ico-slot" data-icon="gear" data-icon-size="16" data-icon-sw="1.9"></span>
+      </button>
+      <span class="top-divider" aria-hidden="true"></span>
       <button class="ico-btn win-btn" id="winMin" title="最小化" data-tauri-drag-region-exclude>
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M5 12h14"/></svg>
       </button>
@@ -29,9 +33,6 @@
       </button>
       <button class="ico-btn win-btn close" id="winClose" title="最小化到托盘" data-tauri-drag-region-exclude>
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>
-      </button>
-      <button class="ico-btn" id="settingsBtn" title="设置" data-tauri-drag-region-exclude>
-        <span class="ico-slot" data-icon="gear" data-icon-size="16" data-icon-sw="1.9"></span>
       </button>
     </div>
   </header>
@@ -71,7 +72,6 @@
     <div class="overview-view" id="overviewView">
       <div class="view-head">
         <span class="vh-title">总览</span>
-        <span class="vh-hint">每日 / 目标 / 限时 / 次数</span>
       </div>
       <div class="cat-grid" id="catGrid" style="padding: 0 6px 6px; display:flex; flex-direction:column; gap:6px;">
         <div class="cat-card" data-cat="daily">
@@ -112,7 +112,6 @@
         <div class="dash-greet-icon" data-icon="sparkle" data-icon-size="16"></div>
         <div style="flex:1">
           <div class="dash-greet-text" id="dashGreetText">下午好，冒险者</div>
-          <div class="dash-greet-sub" id="dashGreetSub">愿今日所行皆有回响</div>
         </div>
       </div>
 
@@ -158,11 +157,7 @@
         </div>
       </div>
 
-      <!-- 22:00 提醒 / 紧急任务提示卡（白话版） -->
-      <div class="tip-card" id="tipCard">
-        <div class="tip-ico" data-icon="bell" data-icon-size="15"></div>
-        <div class="tip-text" id="tipText">每日任务到 0 点会自动刷新；每天 22:00 还没做完会弹窗提醒</div>
-      </div>
+      <!-- boss 反馈：这个 22:00 提醒小字提示很没必要 → 已删除整块 tipCard -->
     </div>
 
     <!-- 任务详情页 -->
@@ -275,7 +270,9 @@
           <div class="ph-info">
             <div class="ph-nick-row">
               <input class="ph-nick-input" id="profileNickname" placeholder="历练者" maxlength="12" />
-              <span class="ph-nick-save-tip">回车保存</span>
+              <button class="ph-nick-save-btn" id="profileNickSave">保存</button>
+            </div>
+            <span class="ph-nick-save-hint">回车</span>
             </div>
             <div class="ph-sub">每完成一项任务，经验条都会往前走一格</div>
           </div>
@@ -504,6 +501,6 @@
   </div>
 
 </div>
-<script src="app.js?v=v60"></script>
+<script src="app.js?v=v61"></script>
 </body>
 </html>

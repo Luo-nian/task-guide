@@ -57,11 +57,11 @@ const CAT_LABEL = { 'daily':'每日任务', 'goal':'目标任务', 'time-limited
 // =============== 5 段等级（集满积分升级，励志角色） ===============
 // ico 指向 ICONS 里的 SVG 图标名（不再用 emoji / 数字，避免系统字体渲染成彩色符号）
 const LEVELS = [
-  { lv:1, name:'历练学徒',  title:'敢开始，就已经赢了一半',      ico:'lv1', min:0,   max:20  },
-  { lv:2, name:'风华游侠',  title:'汗水从不会辜负你',            ico:'lv2', min:20,  max:60  },
-  { lv:3, name:'破浪骑士',  title:'风浪越大，越显本色',          ico:'lv3', min:60,  max:120 },
-  { lv:4, name:'群星行者',  title:'你走过的每一步都算数',        ico:'lv4', min:120, max:200 },
-  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',            ico:'lv5', min:200, max:999 }
+  { lv:1, name:'历练学徒',  title:'再小的开始，也是一大步',        ico:'lv1', min:0,   max:20  },
+  { lv:2, name:'风华游侠',  title:'行有所向，便有所成',            ico:'lv2', min:20,  max:60  },
+  { lv:3, name:'破浪骑士',  title:'稳扎稳打，厚积薄发',            ico:'lv3', min:60,  max:120 },
+  { lv:4, name:'群星行者',  title:'路在脚下，星在远方',            ico:'lv4', min:120, max:200 },
+  { lv:5, name:'传奇勇者',  title:'你就是自己的传说',              ico:'lv5', min:200, max:999 }
 ];
 
 // =============== 内联 SVG 图标库 ===============
@@ -77,8 +77,8 @@ const ICONS = {
   archive:  '<rect x="3.2" y="4" width="17.6" height="5" rx="1.7"/><path d="M5.2 9v9.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
   goal:     '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
   // —— 等级角色 ——
-  lv1: '<path d="M18.6 3.4 20.6 5.4 10.2 15.8 5.8 20.2l-2-2 4.4-4.4L18.6 3.4Z"/><path d="M14.8 7.2l2 2"/>',
-  lv2: '<path d="M5.6 18.4c6.4-1.4 11.4-6.4 12.8-12.8"/><path d="M5.6 18.4l3.9-2.3"/><path d="M15.4 4.6l4 4"/>',
+  lv1: '<circle cx="12" cy="6.5" r="1.5"/><path d="M12 8v13"/><path d="M8.5 13c2-1 3.2-2.2 3.5-5"/><path d="M15.5 13c-2-1-3.2-2.2-3.5-5"/>',
+  lv2: '<path d="M12 4l8 9c-2 5-5 8-8 8s-6-3-8-8l8-9z"/>',
   lv3: '<path d="M12 3.2 5 5.7v5.8c0 4.3 2.9 7.3 7 8.8 4.1-1.5 7-4.5 7-8.8V5.7L12 3.2Z"/><path d="M9.2 11.9l2 2 3.6-3.9"/>',
   lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
   lv5: '<path d="M4.2 17.6h15.6M4.4 17.6 3 7.2l5.2 4L12 4.8l3.8 6.4L21 7.2l-1.4 10.4"/>',
@@ -299,12 +299,15 @@ function renderOverview() {
 
   for (const cat of Object.keys(groups)) {
     const arr = groups[cat];
+    const card = document.querySelector(`.cat-card[data-cat="${cat}"]`);
     const cntEl = document.getElementById('c' + catMapId(cat));
-    if (cntEl) cntEl.textContent = arr.length;
     const box = document.getElementById('list' + catMapId(cat));
+    // 无任务时整张分类卡隐藏（boss 反馈"无任务就不用显示了啊"）
     if (arr.length === 0) {
-      box.innerHTML = `<div class="cc-empty">暂无任务</div>`;
+      if (card) card.style.display = 'none';
     } else {
+      if (card) card.style.display = '';
+      if (cntEl) cntEl.textContent = arr.length;
       box.innerHTML = arr.map(t => catTaskHtml(t)).join('');
     }
   }
@@ -443,11 +446,7 @@ function renderDashboard() {
   document.getElementById('statWeek').innerHTML = (progressInfo.week || 0) + '<span class="unit">项</span>';
   document.getElementById('statWeekTrend').textContent = '稳步前行';
 
-  // 22:00 提示（白话版）
-  const night = settings.night_notify;
-  document.getElementById('tipText').innerHTML = night
-    ? '每日任务到 <b>0 点会自动刷新</b>；每天 <b>22:00</b> 还没做完会弹窗提醒'
-    : '每日任务到 0 点会自动刷新（22:00 提醒已关闭）';
+  // boss 反馈：22:00 提醒提示很没必要 → tipCard 已删整块（HTML+JS），不再渲染
 }
 
 function renderLevelBadge() {
@@ -608,29 +607,50 @@ window.untrackTask = async function(uuid) {
   openDetail(uuid);
 };
 window.completeTask = async function(uuid) {
-  await call('complete_task', { taskUuid: uuid });
+  // 提前取 title/points（render 之后可能从 today 列表过滤掉已完成任务）
+  const before = (typeof tasks !== 'undefined' ? tasks : []).find(t => t.uuid === uuid);
+  const title = before ? before.title : '';
+  const points = (before && before.reward_points) || 0;
+  const r = await call('complete_task', { taskUuid: uuid });
   closeDetail();
-  // 检查是否完成今日最后一项（每日 + 当日限时）
-  await checkBlessing();
+  // 刷新主面板（积分/进度/列表）
+  await render();
+  // boss 要"完成任务弹奖励提示"（原神风）：每次真正完成（partial=false）都弹
+  if (r && r.partial === false) {
+    const habitPts = (r.habit && points === 0) ? 5 : points;
+    showBless({ mode: 'reward', title: title, points: habitPts });
+  }
+  // partial 路径（次数任务累计中）：不弹窗打断节奏，仅在控制台
+  else if (r && r.partial === true && r.done_count !== undefined) {
+    console.log('[progress]', r.done_count + '/' + r.count);
+  }
 };
-async function checkBlessing() {
-  try {
-    const r = await call('get_daily_progress', {});
-    if (r && r.total > 0 && r.done >= r.total) {
-      showBless();
-    }
-  } catch(e) {}
-}
-function showBless() {
-  const msgs = [
-    { t:'恭喜你已完成今日任务', s:'愿星辰指引你的前路', m:'日拱一卒，功不唐捐<br>愿你继续保持这份热情' },
-    { t:'今日之约，已圆满', s:'下一段旅程在前方等你', m:'<b>坚持</b>是最高的技巧<br>你已经走在了大多数人前面' },
-    { t:'愿你此刻内心安宁', s:'每一份努力都在积蓄力量', m:'今日播种，明日收获<br>休息一下，准备迎接新的挑战' }
-  ];
-  const m = msgs[Math.floor(Math.random() * msgs.length)];
-  document.getElementById('blessTitle').textContent = m.t;
-  document.getElementById('blessSub').textContent = m.s;
-  document.getElementById('blessMsg').innerHTML = m.m;
+function showBless(opts) {
+  opts = opts || {};
+  const tEl = document.getElementById('blessTitle');
+  const sEl = document.getElementById('blessSub');
+  const mEl = document.getElementById('blessMsg');
+  if (opts.mode === 'daily') {
+    // 今日全完成祝福（每日仅一次）
+    const msgs = [
+      { t:'恭喜你已完成今日任务', s:'愿星辰指引你的前路', m:'日拱一卒，功不唐捐<br>愿你继续保持这份热情' },
+      { t:'今日之约，已圆满', s:'下一段旅程在前方等你', m:'<b>坚持</b>是最高的技巧<br>你已经走在了大多数人前面' },
+      { t:'愿你此刻内心安宁', s:'每一份努力都在积蓄力量', m:'今日播种，明日收获<br>休息一下，准备迎接新的挑战' }
+    ];
+    const m = msgs[Math.floor(Math.random() * msgs.length)];
+    tEl.textContent = m.t; sEl.textContent = m.s; mEl.innerHTML = m.m;
+  } else if (opts.mode === 'reward') {
+    // 单任务完成奖励（原神风：+N 经验）
+    const pts = opts.points || 0;
+    const title = opts.title || '本回合';
+    tEl.textContent = '+ ' + pts + ' 经验';
+    sEl.textContent = title;
+    mEl.innerHTML = '<b>任务已完成</b><br>这一小步，已被记下';
+  } else {
+    tEl.textContent = '完成';
+    sEl.textContent = '';
+    mEl.innerHTML = '继续保持';
+  }
   document.getElementById('blessOverlay').style.display = '';
 }
 document.getElementById('blessClose').addEventListener('click', () => {
@@ -984,6 +1004,9 @@ function commitNickname() {
 }
 _profileNick.addEventListener('change', commitNickname);
 _profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _profileNick.blur(); } });
+// 昵称"保存"按钮：触发 blur → change → commit
+const _profileNickSave = document.getElementById('profileNickSave');
+if (_profileNickSave) _profileNickSave.addEventListener('click', () => { if (_profileNick) _profileNick.blur(); });
 
 // 头像：自定义图（base64）优先；没有则用字符。字符模式下"换"按钮切下一个字符；
 // 有图时"换"按钮切回字符模式（清除图片 + 回到当前 avatarIdx 的字符）。
