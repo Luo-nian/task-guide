@@ -1205,7 +1205,7 @@ function openCropper(file) {
     img.onload = () => {
       // 初始 scale：让图片短边 = 圆形取景框直径 280px（保证初始覆盖圆）
       const s0 = 280 / Math.min(img.width, img.height);
-      _cropState = { img, scale: s0, x: 0, y: 0 };
+      _cropState = { img, scale: s0, s0, x: 0, y: 0 };
       renderCrop();
       document.getElementById('cropOverlay').classList.add('show');
     };
@@ -1222,8 +1222,14 @@ function renderCrop() {
   // ★ boss #20 修复核心：CDP 实测 srcLen=0 —— 图片从未赋给 DOM img，只存内存里
   //   导致裁剪窗永远空图 + 旧黑背景 = 全黑看不清。必须先赋 src。
   if (el.getAttribute('src') !== c.img.src) el.setAttribute('src', c.img.src);
+  // ★ 边界 clamp：boss 反映"不会用"另一层含义——图可拖出圆窗露出白底
+  //   限制 x/y 让图片始终覆盖圆窗（不小于 stage 圆直径 = 280），缩放不低于初始 s0（保证 cover）
+  const stage = 280;
   const w = c.img.width * c.scale;
   const h = c.img.height * c.scale;
+  if (c.scale < c.s0) c.scale = c.s0;
+  c.x = Math.max(-(w - stage) / 2, Math.min((w - stage) / 2, c.x));
+  c.y = Math.max(-(h - stage) / 2, Math.min((h - stage) / 2, c.y));
   el.style.width = w + 'px';
   el.style.height = h + 'px';
   // 双层 div wrap：img 居中，wrap 负责位移（去旋转：保留简单的平移操作）
