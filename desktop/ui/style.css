@@ -1496,8 +1496,9 @@ input::placeholder { color: var(--ink-faint); }
   border: 1px solid var(--border-soft);
   margin-bottom: 14px;
 }
-/* 头像：自动裁圆（boss #9：上传图片应自动成圆，非矩形头像+圆框） */
-.ph-avatar-wrap { position: relative; border-radius: 50%; overflow: hidden; }
+/* 头像：自动裁圆（boss #9：上传图片应自动成圆，非矩形头像+圆框）
+   .ph-avatar-wrap 必须 overflow:visible 否则"换"/"图"两个浮动按钮被裁掉（boss #35） */
+.ph-avatar-wrap { position: relative; }
 .ph-avatar {
   width: 64px; height: 64px; border-radius: 50%;
   background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
