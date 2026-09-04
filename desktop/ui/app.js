@@ -563,15 +563,15 @@ window.openDetail = async function(uuid) {
         <span>▶ 任务步骤</span>
         <span class="gh-progress">${doneSteps} / ${totalSteps || 0} 已完成</span>
       </div>
-      ${totalSteps === 0 ? '<div class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">' + svgIcon('plus',13,2.2) + '</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此手动添加）</span></div>' :
+      ${totalSteps === 0 ? '<div class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">' + svgIcon('plus',13,2.2) + '</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此添加）</span></div>' :
         steps.map(s => `<div class="goal-item ${s.status==='done'?'done':''}" onclick="toggleStep('${t.uuid}','${s.uuid}','${s.status}')" title="点击切换完成状态">
           <span class="g-play ${s.status==='done'?'done':''}">${s.status==='done'?svgIcon('check',13,2.7):svgIcon('ring',13,1.8)}</span>
           <span class="g-text">${esc(s.title)}</span>
           ${s.attr_value ? `<span class="g-attr">${esc(s.attr_label||'')}: ${esc(s.attr_value)}</span>` : ''}
         </div>`).join('')}
+      <!-- boss A：添加步骤单一入口，JSON 不再独立并排按钮，收进展开面板（手动/JSON 二合一） -->
       <div class="goal-tools">
-        <div class="goal-add" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
-        <div class="goal-json" onclick="openJsonImport('${t.uuid}')" title="粘贴外部 AI 拆好的 JSON，批量生成步骤">${svgIcon('code',13,1.9)} 添加 JSON</div>
+        <div class="goal-add" id="goalAddBtn" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
       </div>
     </div>
 
@@ -692,18 +692,26 @@ window.toggleStep = async function(taskUuid, stepUuid, curStatus) {
 // 添加步骤 inline 版：原生 prompt 在 Tauri WebView2 里被禁用，会出现"按了没反应"的假死，
 // 改成在目标任务的步骤列表里就地插入一行输入框，按回车 / 点"添加"提交，Esc/取消收起。
 window.showInlineAddStep = function(taskUuid) {
-  // 详情页步骤区的工具行（添加步骤 / 添加 JSON 所在容器），把内联输入行插到它前面
+  // 详情页步骤区的工具行容器，把内联输入行插到它前面
   const wrap = document.querySelector('#detailView .goal-tools, #detailBody .goal-tools');
   if (!wrap) return;
   if (document.getElementById('inlineStepRow')) return;          // 已展开就别重开
+  // 入口按钮先隐藏，整个"添加"面板展开（boss A：手动输入 + JSON 导入收进同一卡片）
+  const btn = document.getElementById('goalAddBtn');
+  if (btn) btn.style.display = 'none';
   const row = document.createElement('div');
-  row.className = 'goal-item goal-add-row';
+  row.className = 'goal-item goal-add-row goal-panel';
   row.id = 'inlineStepRow';
   row.innerHTML = `
-    <span class="g-play">${svgIcon('plus',13,2.2)}</span>
-    <input class="g-input" id="inlineStepInput" placeholder="步骤名（按回车提交）" autocomplete="off" />
-    <button class="g-submit" id="inlineStepSubmit">添加</button>
-    <button class="g-cancel" id="inlineStepCancel">取消</button>
+    <div class="gap-input-line">
+      <span class="g-play">${svgIcon('plus',13,2.2)}</span>
+      <input class="g-input" id="inlineStepInput" placeholder="步骤名（按回车提交）" autocomplete="off" />
+      <button class="g-submit" id="inlineStepSubmit">添加</button>
+      <button class="g-cancel" id="inlineStepCancel">取消</button>
+    </div>
+    <div class="gap-json-entry" onclick="cancelInlineStep(); openJsonImport('${taskUuid}')">
+      ${svgIcon('code',12,1.8)} 或粘贴 JSON 批量导入步骤
+    </div>
   `;
   wrap.parentNode.insertBefore(row, wrap);
   const inp = document.getElementById('inlineStepInput');
@@ -734,6 +742,8 @@ window.submitInlineStep = async function(taskUuid) {
 window.cancelInlineStep = function() {
   const row = document.getElementById('inlineStepRow');
   if (row) row.remove();
+  const btn = document.getElementById('goalAddBtn');
+  if (btn) btn.style.display = '';
 };
 // 兼容旧入口（如有外部 / 调试引用），保留但走新流程
 window.addStep = function(taskUuid) { showInlineAddStep(taskUuid); };
