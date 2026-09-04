@@ -271,8 +271,8 @@
             <div class="ph-nick-row">
               <input class="ph-nick-input" id="profileNickname" placeholder="历练者" maxlength="12" />
               <button class="ph-nick-save-btn" id="profileNickSave">保存</button>
+              <span class="ph-nick-save-hint">回车也可保存</span>
             </div>
-            <span class="ph-nick-save-hint">回车</span>
             </div>
             <div class="ph-sub"></div>
           </div>
@@ -322,13 +322,31 @@
           <div class="ss-title">任务默认</div>
           <div class="setting-row">
             <label>限时任务默认时长</label>
-            <input type="number" id="setTimeLimit" min="1" max="1440" />
-            <span class="hint">分钟（默认 5）</span>
+            <div class="ss-default" id="dsp_setTimeLimit">
+              <span class="ss-cur" id="cur_setTimeLimit">5</span>
+              <span class="ss-unit">分钟</span>
+              <button class="small-btn" data-toggle-edit="setTimeLimit">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setTimeLimit" style="display:none">
+              <input type="number" id="setTimeLimit" min="1" max="1440" />
+              <span class="ss-unit">分钟</span>
+              <button class="small-btn primary" data-save-edit="setTimeLimit">确定</button>
+              <button class="small-btn" data-toggle-edit="setTimeLimit">取消</button>
+            </div>
           </div>
           <div class="setting-row">
             <label>次数任务默认次数</label>
-            <input type="number" id="setCountDefault" min="1" max="999" />
-            <span class="hint">次（默认 5）</span>
+            <div class="ss-default" id="dsp_setCountDefault">
+              <span class="ss-cur" id="cur_setCountDefault">5</span>
+              <span class="ss-unit">次</span>
+              <button class="small-btn" data-toggle-edit="setCountDefault">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setCountDefault" style="display:none">
+              <input type="number" id="setCountDefault" min="1" max="999" />
+              <span class="ss-unit">次</span>
+              <button class="small-btn primary" data-save-edit="setCountDefault">确定</button>
+              <button class="small-btn" data-toggle-edit="setCountDefault">取消</button>
+            </div>
           </div>
           <div class="setting-row">
             <label>22:00 未完成弹窗</label>
@@ -341,8 +359,17 @@
           <div class="ss-title">追踪与提醒</div>
           <div class="setting-row">
             <label>同时追踪上限</label>
-            <input type="number" id="setTrackingMax" min="1" max="20" />
-            <span class="hint">项（默认 3）</span>
+            <div class="ss-default" id="dsp_setTrackingMax">
+              <span class="ss-cur" id="cur_setTrackingMax">3</span>
+              <span class="ss-unit">项</span>
+              <button class="small-btn" data-toggle-edit="setTrackingMax">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setTrackingMax" style="display:none">
+              <input type="number" id="setTrackingMax" min="1" max="20" />
+              <span class="ss-unit">项</span>
+              <button class="small-btn primary" data-save-edit="setTrackingMax">确定</button>
+              <button class="small-btn" data-toggle-edit="setTrackingMax">取消</button>
+            </div>
           </div>
           <div class="setting-row">
             <label>紧急提醒</label>
@@ -350,14 +377,32 @@
             <span class="hint">即将超时的任务主动弹</span>
           </div>
           <div class="setting-row">
-            <label>≤48h 任务阈值</label>
-            <input type="number" id="setEtaShort" min="1" max="100" />
-            <span class="hint">% 总时长（默认 30，距离截止只剩 30% 就提醒）</span>
+            <label>短任务（48小时内）剩多少提醒</label>
+            <div class="ss-default" id="dsp_setEtaShort">
+              <span class="ss-cur" id="cur_setEtaShort">30</span>
+              <span class="ss-unit">%</span>
+              <button class="small-btn" data-toggle-edit="setEtaShort">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setEtaShort" style="display:none">
+              <input type="number" id="setEtaShort" min="1" max="100" />
+              <span class="ss-unit">%</span>
+              <button class="small-btn primary" data-save-edit="setEtaShort">确定</button>
+              <button class="small-btn" data-toggle-edit="setEtaShort">取消</button>
+            </div>
           </div>
           <div class="setting-row">
-            <label>&gt;48h 提前提醒</label>
-            <input type="number" id="setEtaLong" min="1" max="240" />
-            <span class="hint">小时（默认 36，长任务提前多少小时先知会你）</span>
+            <label>长任务（超过48小时）提前几小时提醒</label>
+            <div class="ss-default" id="dsp_setEtaLong">
+              <span class="ss-cur" id="cur_setEtaLong">36</span>
+              <span class="ss-unit">小时</span>
+              <button class="small-btn" data-toggle-edit="setEtaLong">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setEtaLong" style="display:none">
+              <input type="number" id="setEtaLong" min="1" max="240" />
+              <span class="ss-unit">小时</span>
+              <button class="small-btn primary" data-save-edit="setEtaLong">确定</button>
+              <button class="small-btn" data-toggle-edit="setEtaLong">取消</button>
+            </div>
           </div>
         </div>
 
@@ -368,7 +413,7 @@
             <span class="hint" id="setPairingStatus">未配对</span>
             <button class="small-btn danger" id="setUnpair">解除配对</button>
           </div>
-          <div class="setting-row">
+          <div class="setting-row ss-pair-hidden-on-pair">
             <label>自动发现（同一 WiFi）</label>
             <button class="small-btn primary" id="setScanBtn">扫描设备</button>
             <span class="hint">扫描手机端「任务栏」服务</span>
@@ -376,7 +421,7 @@
           <div class="setting-row" id="setDeviceListWrap" style="display:none;">
             <div id="setDeviceList" style="flex:1;font-size:12px;line-height:1.8;"></div>
           </div>
-          <div class="setting-row">
+          <div class="setting-row ss-pair-hidden-on-pair">
             <label>手动配对</label>
             <input type="text" id="setPairInput" placeholder="手机IP:端口" />
             <button class="small-btn primary" id="setPairBtn">连接</button>
@@ -386,15 +431,6 @@
             <button class="small-btn" id="setWidgetMode">开启挂件</button>
             <span class="hint">挂件显示今日进度</span>
           </div>
-          <div class="settings-section">
-          <div class="ss-title">今日奖励回放</div>
-          <div class="setting-row">
-            <label>今日完成任务</label>
-            <button class="small-btn primary" id="setViewTodayRewards">查看今日奖励</button>
-            <span class="hint" id="setTodayRewardsHint">今天还没完成任务</span>
-          </div>
-        </div>
-
         <div class="settings-section">
           <div class="ss-title">关于</div>
           <div class="setting-row">
@@ -404,14 +440,6 @@
         </div>
 
       </div>
-    </div>
-  </div>
-
-  <!-- ===== 今日奖励回放弹窗 ===== -->
-  <div class="overlay" id="rewardsOverlay" style="display:none">
-    <div class="modal rewards-modal">
-      <div class="m-head"><span>今日奖励</span><button class="m-close" data-close-overlay="rewardsOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="1.9"></span></button></div>
-      <div class="rewards-body" id="rewardsList"></div>
     </div>
   </div>
 
@@ -526,8 +554,8 @@
      去 slider/旋转：拖动 + 双击缩放 + 滚轮缩放 + 比例切换 -->
 <div class="crop-overlay" id="cropOverlay">
   <div class="crop-card">
-    <div class="crop-title">调整头像位置</div>
-    <div class="crop-hint">拖动图片 · 双击或滚轮缩放 · 选比例</div>
+    <div class="crop-title">✂ 调整你的头像</div>
+    <div class="crop-hint"><b>拖动图片</b>移动位置 · <b>滚轮</b>或<b>双击</b>缩放</div>
     <div class="crop-stage-wrap">
       <div class="crop-frame" id="cropFrame">
         <div class="crop-img-wrap" id="cropImgWrap"><img class="crop-img" id="cropImg" /></div>
@@ -538,15 +566,12 @@
         <button class="crop-btn" id="cropCancel">取消</button>
       </div>
       <div class="right">
-        <button class="crop-btn ratio active" data-ratio="free">自由</button>
-        <button class="crop-btn ratio" data-ratio="1:1">1:1</button>
-        <button class="crop-btn ratio" data-ratio="4:3">4:3</button>
-        <button class="crop-btn primary" id="cropConfirm">使用</button>
+        <button class="crop-btn primary" id="cropConfirm">使用此头像</button>
       </div>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=v70"></script>
+<script src="app2.js?v=v75"></script>
 </body>
 </html>
