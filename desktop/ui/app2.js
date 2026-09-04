@@ -1219,6 +1219,9 @@ function renderCrop() {
   const el = document.getElementById('cropImg');
   const wrap = document.getElementById('cropImgWrap');
   if (!el || !wrap) return;
+  // ★ boss #20 修复核心：CDP 实测 srcLen=0 —— 图片从未赋给 DOM img，只存内存里
+  //   导致裁剪窗永远空图 + 旧黑背景 = 全黑看不清。必须先赋 src。
+  if (el.getAttribute('src') !== c.img.src) el.setAttribute('src', c.img.src);
   const w = c.img.width * c.scale;
   const h = c.img.height * c.scale;
   el.style.width = w + 'px';
