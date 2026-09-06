@@ -1223,11 +1223,11 @@ function renderCrop() {
   //   导致裁剪窗永远空图 + 旧黑背景 = 全黑看不清。必须先赋 src。
   if (el.getAttribute('src') !== c.img.src) el.setAttribute('src', c.img.src);
   // ★ 边界 clamp：boss 反映"不会用"另一层含义——图可拖出圆窗露出白底
-  //   限制 x/y 让图片始终覆盖圆窗（不小于 stage 圆直径 = 280），缩放不低于初始 s0（保证 cover）
+  //   限制 x/y 让图片始终覆盖圆窗（不小于 stage 圆直径 = 280）
+  //   ★ boss #36 修：去掉 scale >= s0 clamp，让滚轮缩小真正有效（用户主动看更多图）
   const stage = 280;
   const w = c.img.width * c.scale;
   const h = c.img.height * c.scale;
-  if (c.scale < c.s0) c.scale = c.s0;
   c.x = Math.max(-(w - stage) / 2, Math.min((w - stage) / 2, c.x));
   c.y = Math.max(-(h - stage) / 2, Math.min((h - stage) / 2, c.y));
   el.style.width = w + 'px';
@@ -1287,12 +1287,16 @@ if (_cropFrame) _cropFrame.addEventListener('dblclick', e => {
   renderCrop();
 });
 
-// 滚轮缩放（上滑放大、下滑缩小，步进 1.1×）
+// 滚轮缩放（boss #36 修：去掉 s0 clamp 让缩小有效；步进 1.06 倍每滚轮一档；scale 范围 [0.1, 8]）
+// 之前 v=v77 bug：s0 clamp 让 scale 不能小于 cover 圆尺寸 → 用户感觉"下滑缩小没反应"，
+//   且步进 1.1 倍过大 → 稍微一滚就放大多倍
 if (_cropFrame) _cropFrame.addEventListener('wheel', e => {
   if (!_cropState || !_cropState.img) return;
   e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
-  _cropState.scale = Math.max(0.3, Math.min(4, _cropState.scale * factor));
+  // WebView2 precision 滚轮一次性触发多个 wheel event；用 Math.exp 让符号与步进一致
+  const sign = e.deltaY < 0 ? 1 : -1;
+  const factor = Math.exp(sign * 0.06);   // 每档约 6%
+  _cropState.scale = Math.max(0.1, Math.min(8, _cropState.scale * factor));
   renderCrop();
 }, { passive: false });
 
