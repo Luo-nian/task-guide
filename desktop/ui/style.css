@@ -87,6 +87,11 @@ body::after {
   border-radius: 0;
   box-shadow: 0 10px 40px rgba(110, 80, 30, 0.15);
   padding: 0;
+  /* v5.13 渲染期间 fade 过渡（render() 加 .fading class 时整窗轻微变暗 0.18s）
+     避免"主页整页重绘 → 瞬间空白 → 重绘"造成的文字闪烁 */
+  transition: opacity 0.18s ease;
+}
+.widget.fading { opacity: 0.55; }
   overflow: hidden;
   display: grid;
   grid-template-rows: 44px 1fr;

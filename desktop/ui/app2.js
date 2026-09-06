@@ -269,28 +269,38 @@ async function fetchAll() {
   if (levelResp && levelResp.style) settings.progress_style = levelResp.style;
 }
 async function render() {
-  try {
-    await fetchAll();
-    document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
-    const tpEl = document.getElementById('totalPoints');
-    if (tpEl) tpEl.textContent = points;
-    renderLevelBadge();
-    renderSideNav();
-    if (nav === 'overview') renderOverview();
-    else renderListView();
-    renderDashboard();
-    checkEmergency();
-  } catch (e) {
-    console.error('render 失败', e);
-    // 调试模式：把错误显示到页面右下角（不静默）
-    let dbg = document.getElementById('_dbg');
-    if (!dbg) {
-      dbg = document.createElement('div');
-      dbg.id = '_dbg';
-      dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#1A2336;border:1px solid #c0392b;color:#EDE7D8;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
-      document.body.appendChild(dbg);
+  // v5.13：render 期间加 .fading 过渡 class（CSS 0.18s opacity 0.55），避免
+  // 整页重绘时出现的"瞬间空白+重绘"闪烁（boss 反馈取消追踪/添加任务闪烁）
+  // 注：fade 时间与 CSS transition 同步，render 完成后立即 remove 触发淡入
+  const app = document.getElementById('app');
+  if (app && !app.classList.contains('fading')) {
+    app.classList.add('fading');
+    await new Promise(r => setTimeout(r, 30));   // 等 fade-out 起步
+    try {
+      await fetchAll();
+      document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
+      const tpEl = document.getElementById('totalPoints');
+      if (tpEl) tpEl.textContent = points;
+      renderLevelBadge();
+      renderSideNav();
+      if (nav === 'overview') renderOverview();
+      else renderListView();
+      renderDashboard();
+      checkEmergency();
+    } catch (e) {
+      console.error('render 失败', e);
+      let dbg = document.getElementById('_dbg');
+      if (!dbg) {
+        dbg = document.createElement('div');
+        dbg.id = '_dbg';
+        dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#1A2336;border:1px solid #c0392b;color:#EDE7D8;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
+        document.body.appendChild(dbg);
+      }
+      dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
+    } finally {
+      // 触发淡入（CSS transition 接管）
+      setTimeout(() => app && app.classList.remove('fading'), 10);
     }
-    dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
   }
 }
 
@@ -307,7 +317,17 @@ document.querySelectorAll('.nav-item').forEach(n => {
     nav = n.dataset.nav;
     selectedUuid = null;
     document.getElementById('detailView').style.display = 'none';
-    render();
+    render();   // v5.13：先 render() 触发 fetchAll 刷新 tasks 数据，再找 first
+    // v5.13：切分类时若该分类有任务，默认选中第一个任务进 detail（不再是空白/暂无任务）
+    const CAT_FILTER = { daily: 'daily', goal: 'goal', 'time-limited': 'time-limited', once: 'once' };
+    const target = CAT_FILTER[nav];
+    if (target && (typeof tasks !== 'undefined') && tasks.length > 0) {
+      const first = tasks.find(t => catOf(t) === target);
+      if (first) {
+        selectedUuid = first.uuid;
+        openDetail(selectedUuid);
+      }
+    }
   });
 });
 document.getElementById('archiveSearch').addEventListener('input', renderArchiveModal);
@@ -610,7 +630,7 @@ window.openDetail = async function(uuid) {
         <span>▶ 任务步骤</span>
         <span class="gh-progress">${doneSteps} / ${totalSteps || 0} 已完成</span>
       </div>
-      ${totalSteps === 0 ? '<div class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">' + svgIcon('plus',13,2.2) + '</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此添加）</span></div>' :
+      ${totalSteps === 0 ? '<div id="goalAddEntry" class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">' + svgIcon('plus',13,2.2) + '</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此添加）</span></div>' :
         steps.map(s => `<div class="goal-item ${s.status==='done'?'done':''}" onclick="toggleStep('${t.uuid}','${s.uuid}','${s.status}')" title="点击切换完成状态">
           <span class="g-play ${s.status==='done'?'done':''}">${s.status==='done'?svgIcon('check',13,2.7):svgIcon('ring',13,1.8)}</span>
           <span class="g-text">${esc(s.title)}</span>
@@ -630,7 +650,6 @@ window.openDetail = async function(uuid) {
     <div class="reward-row">
       <div class="reward-item hl"><span class="reward-ico">${svgIcon('coin',15,1.8)}</span><span class="reward-num">+${t.reward_points||10} 积分</span></div>
       <div class="reward-item"><span class="reward-ico">${svgIcon('trend',15,1.9)}</span><span class="reward-num">推进进度</span></div>
-      <div class="reward-item"><span class="reward-ico">${svgIcon('trophy',15,1.9)}</span><span class="reward-num">积攒坚持</span></div>
     </div>
 
     <div class="btn-row">
@@ -764,16 +783,44 @@ document.getElementById('blessClose').addEventListener('click', () => {
 window.toggleStep = async function(taskUuid, stepUuid, curStatus) {
   const next = curStatus === 'done' ? 'todo' : 'done';
   await call('advance_step', { taskUuid, stepUuid, status: next });
+  // v5.13：步骤完成切回主页——全部步骤都 done 时视同任务完成，
+  // 走 completeTask 路径（弹奖励 + closeDetail + render 回主页）
+  if (next === 'done') {
+    const d = await call('get_task_detail', { taskUuid });
+    const steps = d.steps || [];
+    const allDone = steps.length > 0 && steps.every(s => s.status === 'done');
+    if (allDone) {
+      const r = await call('complete_task', { taskUuid });
+      closeDetail();
+      await render();
+      if (r && r.already_done) { showToast('今日已完成 ✓'); return; }
+      if (r && r.partial === false) {
+        const before = (typeof tasks !== 'undefined' ? tasks : []).find(t => t.uuid === taskUuid);
+        const basePoints = (before && before.reward_points) || 0;
+        const habitPts = (r.habit && !r.final_exp) ? 5 : (r.final_exp || basePoints);
+        showBless({ mode: 'reward', title: before ? before.title : '本回合', points: habitPts, isCritical: !!r.is_critical });
+      }
+      return;
+    }
+  }
   openDetail(taskUuid);
   render();
 };
 // 添加步骤 inline 版：原生 prompt 在 Tauri WebView2 里被禁用，会出现"按了没反应"的假死，
 // 改成在目标任务的步骤列表里就地插入一行输入框，按回车 / 点"添加"提交，Esc/取消收起。
+// v5.13：boss 反馈无步骤任务的 +（尚未拆解步骤）入口点了没反应——
+//   原代码依赖 .goal-tools，但无步骤时该容器可能不在视口或被 openDetail 异步时序遮蔽；
+//   改为"找到入口元素 → 直接插到它后面"（不依赖 .goal-tools 一定存在）
 window.showInlineAddStep = function(taskUuid) {
-  // 详情页步骤区的工具行容器，把内联输入行插到它前面
-  const wrap = document.querySelector('#detailView .goal-tools, #detailBody .goal-tools');
-  if (!wrap) return;
   if (document.getElementById('inlineStepRow')) return;          // 已展开就别重开
+  // 1) 找到 + 入口元素（detailHtml 里"（尚未拆解步骤 · 点此添加）"那条 goal-item 标了 id）
+  //    或找 .goal-tools 入口按钮（已有步骤时的 + 添加入口）
+  let anchor = document.getElementById('goalAddEntry') || document.getElementById('goalAddBtn');
+  if (!anchor) {
+    // 兜底：找 .goal-tools 作为最后退路（兼容原行为）
+    anchor = document.querySelector('#detailView .goal-tools');
+  }
+  if (!anchor) return;  // 找不到任何锚点（detail view 还没渲染好）— 直接放弃
   // 入口按钮先隐藏，整个"添加"面板展开（boss A：手动输入 + JSON 导入收进同一卡片）
   const btn = document.getElementById('goalAddBtn');
   if (btn) btn.style.display = 'none';
@@ -791,7 +838,7 @@ window.showInlineAddStep = function(taskUuid) {
       ${svgIcon('code',12,1.8)} 或粘贴 JSON 批量导入步骤
     </div>
   `;
-  wrap.parentNode.insertBefore(row, wrap);
+  anchor.parentNode.insertBefore(row, anchor.nextSibling);
   const inp = document.getElementById('inlineStepInput');
   inp.focus();
   inp.addEventListener('keydown', e => {
