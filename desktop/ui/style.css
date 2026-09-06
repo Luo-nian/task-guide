@@ -960,17 +960,21 @@ body::after {
   background: linear-gradient(90deg, var(--gold-light), var(--gold));
   border-radius: 14px;
 }
+/* v5.12 桌面挂件重做：去完成/关闭按钮，只读追踪卡片 —— 图标 + 任务/步骤 + 进度条 */
 .folded-bar {
   display: grid;
-  grid-template-columns: 28px 1fr auto auto auto;
-  align-items: center; gap: 8px;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center; gap: 10px;
   width: 100%; height: 100%;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid var(--border-mid);
   border-radius: 10px;
   cursor: pointer;
   box-shadow: var(--shadow-card);
 }
+.fb-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fb-text { color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.fb-step { color: var(--ink-mute); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
 .fb-icon {
   width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
@@ -979,27 +983,10 @@ body::after {
   color: #fff; font-size: 12px; font-weight: 700;
   box-shadow: 0 0 6px var(--glow-azure);
 }
-.fb-text { color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fb-meta { color: var(--orange); font-size: 11px; white-space: nowrap; }
 /* 挂件进度条（紧凑） */
 .fb-progress { width: 60px; height: 6px; background: rgba(201, 162, 39, 0.18); border-radius: 3px; overflow: hidden; }
 .fb-progress .fb-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold)); border-radius: 3px; }
-/* 挂件两个隐藏按键 */
-.fb-btn {
-  width: 22px; height: 22px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(255, 254, 251, 0.95);
-  border: 1px solid var(--border-mid);
-  border-radius: 5px;
-  color: var(--gold-deep);
-  font-size: 12px; font-weight: 700;
-  cursor: pointer;
-  opacity: 0.35;
-  transition: opacity .2s, background .2s, color .2s;
-}
-.fb-bar:hover .fb-btn { opacity: 0.85; }
-.fb-btn:hover { opacity: 1 !important; background: rgba(224, 186, 104, 0.38); color: var(--gold-deep); box-shadow: 0 0 6px var(--glow-gold); }
-.fb-btn.complete:hover { color: var(--jade); border-color: var(--jade); box-shadow: 0 0 6px rgba(74, 139, 111, 0.4); }
+/* v5.12 删 .fb-btn / .fb-meta —— widget 不再有完成/关闭按钮（只读追踪卡片） */
 
 /* ============================================================
    FAB 浮动新建按钮
@@ -1874,14 +1861,15 @@ input::placeholder { color: var(--ink-faint); }
 .gap-json-entry:hover { opacity: 1; color: var(--orange); }
 .goal-json { display: none !important; }   /* 旧独立按钮兜底隐藏，防任何残留路径出现双按钮 */
 
-/* v4.13.5 设置项：默认·修改两态（参考添加任务弹窗次数默认·修改样式） */
+/* v5.12 设置项：默认·修改两态（参考添加任务弹窗次数默认·修改样式） */
 .ss-default, .ss-edit { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .ss-cur { color: var(--ink); font-weight: 600; font-size: 13px; }
 .ss-unit { color: var(--ink-mute); font-size: 12px; }
 .ss-edit input[type=number] { width: 80px; }
 .ss-edit input[type=number],
 .ss-default input[type=number] { padding: 4px 8px; font-size: 13px; }
-.ss-edit .small-btn { padding: 3px 10px; font-size: 12px; }
+/* v5.12 美化：编辑态"确定/取消"按钮 —— 加宽 + nowrap 防汉字竖排，font-size 适配弹窗尺寸 */
+.ss-edit .small-btn { padding: 5px 14px; font-size: 12.5px; min-width: 52px; white-space: nowrap; letter-spacing: 1px; }
 .ss-pair-hidden { display: none !important; }   /* 配对成功时隐藏扫描/手动配对行 */
 
 /* v4.14.0 widget toast 提示（boss #37：widget 模式下给用户即时反馈，替代 alert） */

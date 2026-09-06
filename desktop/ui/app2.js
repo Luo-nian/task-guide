@@ -30,6 +30,7 @@ let nav = 'overview';
 let tasks = [];
 let archive = [];
 let points = 0;
+let trackCards = [];   // v5.12：当前追踪任务 + 当前步骤（widget 专用数据源）
 let level = null;                  // {lv, name, title, char, icon, min, max}
 let progressInfo = { done: 0, total: 0, over: 0, style: 'bar' };
 let settings = {
@@ -251,18 +252,20 @@ async function hydrateUserProfile() {
 
 // =============== 渲染主流程 ===============
 async function fetchAll() {
-  const [tasksResp, archiveResp, pointsResp, levelResp, progressResp] = await Promise.all([
+  const [tasksResp, archiveResp, pointsResp, levelResp, progressResp, trackResp] = await Promise.all([
     call('get_today_tasks'),
     call('get_archive', {}),
     call('get_total_points'),
     call('get_level', {}).catch(() => null),
-    call('get_daily_progress', {}).catch(() => null)
+    call('get_daily_progress', {}).catch(() => null),
+    call('get_track_cards', {}).catch(() => null)
   ]);
   tasks = tasksResp || [];
   archive = archiveResp || [];
   points = typeof pointsResp === 'number' ? pointsResp : (pointsResp && pointsResp.points) || 0;
   level = levelResp || levelOf(points);
   progressInfo = progressResp || progressInfo;
+  trackCards = trackResp || [];
   if (levelResp && levelResp.style) settings.progress_style = levelResp.style;
 }
 async function render() {
@@ -655,6 +658,11 @@ window.completeTask = async function(uuid) {
   closeDetail();
   // 刷新主面板（积分/进度/列表）
   await render();
+  // v5.12 P0：今日已打卡（already_done=true，防刷分）→ 不弹奖励、不写今日奖励
+  if (r && r.already_done) {
+    showToast('今日已完成 ✓');
+    return;
+  }
   // boss 要"完成任务弹奖励提示"（原神风）：每次真正完成（partial=false）都弹
   if (r && r.partial === false) {
     // v5.11.8 即时庆祝+暴击：后端返回 final_exp（暴击时为 base×2），前端按此弹
@@ -1527,64 +1535,48 @@ function addFoldedDone(uuid) {
 }
 
 function renderFolded() {
-  // boss #37：filter tracking 时排除今日已完成的 habit（按日期 key 跨天自动重置）
-  //   → 防止"每日任务完成后再点刷分"，widget 也自动隐藏已完成的 habit
+  // v5.12 桌面挂件重做：只显示当前追踪任务 + 当前步骤（无完成/关闭按钮）
+  // 用 trackCards 数据源（含 task + current_step + done_steps + total_steps）
+  const top = trackCards[0];   // 后端按 updated_at DESC 排序，第一个 = 最新追踪
   const doneList = getFoldedDone();
-  const top = tasks.filter(t => isTracking(t) && !doneList.includes(t.uuid))
-    .sort((a,b)=>(b.updated_at||0)-(a.updated_at||0))[0];
+  // 已打卡过 + 无步骤任务（无 current_step 字段）则隐藏 widget（"今日已完成"）
+  const hiddenByDone = top && !top.current_step && (top.done_steps || 0) > 0 && doneList.includes(top.task.uuid);
   const bar = document.getElementById('foldedBar');
+  if (!bar) return;
   const pct = progressInfo.total > 0 ? Math.min(100, (progressInfo.done / progressInfo.total) * 100) : 0;
-  const overPct = progressInfo.total > 0 ? (Math.max(0, progressInfo.done - progressInfo.total) / progressInfo.total) * 100 : 0;
   bar.querySelector('.fb-fill').style.width = pct + '%';
+  const textEl = bar.querySelector('.fb-text');
+  const stepEl = bar.querySelector('.fb-step');
   if (!top) {
-    // 已无未完成追踪任务：显示今日完成数（防刷分 + 给用户反馈）
-    bar.querySelector('.fb-text').textContent = doneList.length > 0
-      ? '今日已完成 ' + doneList.length + ' 项 · 点击展开'
-      : '暂无追踪任务 · 点击展开';
-    bar.querySelector('.fb-meta').textContent = '';
+    textEl.textContent = '暂无追踪任务';
+    stepEl.textContent = '点击展开唤起主窗口';
+    return;
+  }
+  if (hiddenByDone) {
+    textEl.textContent = '今日已完成 ' + doneList.length + ' 项';
+    stepEl.textContent = '点击展开唤起主窗口';
+    return;
+  }
+  textEl.textContent = top.task.title;
+  const total = top.total_steps || 0;
+  const done = top.done_steps || 0;
+  const step = top.current_step;
+  if (total > 0) {
+    // 有步骤：显示"步骤 N/M · 当前步骤名"
+    stepEl.textContent = '步骤 ' + (done + 1) + '/' + total + (step ? ' · ' + step.title : '');
   } else {
-    bar.querySelector('.fb-text').textContent = top.title;
-    let remainStr = '';
-    if (top.deadline || top.due_at) {
-      const due = top.deadline || top.due_at;
-      if (typeof due === 'number') remainStr = fmtRemaining(due - Date.now());
+    // 无步骤任务：显示分类/到期提示
+    if (top.task.deadline || top.task.due_at) {
+      const due = top.task.deadline || top.task.due_at;
+      if (typeof due === 'number') stepEl.textContent = fmtRemaining(due - Date.now());
+      else stepEl.textContent = '追踪中';
+    } else {
+      stepEl.textContent = '追踪中';
     }
-    bar.querySelector('.fb-meta').textContent = remainStr || '追踪中';
   }
 }
 
-// 挂件两个隐藏按键
-document.getElementById('fbNext').addEventListener('click', async e => {
-  e.stopPropagation();
-  // 找下一个进度条范围内的任务（每日 + 当日限时）
-  const inScope = tasks.filter(t => t.category === 'daily' || (t.category === 'time-limited' && t.due_at && isToday(t.due_at)));
-  if (inScope.length === 0) return;
-  const idx = Math.max(0, inScope.findIndex(t => t.track_status === 'tracking'));
-  const next = inScope[(idx + 1) % inScope.length];
-  await call('start_tracking', { taskUuid: next.uuid });
-  await render();
-  renderFolded();
-});
-document.getElementById('fbComplete').addEventListener('click', async e => {
-  e.stopPropagation();
-  // boss #37：filter 今日已完成 habit（防"完成不了"——之前 daily 打卡后 UI 不刷新）
-  const top = tasks.filter(t => isTracking(t) && !getFoldedDone().includes(t.uuid))[0];
-  if (!top) { showToast('今日已完成所有任务 ✓'); return; }
-  const r = await call('complete_task', { taskUuid: top.uuid });
-  await render();
-  if (r && r.already_done) {
-    // 今天已打过卡：不重复弹奖励，给简短 toast
-    showToast('今日已完成 ✓');
-    addFoldedDone(top.uuid);
-  } else {
-    // 刚完成：弹原神风奖励
-    const points = top.reward_points || 5;
-    showBless({ mode: 'reward', title: top.title, points });
-    addFoldedDone(top.uuid);
-  }
-  renderFolded();
-  await checkBlessing();
-});
+// v5.12 删 fbNext / fbComplete 事件绑定 —— widget 不再有完成/关闭按钮（只读追踪卡片）
 
 // boss #37：简易 inline toast（widget 模式不能用 alert，给用户即时反馈）
 function showToast(msg) {

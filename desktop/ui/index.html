@@ -14,7 +14,6 @@
     <div class="title">
       <span class="title-glyph"></span>
       <span>任务栏</span>
-      <span class="title-sub">— 每完成一项，积分往前走</span>
     </div>
     <div class="top-right" id="topRight">
       <div class="level-badge" id="levelBadge" title="点击查看 / 修改个人信息">
@@ -174,15 +173,15 @@
     </div>
   </section>
 
-  <!-- ===== 折叠态（桌面挂件） ===== -->
+  <!-- ===== 桌面挂件（v5.12 只读追踪卡片：任务 + 当前步骤，去除完成/关闭按钮） ===== -->
   <section class="folded-view" id="foldedView" style="display:none">
     <div class="folded-bar" id="foldedBar">
       <span class="fb-icon" data-icon="sparkle" data-icon-size="14"></span>
-      <span class="fb-text">点击展开</span>
-      <span class="fb-meta"></span>
+      <div class="fb-main">
+        <div class="fb-text">点击展开</div>
+        <div class="fb-step">— · —</div>
+      </div>
       <span class="fb-progress"><span class="fb-fill" style="width:0%"></span></span>
-      <button class="fb-btn" id="fbNext" title="下一个任务"><span class="ico-slot" data-icon="next" data-icon-size="14"></span></button>
-      <button class="fb-btn complete" id="fbComplete" title="已完成"><span class="ico-slot" data-icon="check" data-icon-size="14" data-icon-sw="2.4"></span></button>
     </div>
   </section>
 

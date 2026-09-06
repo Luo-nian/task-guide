@@ -377,6 +377,16 @@ fn get_track_cards(state: tauri::State<AppState>) -> Vec<TrackCard> {
 #[tauri::command]
 fn get_today_tasks(state: tauri::State<AppState>) -> Vec<Task> {
     let db = state.db.lock().unwrap();
+    // v5.12 P0：daily 任务 lazy 重置 —— 昨日(或更早)完成的每日任务自动回到待办，
+    // 使"当日完成置 done → 次日自动挪回今日列表"成立（无定时器，读时惰性重置）
+    let (day_start, _) = today_range();
+    let now = Local::now().timestamp_millis();
+    db.execute(
+        "UPDATE tasks SET track_status='pending', done=0, done_count=0, done_at=NULL, updated_at=?1 \
+         WHERE category='daily' AND track_status='done' AND deleted=0 \
+           AND (done_at IS NULL OR done_at < ?2)",
+        params![now, day_start]
+    ).ok();
     let mut stmt = db.prepare(
         "SELECT * FROM tasks WHERE track_status!='done' AND deleted=0 ORDER BY \
          CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END, \
@@ -651,6 +661,10 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
                 let db = state.db.lock().unwrap();
                 db.execute("INSERT INTO habit_logs(task_uuid,check_date,created_at) VALUES(?1,?2,?3)",
                     params![&task_uuid, &date, now]).ok();
+                // v5.12 P0：习惯今日打卡 → 任务置 done（从今日列表消失 → 归入已完成/归档），
+                // 次日 get_today_tasks lazy 重置回 pending（每日任务"当日完成/次日回归"闭环）
+                db.execute("UPDATE tasks SET track_status='done', done=1, done_at=?1, updated_at=?2 WHERE uuid=?3",
+                    params![now, now, &task_uuid]).ok();
             } // 锁释放
             let rp: i64 = {
                 let db = state.db.lock().unwrap();
