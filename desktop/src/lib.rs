@@ -111,6 +111,32 @@ fn migrate(conn: &Connection) {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL;");
         log::info!("[migrate] tasks 新增列 reminder_strength");
     }
+    // boss #39：旧库 tasks.uuid 没有 UNIQUE 约束 → INSERT OR REPLACE 退化为 INSERT → 任务重复
+    // 先去重（按 uuid 留 updated_at 最新的），再加 UNIQUE 索引
+    let _ = conn.execute_batch("\
+        DELETE FROM tasks WHERE id NOT IN (\
+            SELECT MIN(id) FROM tasks GROUP BY uuid\
+        );\
+    ");
+    let has_uuid_unique: bool = conn
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND tbl_name='tasks' AND sql LIKE '%uuid%UNIQUE%'")
+        .ok()
+        .and_then(|mut s| s.query_row([], |_| Ok(())).ok())
+        .is_some();
+    if !has_uuid_unique {
+        let _ = conn.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_uuid_unique ON tasks(uuid);");
+        log::info!("[migrate] tasks.uuid 加 UNIQUE 索引防重复");
+    }
+    // steps 同理
+    let has_step_uuid_unique: bool = conn
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND tbl_name='steps' AND sql LIKE '%uuid%UNIQUE%'")
+        .ok()
+        .and_then(|mut s| s.query_row([], |_| Ok(())).ok())
+        .is_some();
+    if !has_step_uuid_unique {
+        let _ = conn.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS idx_steps_uuid_unique ON steps(uuid);");
+        log::info!("[migrate] steps.uuid 加 UNIQUE 索引");
+    }
 }
 
 // =============== 日期 / 等级 工具 ===============
@@ -575,6 +601,8 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
                 params![&task_uuid, &date], |r| r.get(0)
             ).unwrap_or(0)
         }; // 锁释放
+        // boss #37：前端 widget 需要区分"刚刚打卡成功" vs "今日已打过卡"
+        // 返回 already_done 让前端弹不同提示（避免重复弹奖励）
         if already == 0 {
             {
                 let db = state.db.lock().unwrap();
@@ -598,7 +626,7 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
         }
         // 所有锁都已释放：安全 push_change
         sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
-        return serde_json::json!({ "status": "ok", "partial": false, "habit": true });
+        return serde_json::json!({ "status": "ok", "partial": false, "habit": true, "already_done": already > 0 });
     }
     // 次数任务（count>1）：先累加 done_count，满额才算真正完成并结算积分
     let info: (i64, i64, i64) = {
@@ -733,11 +761,29 @@ fn win_hide(window: tauri::Window) { let _ = window.hide(); }
 fn connect_server(state: tauri::State<AppState>, url: String) -> String {
     *state.server_url.lock().unwrap() = url.clone();
     save_pairing_to_disk(&state);
+    // boss #40：反向通知手机端"已配对"，让手机 SettingsScreen 显示"已配对：BOOS PC"
+    //   修复"配对后仍显示未配对" —— 桌面 settings.pairing 与手机 settings.paired_device
+    //   原本是两个独立状态，互不通知，现在连接成功后反向 POST 手机 /api/pair
+    let url_arc = state.server_url.clone();
+    let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let base = {
+            let g = url_arc.lock().unwrap();
+            sync::server_base(&g)
+        };
+        if base.is_empty() { return; }
+        let _ = reqwest::blocking::Client::new()
+            .post(format!("{}/api/pair", base))
+            .timeout(std::time::Duration::from_secs(5))
+            .json(&serde_json::json!({ "name": pc_name }))
+            .send();
+    });
     // 启动时也尝试立即同步一次
     let db_arc = state.db.clone();
-    let url_arc = state.server_url.clone();
+    let url_arc2 = state.server_url.clone();
     std::thread::spawn(move || {
-        let _ = sync::full_sync(&db_arc, &url_arc);
+        let _ = sync::full_sync(&db_arc, &url_arc2);
     });
     "已连接".to_string()
 }
@@ -746,6 +792,20 @@ fn connect_server(state: tauri::State<AppState>, url: String) -> String {
 fn disconnect_server(state: tauri::State<AppState>) {
     *state.server_url.lock().unwrap() = String::new();
     let _ = clear_pairing_from_disk(&state);
+    // boss #40：断开时反向通知手机端解除配对
+    let url_arc = state.server_url.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let base = {
+            let g = url_arc.lock().unwrap();
+            sync::server_base(&g)
+        };
+        if base.is_empty() { return; }
+        let _ = reqwest::blocking::Client::new()
+            .post(format!("{}/api/pair/clear", base))
+            .timeout(std::time::Duration::from_secs(3))
+            .send();
+    });
 }
 
 #[tauri::command]

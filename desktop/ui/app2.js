@@ -1402,7 +1402,8 @@ document.getElementById('setWidgetMode').addEventListener('click', () => {
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('foldedView').style.display = '';
   renderFolded();
-  if (isTauriEnv) call('set_window_size', { w: 360, h: 88 }).catch(()=>{});
+  // boss #38：不再 set_window_size 缩窗口到 360×88（resize 异步 + Tauri transparent 窗口下
+  // 时机问题导致截图抓到中间状态）。改为保留主窗口尺寸，widget 浮动在右下角
 });
 
 // 等级徽章点击 → 个人信息（昵称 / 头像 / 经验条都在那）
@@ -1486,17 +1487,34 @@ function exitWidgetMode() {
   document.getElementById('foldedView').style.display = 'none';
   document.getElementById('dashboardView').style.display = '';
   render();
-  if (isTauriEnv) call('set_window_size', { w: 1100, h: 720 }).catch(()=>{});
+  // boss #38：退出 widget 不恢复窗口尺寸（现在 widget 模式不缩窗，仅切 CSS）
+}
+
+// 折叠态今日已完成列表（按日期 key，跨天自动重置 —— boss 反映"刷分"问题）
+function _foldedDateKey() { return 'foldedDone_' + new Date().toDateString(); }
+function getFoldedDone() {
+  try { return JSON.parse(sessionStorage.getItem(_foldedDateKey()) || '[]'); } catch(e) { return []; }
+}
+function addFoldedDone(uuid) {
+  const list = getFoldedDone();
+  if (!list.includes(uuid)) { list.push(uuid); sessionStorage.setItem(_foldedDateKey(), JSON.stringify(list)); }
 }
 
 function renderFolded() {
-  const top = tasks.filter(isTracking).sort((a,b)=>(b.updated_at||0)-(a.updated_at||0))[0];
+  // boss #37：filter tracking 时排除今日已完成的 habit（按日期 key 跨天自动重置）
+  //   → 防止"每日任务完成后再点刷分"，widget 也自动隐藏已完成的 habit
+  const doneList = getFoldedDone();
+  const top = tasks.filter(t => isTracking(t) && !doneList.includes(t.uuid))
+    .sort((a,b)=>(b.updated_at||0)-(a.updated_at||0))[0];
   const bar = document.getElementById('foldedBar');
   const pct = progressInfo.total > 0 ? Math.min(100, (progressInfo.done / progressInfo.total) * 100) : 0;
   const overPct = progressInfo.total > 0 ? (Math.max(0, progressInfo.done - progressInfo.total) / progressInfo.total) * 100 : 0;
   bar.querySelector('.fb-fill').style.width = pct + '%';
   if (!top) {
-    bar.querySelector('.fb-text').textContent = '暂无追踪任务 · 点击展开';
+    // 已无未完成追踪任务：显示今日完成数（防刷分 + 给用户反馈）
+    bar.querySelector('.fb-text').textContent = doneList.length > 0
+      ? '今日已完成 ' + doneList.length + ' 项 · 点击展开'
+      : '暂无追踪任务 · 点击展开';
     bar.querySelector('.fb-meta').textContent = '';
   } else {
     bar.querySelector('.fb-text').textContent = top.title;
@@ -1523,13 +1541,39 @@ document.getElementById('fbNext').addEventListener('click', async e => {
 });
 document.getElementById('fbComplete').addEventListener('click', async e => {
   e.stopPropagation();
-  const top = tasks.filter(isTracking)[0];
-  if (!top) return;
-  await call('complete_task', { taskUuid: top.uuid });
+  // boss #37：filter 今日已完成 habit（防"完成不了"——之前 daily 打卡后 UI 不刷新）
+  const top = tasks.filter(t => isTracking(t) && !getFoldedDone().includes(t.uuid))[0];
+  if (!top) { showToast('今日已完成所有任务 ✓'); return; }
+  const r = await call('complete_task', { taskUuid: top.uuid });
   await render();
+  if (r && r.already_done) {
+    // 今天已打过卡：不重复弹奖励，给简短 toast
+    showToast('今日已完成 ✓');
+    addFoldedDone(top.uuid);
+  } else {
+    // 刚完成：弹原神风奖励
+    const points = top.reward_points || 5;
+    showBless({ mode: 'reward', title: top.title, points });
+    addFoldedDone(top.uuid);
+  }
   renderFolded();
   await checkBlessing();
 });
+
+// boss #37：简易 inline toast（widget 模式不能用 alert，给用户即时反馈）
+function showToast(msg) {
+  let el = document.getElementById('foldedToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'foldedToast';
+    el.className = 'folded-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 1800);
+}
 function isToday(ts) {
   if (typeof ts !== 'number') return false;
   const d = new Date(ts), n = new Date();

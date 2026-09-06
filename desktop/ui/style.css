@@ -93,22 +93,35 @@ body::after {
   grid-template-columns: 9% 30% 1fr;   /* boss #12：侧栏从 7% 加宽到 9%，加长 */
   transition: width .25s ease, height .25s ease;
 }
-/* 折叠态：仅占右下角 */
+/* 折叠态：仅占右下角（boss #38 改为悬浮玻璃条，不再缩窗口、不再隐藏主 UI）
+   玻璃感：双层 backdrop blur + 渐变 + 1px 金边 + 大阴影 + 圆角 18px
+   主 UI 仍可见，widget 浮在主界面之上，叠层显示 */
 .widget.widget-mode {
-  position: fixed; right: 18px; bottom: 18px;
-  width: 360px; height: 88px;
-  border-radius: 14px;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-  border: 1px solid var(--border-mid);
-  box-shadow: 0 8px 28px rgba(110, 80, 30, 0.25), 0 0 16px var(--glow-gold);
+  /* .app 容器保持 100vw/100vh 让主 UI 全显示，widget 是附加悬浮层 */
+  background: transparent;
+  border: 0; border-radius: 0;
+  box-shadow: none;
+  width: 100vw; height: 100vh;
+  grid-template-columns: 9% 30% 1fr;
+  grid-template-rows: 44px 1fr;
+  transition: background .2s ease;
 }
-.widget.widget-mode > .topbar,
-.widget.widget-mode > .side-nav,
-.widget.widget-mode > .list-pane,
-.widget.widget-mode > .main-pane,
-.widget.widget-mode > .fab { display: none; }
-.widget.widget-mode > .folded-view { display: flex !important; grid-row: 1; grid-column: 1; }
+/* boss #38：widget-mode 不再隐藏主 UI（topbar/side/list/main/fab/dashboard），
+   让"悬浮玻璃条"叠加在主界面之上，用户随时可看到任务列表 */
+.widget.widget-mode > .folded-view {
+  display: flex !important;
+  position: fixed; right: 24px; bottom: 24px;
+  width: 360px; height: 92px;
+  grid-row: auto; grid-column: auto;
+  background: linear-gradient(135deg, rgba(255, 253, 248, 0.93), rgba(255, 246, 226, 0.86));
+  backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  border-radius: 18px;
+  padding: 8px 10px;
+  box-shadow: 0 12px 40px rgba(110, 80, 30, 0.22), 0 0 18px rgba(201, 162, 39, 0.18);
+  z-index: 50;
+  overflow: hidden;
+}
 
 /* ============================================================
    顶栏（仅客户模式）
@@ -1823,3 +1836,13 @@ input::placeholder { color: var(--ink-faint); }
 .ss-default input[type=number] { padding: 4px 8px; font-size: 13px; }
 .ss-edit .small-btn { padding: 3px 10px; font-size: 12px; }
 .ss-pair-hidden { display: none !important; }   /* 配对成功时隐藏扫描/手动配对行 */
+
+/* v4.14.0 widget toast 提示（boss #37：widget 模式下给用户即时反馈，替代 alert） */
+.folded-toast {
+  position: fixed; left: 50%; top: 24px; transform: translateX(-50%) translateY(-12px);
+  background: rgba(38, 30, 18, 0.92); color: #FFFDF8; font-size: 13px;
+  padding: 8px 18px; border-radius: 18px; box-shadow: 0 6px 22px rgba(40, 30, 12, 0.28);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+  z-index: 11000;
+}
+.folded-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

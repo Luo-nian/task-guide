@@ -31,7 +31,7 @@ struct HabitLog {
     created_at: i64,
 }
 
-fn server_base(url: &str) -> String {
+pub fn server_base(url: &str) -> String {
     url.trim_end_matches('/').to_string()
 }
 
