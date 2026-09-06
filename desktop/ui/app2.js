@@ -650,15 +650,16 @@ window.completeTask = async function(uuid) {
   // 提前取 title/points（render 之后可能从 today 列表过滤掉已完成任务）
   const before = (typeof tasks !== 'undefined' ? tasks : []).find(t => t.uuid === uuid);
   const title = before ? before.title : '';
-  const points = (before && before.reward_points) || 0;
+  const basePoints = (before && before.reward_points) || 0;
   const r = await call('complete_task', { taskUuid: uuid });
   closeDetail();
   // 刷新主面板（积分/进度/列表）
   await render();
   // boss 要"完成任务弹奖励提示"（原神风）：每次真正完成（partial=false）都弹
   if (r && r.partial === false) {
-    const habitPts = (r.habit && points === 0) ? 5 : points;
-    showBless({ mode: 'reward', title: title, points: habitPts });
+    // v5.11.8 即时庆祝+暴击：后端返回 final_exp（暴击时为 base×2），前端按此弹
+    const habitPts = (r.habit && !r.final_exp) ? 5 : (r.final_exp || basePoints);
+    showBless({ mode: 'reward', title: title, points: habitPts, isCritical: !!r.is_critical });
     // boss D：把今日奖励存 sessionStorage，设置页"查看今日奖励"可回放
     try {
       const key = 'todayRewards_' + new Date().toDateString();
@@ -690,15 +691,40 @@ function showBless(opts) {
     // 单任务完成奖励（原神风：+N 经验）
     const pts = opts.points || 0;
     const title = opts.title || '本回合';
+    const isCrit = !!opts.isCritical;
     tEl.textContent = '+ ' + pts + ' 经验';
     sEl.textContent = title;
-    mEl.innerHTML = '<b>任务已完成</b><br>这一小步，已被记下';
+    const critBadge = isCrit ? '<div class="bless-crit-badge">✨ ×2 暴击！</div>' : '';
+    mEl.innerHTML = '<b>任务已完成</b><br>这一小步，已被记下' + critBadge;
+    // v5.11.8 即时庆祝：暴击时弹金色光晕 + 10 颗小金粒散开
+    const overlay = document.getElementById('blessOverlay');
+    if (isCrit) {
+      overlay.classList.add('bless-critical');
+      spawnBlessParticles(overlay);
+      setTimeout(() => overlay.classList.remove('bless-critical'), 1500);
+    } else {
+      overlay.classList.remove('bless-critical');
+    }
   } else {
     tEl.textContent = '完成';
     sEl.textContent = '';
     mEl.innerHTML = '继续保持';
   }
   document.getElementById('blessOverlay').style.display = '';
+}
+// v5.11.8 暴击粒子：10 颗小金粒从中心向四周飞散 + 缩放 + 渐隐，0.9s 后移除
+function spawnBlessParticles(container) {
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElement('div');
+    p.className = 'bless-particle';
+    const angle = (Math.PI * 2 * i) / 10 + (Math.random() * 0.4);
+    const dist = 90 + Math.random() * 70;
+    p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+    p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+    p.style.animationDelay = (Math.random() * 80) + 'ms';
+    container.appendChild(p);
+    setTimeout(() => p.remove(), 1500);
+  }
 }
 document.getElementById('blessClose').addEventListener('click', () => {
   document.getElementById('blessOverlay').style.display = 'none';

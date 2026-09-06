@@ -1283,6 +1283,53 @@ input::placeholder { color: var(--ink-faint); }
 }
 .bless-btn:hover { box-shadow: 0 6px 18px var(--glow-gold); }
 
+/* ===== v5.11.8 暴击庆祝（克制：金=点缀，不吞没卡片） ===== */
+.bless-critical .bless-card {
+  animation: blessPulse 0.5s ease-out 1;
+  box-shadow: 0 0 22px var(--glow-gold), 0 0 8px var(--gold);
+}
+@keyframes blessPulse {
+  0%   { transform: scale(1);     box-shadow: 0 0 22px var(--glow-gold); }
+  50%  { transform: scale(1.015); box-shadow: 0 0 32px var(--glow-gold); }
+  100% { transform: scale(1);     box-shadow: 0 0 22px var(--glow-gold); }
+}
+.bless-crit-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 14px;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px var(--glow-gold);
+  animation: blessBadgeFlash 0.6s ease-out 2;
+}
+@keyframes blessBadgeFlash {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.08); opacity: 0.85; }
+}
+.bless-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFF4D0, var(--gold));
+  box-shadow: 0 0 10px var(--gold), 0 0 18px var(--glow-gold);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  animation: blessParticleFly 0.9s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+}
+@keyframes blessParticleFly {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))) scale(0.2); opacity: 0; }
+}
+
 /* ===== 22:00 未完成提醒弹窗（复用祝福弹窗布局，改夜色警示调） ===== */
 .night-overlay {
   background: radial-gradient(circle at center, rgba(240, 238, 244, 0.95), rgba(130, 120, 150, 0.5));

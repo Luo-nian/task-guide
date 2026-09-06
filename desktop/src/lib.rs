@@ -699,17 +699,30 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
         db.execute("UPDATE steps SET status='done', done_at=?1, updated_at=?2 WHERE task_uuid=?3 AND status!='done'",
             params![now, now, &task_uuid]).ok();
     }
+    // v5.11.8 暴击判定：非 habit 任务完整完成时 5% 概率触发，经验 × 2
+    // 零依赖 RNG：SystemTime 纳秒戳 % 100 < 5（真随机性不必要）
+    let is_critical: bool = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() % 100 < 5)
+        .unwrap_or(false);
+    let final_rp = if is_critical { rp * 2 } else { rp };
     // 累加积分
     {
         let db = state.db.lock().unwrap();
         db.execute(
             "INSERT INTO settings(key,value) VALUES('total_points',?1) \
              ON CONFLICT(key) DO UPDATE SET value=printf('%d', CAST(value AS INTEGER) + ?2)",
-            params![rp.to_string(), rp]
+            params![final_rp.to_string(), final_rp]
         ).ok();
     }
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
-    serde_json::json!({ "status": "ok", "partial": false })
+    serde_json::json!({
+        "status": "ok",
+        "partial": false,
+        "is_critical": is_critical,
+        "base_exp": rp,
+        "final_exp": final_rp
+    })
 }
 
 #[tauri::command]
