@@ -32,7 +32,13 @@ import com.taskbar.app.TaskBarApp
 import com.taskbar.app.data.model.Levels
 import com.taskbar.app.data.model.ReminderStrength
 import com.taskbar.app.server.SyncService
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -303,7 +309,24 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             Text("配对", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             var pairedDevice by remember { mutableStateOf("") }
-            LaunchedEffect(Unit) { pairedDevice = vm.getSetting("paired_device", "") }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            val coScope = rememberCoroutineScope()
+            DisposableEffect(lifecycleOwner) {
+                var job: Job? = null
+                val refresh = {
+                    job?.cancel()
+                    job = coScope.launch { pairedDevice = vm.getSetting("paired_device", "") }
+                }
+                refresh()
+                val observer = LifecycleEventObserver { _, e ->
+                    if (e == Lifecycle.Event.ON_RESUME) refresh()
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose {
+                    job?.cancel()
+                    lifecycleOwner.lifecycle.removeObserver(observer)
+                }
+            }
             if (pairedDevice.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("已配对：$pairedDevice", color = TGColors.Jade, fontSize = 13.sp, modifier = Modifier.weight(1f))
