@@ -428,10 +428,33 @@ function renderArchiveModal() {
     box.innerHTML = `<div class="empty-line">暂无历史任务</div>`;
     return;
   }
-  box.innerHTML = arr.map(t => {
-    // 完成时间容错：后端可能只给 track_status=done 而 done_at 为空，退回 updated_at
-    const doneTs = t.done_at || (t.track_status === 'done' ? t.updated_at : null);
-    return `
+  // v5.12 历史任务分层：全部视图按 4 类分组，每类一层（boss 要求"历史任务里也分层排放 每一类一层"）
+  const groups = [
+    { key: 'daily', label: '每日任务' },
+    { key: 'goal', label: '目标任务' },
+    { key: 'time-limited', label: '限时任务' },
+    { key: 'once', label: '次数任务' }
+  ];
+  let html = '';
+  if (archiveCat === 'all') {
+    html = groups.map(g => {
+      const items = arr.filter(t => catOf(t) === g.key);
+      if (items.length === 0) return '';
+      return `<div class="arc-group">
+        <div class="arc-group-title">${g.label}<span class="arc-group-count">${items.length}</span></div>
+        ${items.map(arcItemHtml).join('')}
+      </div>`;
+    }).join('');
+    if (!html) html = `<div class="empty-line">暂无历史任务</div>`;
+  } else {
+    html = arr.map(arcItemHtml).join('');
+  }
+  box.innerHTML = html;
+}
+function arcItemHtml(t) {
+  // 完成时间容错：后端可能只给 track_status=done 而 done_at 为空，退回 updated_at
+  const doneTs = t.done_at || (t.track_status === 'done' ? t.updated_at : null);
+  return `
     <div class="arc-item">
       <span class="arc-ico cat-${catOf(t)}">${doneTs ? svgIcon('check',11,2.8) : '<i class="arc-dot"></i>'}</span>
       <div class="arc-main">
@@ -440,7 +463,6 @@ function renderArchiveModal() {
       </div>
       <span class="arc-points">+${t.reward_points || 10}</span>
     </div>`;
-  }).join('');
 }
 
 // =============== 右侧今日概览仪表盘 ===============

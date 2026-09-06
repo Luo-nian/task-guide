@@ -1423,6 +1423,23 @@ input::placeholder { color: var(--ink-faint); }
   box-shadow: 0 0 6px var(--glow-gold);
 }
 .arc-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+/* v5.12 历史任务分层：每类一层（小节标题 + 该层任务） */
+.arc-group { display: flex; flex-direction: column; gap: 6px; }
+.arc-group + .arc-group { margin-top: 10px; }
+.arc-group-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 700; color: var(--gold-deep);
+  letter-spacing: 1px;
+  padding: 2px 4px;
+}
+.arc-group-title::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, var(--gold-light), var(--gold)); }
+.arc-group-title:not(:first-child)::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(201,162,39,0.28), transparent); margin-left: 4px; }
+.arc-group-count {
+  font-size: 10.5px; font-weight: 600;
+  background: rgba(201, 162, 39, 0.14);
+  color: var(--gold-deep);
+  border-radius: 9px; padding: 1px 8px;
+}
 .arc-item {
   display: flex; align-items: center; gap: 10px;
   background: linear-gradient(90deg, rgba(255, 254, 251, 0.95), rgba(240, 232, 214, 0.8));
