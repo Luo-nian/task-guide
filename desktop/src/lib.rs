@@ -111,13 +111,56 @@ fn migrate(conn: &Connection) {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL;");
         log::info!("[migrate] tasks 新增列 reminder_strength");
     }
-    // boss #39：旧库 tasks.uuid 没有 UNIQUE 约束 → INSERT OR REPLACE 退化为 INSERT → 任务重复
-    // 先去重（按 uuid 留 updated_at 最新的），再加 UNIQUE 索引
-    let _ = conn.execute_batch("\
-        DELETE FROM tasks WHERE id NOT IN (\
-            SELECT MIN(id) FROM tasks GROUP BY uuid\
-        );\
-    ");
+    // boss #41：桌面的"任务重复"实际是同 title 但 uuid 不同的脏数据（占位 UUID 0000000X + 真实 UUID）
+    //   旧版 schema.sql 没正确执行 → uuid 列无 UNIQUE 约束 + 部分 add_task 用了占位 uuid
+    //   修：1) 占位 uuid 且存在同名真 uuid 任务 → 直接删占位
+    //       2) 无同名的占位 → 重新生成 uuid v4
+    //       3) 建 UNIQUE INDEX 防未来重复
+    let placeholders_before: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND (length(uuid) < 32 OR uuid LIKE '0000000%' OR uuid = '')",
+        [], |r| r.get::<_, i64>(0)
+    ).unwrap_or(0);
+    log::info!("[migrate] 检测到占位 uuid 任务 {} 条", placeholders_before);
+
+    // 用 alias DELETE + EXISTS（同 title + 不同 id + 真 uuid）
+    let deleted_placeholder = conn.execute(
+        "DELETE FROM tasks WHERE id IN (\
+            SELECT t.id FROM tasks t \
+            WHERE t.deleted=0 \
+              AND (length(t.uuid) < 32 OR t.uuid LIKE '0000000%' OR t.uuid = '') \
+              AND EXISTS (\
+                  SELECT 1 FROM tasks t2 \
+                  WHERE t2.id != t.id AND t2.deleted=0 AND t2.title = t.title \
+                    AND length(t2.uuid) >= 32 AND t2.uuid NOT LIKE '0000000%' AND t2.uuid != ''\
+              )\
+         )",
+        [],
+    );
+    match deleted_placeholder {
+        Ok(n) => log::info!("[migrate] 删除占位 uuid 任务 {} 条", n),
+        Err(e) => log::error!("[migrate] DELETE 占位任务失败: {}", e),
+    }
+
+    // 剩余占位 uuid（无同名真任务）→ 重新生成 uuid v4
+    let orphan_count: i64 = {
+        let mut stmt = conn.prepare(
+            "SELECT id FROM tasks WHERE deleted=0 AND (length(uuid) < 32 OR uuid LIKE '0000000%' OR uuid = '')"
+        ).unwrap();
+        let ids: Vec<i64> = stmt.query_map([], |r| r.get(0)).unwrap()
+            .filter_map(|r| r.ok()).collect();
+        let n = ids.len() as i64;
+        for id in ids {
+            let new_uuid = uuid::Uuid::new_v4().to_string();
+            let _ = conn.execute("UPDATE tasks SET uuid=?1 WHERE id=?2", params![new_uuid, id]);
+        }
+        n
+    };
+    log::info!("[migrate] 重新生成 {} 条孤立占位任务 uuid", orphan_count);
+
+    // 保险：按 uuid 去重 + 建 UNIQUE 索引
+    let _ = conn.execute_batch(
+        "DELETE FROM tasks WHERE id NOT IN (SELECT MIN(id) FROM tasks GROUP BY uuid);"
+    );
     let has_uuid_unique: bool = conn
         .prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND tbl_name='tasks' AND sql LIKE '%uuid%UNIQUE%'")
         .ok()
