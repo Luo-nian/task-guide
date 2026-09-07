@@ -88,6 +88,9 @@ const ICONS = {
   lim:      '<path d="M7 3.2h10M7 20.8h10"/><path d="M8 3.2v3.7l4 3.9 4-3.9V3.2"/><path d="M8 20.8v-3.7l4-3.9 4 3.9v3.7"/>',
   once:     '<path d="M4.6 12a7.4 7.4 0 0 1 12.6-5.2L20 9"/><path d="M20 4.6V9h-4.4"/><path d="M19.4 12a7.4 7.4 0 0 1-12.6 5.2L4 15"/><path d="M4 19.4V15h4.4"/>',
   archive:  '<rect x="3.2" y="4" width="17.6" height="5" rx="1.7"/><path d="M5.2 9v9.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
+  // v5.14g fix：boss 反馈侧边栏今日/追踪图标空白 —— svg 库缺 sun/crosshair（lucide 标准 path）
+  sun:      '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  crosshair:'<circle cx="12" cy="12" r="10"/><path d="M22 12h-4M6 12H2M12 6V2M12 22v-4"/>',
   goal:     '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
   // —— 等级角色 ——
   // —— 10 级等级（v5.13i 用 Lucide 专业图标：sprout/compass/sword/sparkles/swords/shield/flame/crown/wand-sparkles/orbit）——
@@ -1640,11 +1643,13 @@ function renderUserAvatar() {
   if (top) {
     if (settings.avatar_img) {
       top.innerHTML = '';
+      // v5.14g fix：top.style.background='transparent' 用简写会清掉刚设的 background-image → 头像永远不显示
+      //   正确做法：只设 background-image + cover（inline 优先级高于 CSS 渐变，会盖住渐变底）
       top.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
       top.style.backgroundSize = 'cover';
       top.style.backgroundPosition = 'center';
       top.style.backgroundRepeat = 'no-repeat';
-      top.style.background = 'transparent';
+      // 不设 background 简写（会重置 background-image）
     } else {
       top.style.backgroundImage = '';
       top.style.background = '';
