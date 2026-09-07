@@ -375,7 +375,6 @@ function renderTodayView() {
     <div class="list-view-header today-view-header">
       <span class="vh-title">今日待办</span>
       <span class="vh-meta">${todayTasks.length} 项未完成</span>
-      <button type="button" class="vh-add-btn" id="todayAddBtn" onclick="openAdd()">${ '添加' }</button>
     </div>
     <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
@@ -392,14 +391,11 @@ function renderTodayView() {
   }
   lvEl.innerHTML = html;
   lvEl.style.display = '';   // v5.14d 修：原本 listView display:none，renderTodayView 写进去看不见
-  // 同步隐藏 overview dashboard
+  // 同步隐藏 overviewView（中间列表区的 4 分类卡）
   const overviewEl = document.getElementById('overviewView');
-  const dashEl = document.getElementById('dashboardView');
   if (overviewEl) overviewEl.style.display = 'none';
-  if (dashEl) dashEl.style.display = 'none';
-  // 同步显示 listView 容器（listPane 整个显示）
-  const listPane = document.getElementById('listPane');
-  if (listPane) listPane.style.display = '';
+  // 右侧主区 dashboard 永远显示（boss 反馈"之前的页面呢 不要了吗"——"晚上好 boss + 进度条"就是 dashboard）
+  // render() 主流程已经无条件 renderDashboard()，这里不再 hide
 }
 document.querySelectorAll('.nav-item').forEach(n => {
   n.addEventListener('click', () => {
