@@ -90,26 +90,27 @@ const ICONS = {
   archive:  '<rect x="3.2" y="4" width="17.6" height="5" rx="1.7"/><path d="M5.2 9v9.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
   goal:     '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
   // —— 等级角色 ——
-  lv1: '<circle cx="12" cy="6.5" r="1.5"/><path d="M12 8v13"/><path d="M8.5 13c2-1 3.2-2.2 3.5-5"/><path d="M15.5 13c-2-1-3.2-2.2-3.5-5"/>',
-  lv2: '<path d="M12 4l8 9c-2 5-5 8-8 8s-6-3-8-8l8-9z"/>',
-  // boss 认可的「骑枪破浪」：三角枪尖 + 枪杆 + 护手横档 + 垂直贯穿两道波形带
-  // v4.11 全局 svg path { fill: ink-black-soft; stroke: none } —— 强制 fill 让开放路径（stroke-only 线条）糊成色块
-  // 改用闭合路径（每个子组件独立闭合）让 fill 渲染为清晰图形
-  lv3: '<path d="M12 2 L8.4 7 L15.6 7 Z"/><path d="M11 7 L13 7 L13 21.5 L11 21.5 Z"/><path d="M6.8 9 L17.2 9 L17.2 10.6 L6.8 10.6 Z"/><path d="M2.5 13.6 C 4.8 11.9 7.2 11.9 9.5 13.6 C 11.8 15.3 14.2 15.3 16.5 13.6 C 18.2 12.4 19.5 12.3 21.5 13 L 21.5 15 C 19.7 14.2 18.5 14.3 16.5 15.6 C 14.2 17.3 11.8 17.3 9.5 15.6 C 7.2 13.9 4.8 13.9 2.5 15.6 Z"/><path d="M2.5 17.6 C 4.8 15.9 7.2 15.9 9.5 17.6 C 11.8 19.3 14.2 19.3 16.5 17.6 C 18.2 16.4 19.5 16.3 21.5 17 L 21.5 19 C 19.7 18.2 18.5 18.3 16.5 19.6 C 14.2 21.3 11.8 21.3 9.5 19.6 C 7.2 17.9 4.8 17.9 2.5 19.6 Z"/>',
-  lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
-  // v5.13g 等级图标重做（含义优先）：lv5+ 修真，更帅、配得上"传奇"等高阶
-  // lv5 传奇勇者：双手剑交叉 + 中心宝石
-  lv5: '<path d="M3.5 3.5l8.5 8.5M20.5 3.5l-8.5 8.5M3.5 20.5l8.5-8.5M20.5 20.5l-8.5-8.5"/><path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>',
-  // lv6 苍穹守护者：展翼 + 中心（盾/星）
-  lv6: '<path d="M12 21V12M3.5 9c0-3.5 2.5-6 8.5-6 6 0 8.5 2.5 8.5 6"/><path d="M3.5 9C2 9 1.2 7.5 1.2 5.5M20.5 9c1.5 0 2.3-1.5 2.3-3.5"/><path d="M8 12c0 1.5 1 2.5 2 3h4c1-0.5 2-1.5 2-3"/>',
-  // lv7 深渊征服者：三叉戟（中心矛 + 两侧月牙）
-  lv7: '<path d="M12 2.4V21.6M5.5 8.5v-2.5M18.5 8.5v-2.5M9.5 21.5h5"/><path d="M3 9.5l4 5M21 9.5l-4 5"/><circle cx="12" cy="6" r="1.4" fill="currentColor" stroke="none"/>',
-  // lv8 星辰霸主：皇家王冠（5 尖顶 + 中央宝石）
-  lv8: '<path d="M3.5 9.5 12 4l8.5 5.5-1.8 9H5.3z"/><path d="M7 12l5 4 5-4M5 18.5h14"/><circle cx="12" cy="11" r="1.4" fill="currentColor" stroke="none"/>',
-  // lv9 天命传奇：法杖 + 顶部晶球
-  lv9: '<circle cx="12" cy="5.5" r="2.8"/><path d="M12 8.3V21.7M8 21.5h8M5.5 5.5 9 4M18.5 5.5 15 4"/><path d="M10 5.5h4"/>',
-  // lv10 寰宇传说：双环 + 四芒星（龙简化为环+星）
-  lv10: '<circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="9.5" transform="rotate(20 12 12)"/><path d="M12 1.5l1.4 3.4h3.5L14 6.7l1 3.3-3-1.8-3 1.8 1-3.3-2.9-1.8h3.5z" transform="translate(0 -2) scale(0.8) translate(1.5 2.5)"/>',
+  // —— 10 级等级（v5.13h 重画：实心 fill 主体 + 细 stroke 装饰，层次清晰）——
+  // lv1 历练学徒：太阳 + 小树苗 + 地平线
+  lv1: '<circle fill="currentColor" cx="12" cy="3.8" r="1.6"/><path fill="currentColor" d="M12 6.2v4.5M9.5 10.5c-1.5 0-2.5 1-2.5 2.5s1 2.5 2.5 2.5h5c1.5 0 2.5-1 2.5-2.5s-1-2.5-2.5-2.5z"/><path d="M9 11c0-1.5 1.2-2.8 3-3.2M15 11c0-1.5-1.2-2.8-3-3.2M12 15.5V22M3 22h18"/>',
+  // lv2 风华游侠：披风轮廓 + 头部
+  lv2: '<path fill="currentColor" d="M12 3.5l-5 2-3 4v8l3 4h10l3-4v-8l-3-4z"/><path d="M8 5l4-1.5 4 1.5"/><circle fill="currentColor" cx="12" cy="8" r="1.5"/><path d="M9.5 11.5c0 1.5 1 2.5 2.5 2.5s2.5-1 2.5-2.5M8 17h8"/>',
+  // lv3 破浪骑士：盾 + 枪 + 浪花
+  lv3: '<path fill="currentColor" d="M5 11.5c0-1 1-2 2.5-2h9c1.5 0 2.5 1 2.5 2v6.5c0 1-1 2-2.5 2h-9c-1.5 0-2.5-1-2.5-2z"/><path d="M5.5 13.5h13M5.5 16.5h13M12 22V2M9 2.2h6M9.5 4.5h5M10 6.8h4"/><path d="M2 20.5c1-1 2-1 3 0M22 20.5c-1-1-2-1-3 0M2 22.5c1.5-1 3-1 4.5 0M22 22.5c-1.5-1-3-1-4.5 0"/>',
+  // lv4 群星行者：实心五角星 + 月光弧 + 中心点
+  lv4: '<path fill="currentColor" d="M12 2.5l2.5 5.1 5.7.8-4.1 4 .9 5.6-5-2.7-5 2.7.9-5.6-4.1-4 5.7-.8z"/><path d="M3.5 12l-1.5 1M20.5 12l1.5 1M12 20.5v1.5"/><circle fill="currentColor" cx="12" cy="12" r="0.8" stroke="none"/>',
+  // lv5 传奇勇者：双手剑 X 形 + 王冠 + 中央宝石
+  lv5: '<path fill="currentColor" d="M3 3l8.5 8.5M21 3l-8.5 8.5M3 21l8.5-8.5M21 21l-8.5-8.5"/><path fill="currentColor" d="M12 4l1 1.5 2-1-1 2 .8 2-2.8 0L12 9l-1 1.5L9 9.5 8 7.5 9.2 5.5z"/><circle fill="currentColor" cx="12" cy="12" r="2"/><path d="M9 12h6M12 9v6"/>',
+  // lv6 苍穹守护者：双翼 + 盾
+  lv6: '<path fill="currentColor" d="M12 21V12M3.5 9.5c0-3.5 3-6 8.5-6 5.5 0 8.5 2.5 8.5 6l-2 1.5h-13z"/><path d="M3.5 9.5c-1.5 0-2.5-1-2.5-3M20.5 9.5c1.5 0 2.5-1 2.5-3"/><path fill="currentColor" d="M8.5 13c0 1.2 1 2 2 2.5h3c1-.5 2-1.3 2-2.5z"/><path d="M12 8.5v4M9 11h6"/>',
+  // lv7 深渊征服者：三叉戟 + 角 + 螺纹底
+  lv7: '<path fill="currentColor" d="M12 2v20M5 4v4M19 4v4M9.5 22h5"/><path d="M2.5 7.5l3.5 5M21.5 7.5l-3.5 5M9.5 22l-1-2h2l-1 2M14.5 22l-1-2h2l-1 2"/><circle fill="currentColor" cx="12" cy="5.5" r="1.4"/>',
+  // lv8 星辰霸主：皇家王冠实心 + 3 宝石
+  lv8: '<path fill="currentColor" d="M3 9.5 12 4l9 5.5-1.5 9.5H4.5z"/><path d="M3 9.5 6 14l6-4 6 4 3-4.5M5 19h14M3.5 21h17"/><circle fill="currentColor" cx="6" cy="13" r="0.7"/><circle fill="currentColor" cx="12" cy="12" r="1.1"/><circle fill="currentColor" cx="18" cy="13" r="0.7"/>',
+  // lv9 天命传奇：法杖晶球 + 光芒 + 杖身
+  lv9: '<circle fill="currentColor" cx="12" cy="5" r="2.5"/><path d="M9.5 5h5M9.5 4h5M11 7l1 1 1-1"/><path d="M3.5 5l1.2-1M20.5 5l-1.2-1M2 5.5h1.5M20.5 5.5H22"/><path fill="currentColor" d="M11 7.5V21M9 21h6"/>',
+  // lv10 寰宇传说：实心太阳 + 旋转环 + 四方位星
+  lv10:'<circle fill="currentColor" cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="8.5" transform="rotate(20 12 12)"/><path fill="currentColor" d="M12 1.5l1 2.2 2.4-.4-1.4 1.8 1.2 1.5-2.1-.3-1.1 2.2-1.1-2.2-2.1.3 1.2-1.5-1.4-1.8 2.4.4z"/><path fill="currentColor" d="M22.5 12l-2.2 1 .4 2.4-1.8-1.4-1.5 1.2.3-2.1-2.2-1.1 2.2-1.1-.3-2.1 1.5 1.2 1.8-1.4z"/><path fill="currentColor" d="M12 22.5l-1-2.2-2.4.4 1.4-1.8-1.2-1.5 2.1.3 1.1-2.2 1.1 2.2 2.1-.3-1.2 1.5 1.4 1.8-2.4-.4z"/><path fill="currentColor" d="M1.5 12l2.2-1-.4-2.4 1.8 1.4 1.5-1.2-.3 2.1 2.2 1.1-2.2 1.1.3 2.1-1.5-1.2-1.8 1.4z"/>',
   // —— 通用 ——
   // boss：之前 gear 是"中心圆 + 8 条放射短线"，画出来就是太阳/星形
   // 改成 Lucide 标准齿轮（8 齿 + 中心圆），24×24 16px 都清晰
