@@ -87,17 +87,15 @@ body::after {
   border-radius: 0;
   box-shadow: 0 10px 40px rgba(110, 80, 30, 0.15);
   padding: 0;
-  /* v5.13 渲染期间 fade 过渡（render() 加 .fading class 时整窗轻微变暗 0.18s）
-     避免"主页整页重绘 → 瞬间空白 → 重绘"造成的文字闪烁 */
-  transition: opacity 0.18s ease;
-}
-.widget.fading { opacity: 0.55; }
   overflow: hidden;
   display: grid;
   grid-template-rows: 44px 1fr;
   grid-template-columns: 9% 30% 1fr;   /* boss #12：侧栏从 7% 加宽到 9%，加长 */
-  transition: width .25s ease, height .25s ease;
+  /* v5.13 渲染期间 fade 过渡（render() 加 .fading class 时整窗轻微变暗 0.18s）
+     避免"主页整页重绘 → 瞬间空白 → 重绘"造成的文字闪烁 */
+  transition: opacity 0.18s ease, width .25s ease, height .25s ease;
 }
+.widget.fading { opacity: 0.55; }
 /* 折叠态：仅占右下角（boss #38 改为悬浮玻璃条，不再缩窗口、不再隐藏主 UI）
    玻璃感：双层 backdrop blur + 渐变 + 1px 金边 + 大阴影 + 圆角 18px
    主 UI 仍可见，widget 浮在主界面之上，叠层显示 */
@@ -528,13 +526,13 @@ body::after {
   color: var(--gold-deep); font-size: 14px; font-weight: 700;
 }
 
-/* 样式 2：条形进度 */
-.progress-bar { flex: 1; height: 14px; background: rgba(201, 162, 39, 0.13); border: 1px solid var(--border-soft); border-radius: 8px; overflow: visible; position: relative; }
+/* 样式 2：条形进度（v5.13b 配色改"黑金流沙"：暗底细槽 + 深咖→鎏金渐变填充，去刺眼发光） */
+.progress-bar { flex: 1; height: 9px; background: rgba(90, 72, 40, 0.12); border: 1px solid rgba(138, 106, 28, 0.18); border-radius: 5px; overflow: visible; position: relative; }
 .progress-bar .bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--gold-light), var(--gold));
-  border-radius: 8px;
-  box-shadow: 0 0 8px var(--glow-gold);
+  background: linear-gradient(90deg, #7A5516 0%, #B98F2E 55%, #D8B45A 100%);
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.22);
   transition: width .6s cubic-bezier(0.4, 0.1, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -542,9 +540,8 @@ body::after {
 .progress-bar .bar-fill::after {
   content: "";
   position: absolute; inset: 0;
-  /* v4.10.1：原白色 0.45 扫光太刺眼（boss 反馈太白/反光），降为几乎不可见的微光 */
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
-  animation: barShine 3.5s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 50%, transparent 100%);
+  animation: barShine 5s ease-in-out infinite;
 }
 @keyframes barShine {
   0% { transform: translateX(-100%); }
@@ -555,7 +552,7 @@ body::after {
   position: absolute; top: -2px;
   height: calc(100% + 4px);
   background: linear-gradient(90deg, var(--jade), var(--jade));
-  border-radius: 8px;
+  border-radius: 5px;
   box-shadow: 0 0 12px rgba(74, 139, 111, 0.6), 0 0 0 1px rgba(160, 128, 55, 0.30);
   opacity: 0.95;
   display: none;
@@ -878,7 +875,7 @@ body::after {
 }
 .dv-progress-summary .ps-label { color: var(--ink-mute); font-size: 11px; }
 .dv-progress-summary .ps-bar { flex: 1; height: 8px; background: rgba(201, 162, 39, 0.13); border-radius: 4px; overflow: hidden; }
-.dv-progress-summary .ps-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold)); border-radius: 4px; transition: width .5s; }
+.dv-progress-summary .ps-fill { height: 100%; background: linear-gradient(90deg, #7A5516, #C9A227 75%, #D8B45A); border-radius: 4px; transition: width .5s; }
 .dv-progress-summary .ps-num { color: var(--gold-deep); font-size: 13px; font-weight: 700; }
 
 .detail-desc {
@@ -990,7 +987,7 @@ body::after {
 }
 /* 挂件进度条（紧凑） */
 .fb-progress { width: 60px; height: 6px; background: rgba(201, 162, 39, 0.18); border-radius: 3px; overflow: hidden; }
-.fb-progress .fb-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold)); border-radius: 3px; }
+.fb-progress .fb-fill { height: 100%; background: linear-gradient(90deg, #7A5516, #C9A227 75%, #D8B45A); border-radius: 3px; }
 /* v5.12 删 .fb-btn / .fb-meta —— widget 不再有完成/关闭按钮（只读追踪卡片） */
 
 /* ============================================================
@@ -1397,7 +1394,7 @@ input::placeholder { color: var(--ink-faint); }
 .level-exp-row { align-items: flex-start; }
 .exp-box { flex: 1; min-width: 0; }
 .exp-bar { height: 8px; background: rgba(201, 162, 39, 0.15); border-radius: 4px; overflow: hidden; margin-top: 4px; }
-.exp-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold-deep)); border-radius: 4px; box-shadow: 0 0 8px var(--glow-gold); transition: width .5s; }
+.exp-fill { height: 100%; background: linear-gradient(90deg, #7A5516, #C9A227 75%, #D8B45A); border-radius: 4px; box-shadow: inset 0 1px 0 rgba(255,244,208,0.2); transition: width .5s; }
 .exp-hint { color: var(--ink-mute); font-size: 10.5px; margin-top: 4px; }
 
 /* ============================================================
@@ -1638,7 +1635,7 @@ input::placeholder { color: var(--ink-faint); }
 .pc-points-label { color: var(--ink-mute); font-size: 11px; }
 .pc-exp-row { display: flex; align-items: center; gap: 10px; }
 .pc-exp-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 254, 251, 0.9); overflow: hidden; border: 1px solid var(--border-soft); }
-.pc-exp-fill { height: 100%; background: linear-gradient(90deg, var(--gold-light), var(--gold-deep)); transition: width .35s; }
+.pc-exp-fill { height: 100%; background: linear-gradient(90deg, #7A5516, #C9A227 75%, #D8B45A); transition: width .35s; }
 .pc-exp-hint { color: var(--ink-mute); font-size: 11px; }
 
 /* 解除配对 disabled 态 */
