@@ -166,11 +166,32 @@ body::after {
 .level-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
+  background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
+  color: var(--rank-ico);
+  border: 1px solid rgba(255, 244, 208, 0.35);
   border-radius: 50%;
-  font-size: 11px; font-weight: 700; color: var(--ink-black);
-  box-shadow: 0 0 6px var(--glow-gold);
+  font-size: 11px; font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all .2s;
 }
+/* v5.13j：10 档等级徽章分档配色（boss 反馈"太土/low" — 全部一个色太单调） */
+.level-icon.rank-lv1, .pc-level-icon.rank-lv1 { --rank-from: #F5DBA0; --rank-to: #C9A65A; }
+.level-icon.rank-lv2, .pc-level-icon.rank-lv2 { --rank-from: #EFCB7F; --rank-to: #B98F2E; }
+.level-icon.rank-lv3, .pc-level-icon.rank-lv3 { --rank-from: #E8CB7F; --rank-to: #8A6A1C; }
+.level-icon.rank-lv4, .pc-level-icon.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; --rank-ico: #1F1407; }
+.level-icon.rank-lv5, .pc-level-icon.rank-lv5 { --rank-from: #B98F2E; --rank-to: #4A3712; --rank-ico: #FFF4D0;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.3), 0 0 8px rgba(216,180,90,0.4), 0 1px 2px rgba(0,0,0,0.25); }
+.level-icon.rank-lv6, .pc-level-icon.rank-lv6 { --rank-from: #6B4E1B; --rank-to: #2C1E0A; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.25), 0 0 10px rgba(216,180,90,0.5), 0 1px 3px rgba(0,0,0,0.4); }
+.level-icon.rank-lv7, .pc-level-icon.rank-lv7 { --rank-from: #3D2A0E; --rank-to: #1A1208; --rank-ico: #E8CB7F;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.15), 0 0 12px rgba(216,180,90,0.55), 0 2px 4px rgba(0,0,0,0.5); border-color: rgba(216,180,90,0.4); }
+.level-icon.rank-lv8, .pc-level-icon.rank-lv8 { --rank-from: #2C1E0A; --rank-to: #0A0518; --rank-ico: #E8CB7F;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.2), 0 0 14px rgba(216,180,90,0.6), 0 2px 5px rgba(0,0,0,0.55); border-color: rgba(216,180,90,0.5); }
+.level-icon.rank-lv9, .pc-level-icon.rank-lv9 { --rank-from: #1A0F2E; --rank-to: #0A0518; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,220,140,0.25), 0 0 18px rgba(216,180,90,0.5), 0 2px 6px rgba(0,0,0,0.6); border-color: rgba(216,180,90,0.55); }
+.level-icon.rank-lv10, .pc-level-icon.rank-lv10 { --rank-from: #0A0518; --rank-to: #000; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,220,140,0.3), 0 0 22px rgba(255,220,140,0.6), 0 3px 8px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
 .level-text { color: var(--gold-light); font-size: 11.5px; font-weight: 600; letter-spacing: 0.5px; }
 .level-text small { color: rgba(230, 199, 122, 0.6); font-size: 10px; margin-left: 3px; font-weight: 400; }
 
@@ -644,10 +665,28 @@ body::after {
   width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center;
   font-size: 30px;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
+  background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
+  color: var(--rank-ico);
   border-radius: 50%;
-  box-shadow: 0 0 10px var(--glow-gold), inset 0 0 0 2px rgba(212, 175, 55, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.4), 0 4px 10px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 244, 208, 0.35);
   flex: 0 0 52px;
+}
+/* v5.13j：level-character 10 档分档 */
+.level-character.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; }
+.level-character.rank-lv5 { --rank-from: #B98F2E; --rank-to: #4A3712; --rank-ico: #FFF4D0;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.3), 0 0 14px rgba(216,180,90,0.5), 0 4px 12px rgba(0,0,0,0.3); }
+.level-character.rank-lv6 { --rank-from: #6B4E1B; --rank-to: #2C1E0A; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.25), 0 0 16px rgba(216,180,90,0.55), 0 4px 14px rgba(0,0,0,0.4); border-color: rgba(216,180,90,0.4); }
+.level-character.rank-lv7 { --rank-from: #3D2A0E; --rank-to: #1A1208; --rank-ico: #E8CB7F;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.18), 0 0 18px rgba(216,180,90,0.6), 0 4px 14px rgba(0,0,0,0.5); border-color: rgba(216,180,90,0.4); }
+.level-character.rank-lv8 { --rank-from: #2C1E0A; --rank-to: #0A0518; --rank-ico: #E8CB7F;
+  box-shadow: inset 0 1px 0 rgba(255,244,208,0.22), 0 0 20px rgba(216,180,90,0.65), 0 5px 14px rgba(0,0,0,0.55); border-color: rgba(216,180,90,0.5); }
+.level-character.rank-lv9 { --rank-from: #1A0F2E; --rank-to: #0A0518; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,220,140,0.25), 0 0 22px rgba(216,180,90,0.55), 0 5px 16px rgba(0,0,0,0.6); border-color: rgba(216,180,90,0.6); }
+.level-character.rank-lv10 { --rank-from: #0A0518; --rank-to: #000; --rank-ico: #FFE68A;
+  box-shadow: inset 0 1px 0 rgba(255,220,140,0.32), 0 0 26px rgba(255,220,140,0.65), 0 5px 18px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
 }
 .level-info { flex: 1; min-width: 0; }
 .level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }  /* 深字，浅底上清晰 */
@@ -1622,10 +1661,13 @@ input::placeholder { color: var(--ink-faint); }
 }
 .pc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .pc-level-icon {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
-  color: var(--ink-black); display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 10px var(--glow-gold);
+  width: 48px; height: 48px; border-radius: 50%;
+  --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
+  background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
+  color: var(--rank-ico);
+  border: 1px solid rgba(255, 244, 208, 0.35);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.4), 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 .pc-level-text { flex: 1; min-width: 0; }
 .pc-level-name { color: var(--gold-light); font-size: 16px; font-weight: 700; letter-spacing: 1px; }

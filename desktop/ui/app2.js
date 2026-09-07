@@ -124,7 +124,8 @@ const ICONS = {
   bell:     '<path d="M18 8.6a6 6 0 1 0-12 0c0 5.4-2.2 6.9-2.2 6.9h16.4S18 14 18 8.6Z"/><path d="M13.7 19.4a2 2 0 0 1-3.4 0"/>',
   sparkle:  '<path d="M11 3.4l1.6 4.4 4.4 1.6-4.4 1.6L11 15.4 9.4 11 5 9.4l4.4-1.6L11 3.4Z"/><path d="M17.6 14.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7.7-1.9Z"/>',
   warn:     '<path d="M12 4.4 21 19.6H3L12 4.4Z"/><path d="M12 9.8v4.1"/><circle cx="12" cy="17" r="1.05" fill="currentColor" stroke="none"/>',
-  pin:     '<path d="M9 3.6h6M10.5 3.6V8.4l-3 3 1.2 1.2 3-3 1.8 1.8 1.2-1.2-1.8-1.8 3-3V3.6"/>',
+  // v5.13j：顶栏挂件开关换 lucide columns-2（更直观"独立窗格/桌面挂件"，手画 pin 渲染像 R 太丑）
+  columns2: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
   star:     '<path d="M12 3.8l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8L12 3.8Z"/>',
   bar:      '<rect x="3" y="8.6" width="18" height="6.8" rx="3.4"/><path d="M3.4 12h8.4" stroke-width="2.6"/>',
   circle:   '<circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17Z" fill="currentColor" stroke="none"/>',
@@ -587,16 +588,20 @@ function renderLevelBadge() {
   // boss E：顶栏徽章左侧 .level-icon 优先显示用户头像（settings.avatar_img），
   // 没有头像则降级显示等级 SVG 图标
   const ic = document.getElementById('levelIcon');
+  // v5.13j：根据等级设分档 class（10 档配色 + 质感差异）
+  const rankCls = 'rank-lv' + (lv.lv || 1);
   if (settings.avatar_img) {
     ic.innerHTML = '';
+    ic.className = 'level-icon';   // 自定义头像时不分档
     ic.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
     ic.style.backgroundSize = 'cover';
     ic.style.backgroundPosition = 'center';
     ic.style.backgroundRepeat = 'no-repeat';
-    ic.style.background = 'transparent';  // v5.13g：清掉 .level-icon 自带金色渐变，避免覆盖自定义头像
+    ic.style.background = 'transparent';
   } else {
     ic.style.backgroundImage = '';
-    ic.style.background = '';   // 让 .level-icon CSS 默认金色渐变回归
+    ic.style.background = '';
+    ic.className = 'level-icon ' + rankCls;
     ic.innerHTML = svgIcon(lv.ico || 'lv1', 13, 2);
   }
   document.getElementById('levelText').textContent = lv.name;
@@ -605,6 +610,9 @@ function renderLevelCard() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
   // 总览大卡
+  // v5.13j：总览大卡设分档 class
+  const lch = document.getElementById('levelChar');
+  lch.className = 'level-character rank-lv' + (lv.lv || 1);
   document.getElementById('levelChar').innerHTML = svgIcon(lv.ico || 'lv1', 30, 1.7);
   document.getElementById('levelName').textContent = lv.name;
   // boss：title 全删，元素自身隐藏避免占行
@@ -1228,7 +1236,10 @@ function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.leng
 function openProfileModal() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
-  document.getElementById('profileLevelIcon').innerHTML = svgIcon(lv.ico || 'lv1', 36, 1);
+  // v5.13j：profile 大徽章设分档 class（10 档配色）
+  const pcIc = document.getElementById('profileLevelIcon');
+  pcIc.className = 'pc-level-icon rank-lv' + (lv.lv || 1);
+  pcIc.innerHTML = svgIcon(lv.ico || 'lv1', 36, 1.5);
   document.getElementById('profileLevelName').textContent = lv.name;
   // 同步处理 title 空串隐藏（与上方 renderLevelCard 一致）
   const _pt2 = document.getElementById('profileLevelTitle');
