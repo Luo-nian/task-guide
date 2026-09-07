@@ -366,6 +366,71 @@
 
         <div class="settings-section">
           <div class="ss-title">追踪与提醒</div>
+          <!-- v5.14c：boss 要求 提醒设置：端→方式→时间 顺序 + 条件显示 + 默认值联动 -->
+          <div class="setting-row remind-section">
+            <label class="lbl-head">提醒</label>
+            <span class="hint">添加任务时自动套用这里的默认提醒设置</span>
+          </div>
+          <!-- 1) 端选择（必选第一步） -->
+          <div class="setting-row">
+            <label>接收端</label>
+            <div class="rem-device-row">
+              <button type="button" class="rem-device-btn" data-device="desktop" id="remDevDesktop">电脑端</button>
+              <button type="button" class="rem-device-btn" data-device="mobile" id="remDevMobile">手机端</button>
+              <button type="button" class="rem-device-btn" data-device="both" id="remDevBoth">双端</button>
+              <button type="button" class="rem-device-btn" data-device="none" id="remDevNone">不提醒</button>
+            </div>
+          </div>
+          <!-- 2) 提醒方式（条件显示：选了"不提醒"就整块隐藏；选了端就显示该端的提醒方式） -->
+          <div class="rem-strength-block" id="remStrengthBlock">
+            <!-- 电脑端提醒方式 -->
+            <div class="setting-row rem-strength-desktop" style="display:none">
+              <label>电脑提醒</label>
+              <div class="rem-strength-row">
+                <label class="chk-pill"><input type="checkbox" id="remDeskNotif" /> <span>通知栏</span></label>
+                <label class="chk-pill"><input type="checkbox" id="remDeskSound" /> <span>提示音</span></label>
+                <label class="chk-pill"><input type="checkbox" id="remDeskPop" /> <span>弹窗</span></label>
+              </div>
+            </div>
+            <!-- 手机端提醒方式 -->
+            <div class="setting-row rem-strength-mobile" style="display:none">
+              <label>手机提醒</label>
+              <div class="rem-strength-row">
+                <label class="chk-pill"><input type="checkbox" id="remMobNotif" /> <span>通知栏</span></label>
+                <label class="chk-pill"><input type="checkbox" id="remMobVibrate" /> <span>振动</span></label>
+                <label class="chk-pill"><input type="checkbox" id="remMobSound" /> <span>铃声</span></label>
+              </div>
+            </div>
+          </div>
+          <!-- 3) 提醒时间（选了端才显示） -->
+          <div class="rem-time-block" id="remTimeBlock" style="display:none">
+            <div class="setting-row">
+              <label>提前提醒</label>
+              <div class="rem-time-row">
+                <button type="button" class="rem-time-btn" data-min="0">准时</button>
+                <button type="button" class="rem-time-btn" data-min="15">15分钟前</button>
+                <button type="button" class="rem-time-btn" data-min="60">1小时前</button>
+                <button type="button" class="rem-time-btn" data-min="1440">1天前</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label>每日例行提醒</label>
+              <div class="rem-time-row">
+                <button type="button" class="rem-time-btn" data-time="06:00">起床 06:00</button>
+                <button type="button" class="rem-time-btn" data-time="21:00">睡前 21:00</button>
+              </div>
+            </div>
+          </div>
+          <!-- 自定义分类（boss 提"工作/生活/锻炼"分类） -->
+          <div class="setting-row">
+            <label>分类标签</label>
+            <div class="rem-cat-row">
+              <button type="button" class="rem-cat-btn" data-cat="工作">工作</button>
+              <button type="button" class="rem-cat-btn" data-cat="生活">生活</button>
+              <button type="button" class="rem-cat-btn" data-cat="锻炼">锻炼</button>
+            </div>
+            <span class="hint">选中后该分类任务添加时自动打标</span>
+          </div>
           <div class="setting-row">
             <label>同时追踪上限</label>
             <div class="ss-default" id="dsp_setTrackingMax">

@@ -194,6 +194,12 @@ function fmtDue(dueAt) {
   }
   return String(dueAt);
 }
+// v5.14c：纯时间格式 HH:MM（用于任务卡"开始-结束"显示）
+function fmtTime(ts) {
+  if (!ts) return '--:--';
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
 function isTracking(t) { return t.track_status === 'tracking'; }
 const TYPE_LABEL = { goal:'目标', habit:'习惯', repeat:'重复', note:'速记', once:'单次' };
 const PRIO_LABEL = { high:'高优先级', medium:'中优先级', low:'低优先级' };
@@ -232,6 +238,73 @@ function applySettingsToUi() {
   document.querySelectorAll('.ss-pair-hidden-on-pair').forEach(el => el.classList.toggle('ss-pair-hidden', paired));
   // 解除配对按钮：未配对时禁用 + 灰
   const unpair = document.getElementById('setUnpair');
+
+  // v5.14c：提醒设置 — 端→方式→时间 三段式条件显示
+  const DEV_KEY = 'reminder_default_device';
+  const LEAD_KEY = 'reminder_default_lead_min';
+  const CAT_KEY = 'reminder_default_cat';
+  const dev = settings[DEV_KEY] || 'none';
+  // 端选择高亮
+  document.querySelectorAll('.rem-device-btn').forEach(b => b.classList.toggle('active', b.dataset.device === dev));
+  // 条件显示：选了端才显示方式 + 时间；选了 none 整块隐藏
+  const showBlock = dev !== 'none';
+  const showDesk = dev === 'desktop' || dev === 'both';
+  const showMob = dev === 'mobile' || dev === 'both';
+  const sb = document.getElementById('remStrengthBlock');
+  const tb = document.getElementById('remTimeBlock');
+  if (sb) sb.style.display = showBlock ? '' : 'none';
+  if (tb) tb.style.display = showBlock ? '' : 'none';
+  document.querySelector('.rem-strength-desktop') && (document.querySelector('.rem-strength-desktop').style.display = showDesk ? '' : 'none');
+  document.querySelector('.rem-strength-mobile') && (document.querySelector('.rem-strength-mobile').style.display = showMob ? '' : 'none');
+  // 端选择 click
+  document.querySelectorAll('.rem-device-btn').forEach(b => {
+    b.onclick = () => {
+      settings[DEV_KEY] = b.dataset.device;
+      saveSettings();
+      applySettingsToUi();
+      persistSettingsServer();
+    };
+  });
+  // 提醒方式 checkbox
+  ['remDeskNotif','remDeskSound','remDeskPop','remMobNotif','remMobVibrate','remMobSound'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.onchange = () => {
+      settings[id.replace('rem', 'rem_').replace(/^(Desk|Mob)/, m => m.toLowerCase() + '_')] = el.checked;
+      // 简化：直接存到 settings[id] = el.checked
+      settings[id] = el.checked;
+      saveSettings();
+    };
+  });
+  // 提前提醒时间高亮
+  document.querySelectorAll('.rem-time-btn[data-min]').forEach(b => {
+    b.classList.toggle('active', String(b.dataset.min) === String(settings[LEAD_KEY] || '15'));
+    b.onclick = () => {
+      settings[LEAD_KEY] = parseInt(b.dataset.min, 10);
+      saveSettings();
+      applySettingsToUi();
+    };
+  });
+  // 每日例行提醒高亮
+  document.querySelectorAll('.rem-time-btn[data-time]').forEach(b => {
+    b.classList.toggle('active', b.dataset.time === (settings.reminder_default_daily || ''));
+    b.onclick = () => {
+      settings.reminder_default_daily = b.dataset.time;
+      saveSettings();
+      applySettingsToUi();
+    };
+  });
+  // 自定义分类按钮
+  document.querySelectorAll('.rem-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === settings[CAT_KEY]);
+    b.onclick = () => {
+      settings[CAT_KEY] = settings[CAT_KEY] === b.dataset.cat ? '' : b.dataset.cat;
+      saveSettings();
+      applySettingsToUi();
+    };
+  });
+  // 持久化到后端 settings
+  if (!settings._remSynced) { settings._remSynced = true; }
   if (unpair) {
     unpair.disabled = !settings.pairing;
     unpair.classList.toggle('disabled', !settings.pairing);
@@ -383,11 +456,23 @@ function catTaskHtml(t) {
   if (t.due_at) { metaIcon = 'clock'; meta = fmtDue(t.due_at); }
   else if (t.category === 'once' && t.count > 1) meta = '次数 ' + (t.done_count || 0) + '/' + t.count;
   const metaHtml = meta ? `<span class="ct-meta">${metaIcon ? svgIcon(metaIcon,11,2.1) : ''}${esc(meta)}</span>` : '';
+  // v5.14c：时间段漏斗 + 开始-结束时间显示（boss：今天的事应显示开始时间-结束时间）
+  let timeBarHtml = '';
+  if (t.due_at) {
+    const start = t.due_at - 30 * 60 * 1000;   // 默认前置 30 分钟
+    const end = t.due_at;
+    timeBarHtml = `<div class="tc-time-bar">
+      <span class="tc-time-icon">${svgIcon('clock',11,2.1)}</span>
+      <span class="tc-time-range">${fmtTime(start)}<span class="tc-time-arrow">→</span>${fmtTime(end)}</span>
+      <span class="ct-meta">(${fmtDue(t.due_at)})</span>
+    </div>`;
+  }
   // 追踪中：左侧不显示任何标识，右侧显示会动的涟漪菱形
   const ri = isTracking(t) ? `<span class="ct-diamond"></span>` : '';
   return `<div class="cat-task ${isTracking(t)?'tracking':''}" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')">
     <span class="ct-title">${esc(t.title)}</span>
     ${metaHtml}
+    ${timeBarHtml}
     ${ri}
   </div>`;
 }
