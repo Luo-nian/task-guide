@@ -1186,37 +1186,45 @@ fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
                     }
                 )
             }
-            // 圆形青蓝按钮 + 白色任务标记（简洁，与顶栏"追踪中"Azure 视觉一致）
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(TGColors.Azure)
-                    .clickable {
-                        scope.launch {
-                            ripple.snapTo(0f)
-                            ripple.animateTo(1f, tween(700))
-                        }
-                        navController.navigate("track")
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                TGIcon(
-                    drawable = R.drawable.ic_mark,
-                    contentDescription = "追踪",
-                    tint = Color.White,
-                    size = 24.dp
-                )
-            }
-            // 追踪数：按钮正下方小字（Azure 深色，非红色角标）
-            if (trackingCount > 0) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = trackingCount.toString(),
-                    color = TGColors.Azure,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            // 圆形青蓝按钮 + 白色任务标记 + 右上红色数量角标（v5.15 fix：原下方小字易截断）
+            Box {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(TGColors.Azure)
+                        .clickable {
+                            scope.launch {
+                                ripple.snapTo(0f)
+                                ripple.animateTo(1f, tween(700))
+                            }
+                            navController.navigate("track")
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    TGIcon(
+                        drawable = R.drawable.ic_mark,
+                        contentDescription = "追踪",
+                        tint = Color.White,
+                        size = 24.dp
+                    )
+                }
+                // 角标：贴按钮右上（Badge 自带圆角+内边距，数字完整不截断）
+                if (trackingCount > 0) {
+                    Badge(
+                        containerColor = TGColors.Crimson,
+                        contentColor = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 8.dp, y = (-6).dp)
+                    ) {
+                        Text(
+                            text = if (trackingCount > 99) "99+" else trackingCount.toString(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }

@@ -31,10 +31,28 @@ class SyncService : Service() {
     private var serverJob: Job? = null
     private var mdns: MdnsRegistrar? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // v5.15：网络变化监听（WiFi 重连/切换 → 重新注册 mDNS + 重启服务器）
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.ensureChannels(this)
+        // v5.15：WiFi 变化 → mDNS 重新广播（桌面 auto_reconnect 靠 mDNS 发现新 IP）
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        if (cm != null) {
+            try {
+                val cb = object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        Log.i("SyncService", "网络已连接，重启 mDNS 广播 + 服务器")
+                        restartAfterNetworkChange()
+                    }
+                }
+                netCallback = cb
+                cm.registerDefaultNetworkCallback(cb)
+            } catch (e: Exception) {
+                Log.e("SyncService", "网络监听注册失败", e)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,11 +115,37 @@ class SyncService : Service() {
         serverJob?.cancel()
         runCatching { server?.stop(1000, 2000) }
         mdns?.unregister()
+        // v5.15：反注册网络监听
+        try {
+            netCallback?.let { cb ->
+                (getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)?.unregisterNetworkCallback(cb)
+            }
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // v5.15：网络变化（WiFi 重连/切换）后重新注册 mDNS + 重启服务器，
+    // 保证桌面 auto_reconnect 能通过 mDNS 发现手机新 IP。
+    private fun restartAfterNetworkChange() {
+        scope.launch {
+            kotlinx.coroutines.delay(1500)   // 等网络真正可用
+            if (server != null) {
+                // 服务器已在跑：只重新广播 mDNS（IP 变了，广播里带的是新地址）
+                runCatching {
+                    val port = BuildConfig.SERVER_PORT
+                    mdns?.unregister()
+                    mdns = MdnsRegistrar(this@SyncService).also { it.register(port) }
+                }
+                Log.i("SyncService", "mDNS 已重新广播（网络变化后）")
+            } else {
+                // 服务器没起来（例如端口曾占用/网络刚恢复）→ 完整重启
+                startServer()
+                Log.i("SyncService", "服务器已重启（网络恢复后）")
+            }
+        }
+    }
     companion object {
         const val NOTIF_ID = 1001
 

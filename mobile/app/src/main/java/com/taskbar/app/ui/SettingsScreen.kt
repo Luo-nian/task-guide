@@ -2,6 +2,7 @@ package com.taskbar.app.ui
 
 import android.content.Intent
 import android.media.RingtoneManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -352,7 +353,30 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
-        // 服务器地址（给电脑端连接用）
+        // 后台保活引导（iQOO/小米等 ROM 会冻结后台 → 桌面连不上，引导用户放行）
+        TGCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("后台保活", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(3.dp))
+                    Text("手机息屏/锁屏后桌面连不上？部分系统会冻结后台", color = TGColors.InkMute, fontSize = 11.sp)
+                    Text("在系统设置里允许本应用后台运行 + 自启动", color = TGColors.InkMute, fontSize = 11.sp)
+                }
+                // v5.15：跳系统电池优化设置页
+                TextButton(onClick = {
+                    try {
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:${ctx.packageName}")
+                        }
+                        ctx.startActivity(intent)
+                    } catch (_: Exception) {}
+                }) { Text("忽略电池优化", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        // 同步服务器（给电脑端连接用）
         TGCard(Modifier.fillMaxWidth()) {
             Text("同步服务器", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
