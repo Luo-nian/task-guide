@@ -315,11 +315,20 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 var job: Job? = null
                 val refresh = {
                     job?.cancel()
-                    job = coScope.launch { pairedDevice = vm.getSetting("paired_device", "") }
+                    job = coScope.launch {
+                        // v5.15 P0：设置页停留期间每 3s 轮询配对状态 —— 桌面端配对/解除后
+                        // 手机端不必切走再切回才刷新（之前只 onResume 读一次，用户停在
+                        // 设置页等桌面配对时永远显示"未配对"）
+                        while (true) {
+                            pairedDevice = vm.getSetting("paired_device", "")
+                            kotlinx.coroutines.delay(3000)
+                        }
+                    }
                 }
                 refresh()
                 val observer = LifecycleEventObserver { _, e ->
                     if (e == Lifecycle.Event.ON_RESUME) refresh()
+                    if (e == Lifecycle.Event.ON_PAUSE) job?.cancel()
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
