@@ -495,24 +495,54 @@ function arcItemHtml(t) {
       <span class="arc-points">+${t.reward_points || 10}</span>
     </div>`;
 }
-// v5.13d 历史任务右键 = 恢复到今日待办（boss：历史里任务可以恢复）
+// v5.13e 历史任务右键 = 自绘弹层菜单（含"恢复"+"取消"——boss 反馈右键直接恢复没保护）
+let _restoreMenu = null;
+function showRestoreMenu(x, y, uuid) {
+  hideRestoreMenu();
+  const m = document.createElement('div');
+  m.className = 'ctx-menu';
+  m.id = '_restoreMenu';
+  // 防止超出右/下边界
+  const W = 120, H = 70;
+  const px = Math.min(x, window.innerWidth - W - 4);
+  const py = Math.min(y, window.innerHeight - H - 4);
+  m.style.left = px + 'px';
+  m.style.top = py + 'px';
+  m.innerHTML = '<button data-act="restore">恢复任务</button><button data-act="cancel">取消</button>';
+  document.body.appendChild(m);
+  m.addEventListener('click', (e) => {
+    const act = e.target.dataset && e.target.dataset.act;
+    hideRestoreMenu();
+    if (act === 'restore') doRestore(uuid);
+  });
+  _restoreMenu = m;
+}
+function hideRestoreMenu() {
+  if (_restoreMenu) { _restoreMenu.remove(); _restoreMenu = null; }
+}
+async function doRestore(uuid) {
+  try {
+    await call('restore_task', { taskUuid: uuid });
+    showToast('已恢复到今日任务');
+  } catch (e) { showToast('恢复失败'); }
+  await fetchAll();
+  render();
+  renderArchiveModal();
+}
 document.getElementById('archiveBody').addEventListener('contextmenu', (e) => {
   const item = e.target.closest('.arc-item');
   if (!item) return;
   e.preventDefault();
+  hideRestoreMenu();
   const uuid = item.dataset.uuid;
-  const t = archive.find(x => x.uuid === uuid);
-  (async () => {
-    try {
-      await call('restore_task', { taskUuid: uuid });
-      showToast('已恢复到今日任务');
-    } catch (err) {
-      showToast('恢复失败');
-    }
-    await fetchAll();
-    render();
-    renderArchiveModal();
-  })();
+  showRestoreMenu(e.clientX, e.clientY, uuid);
+});
+// 点别处 / Esc 关闭菜单
+document.addEventListener('click', (e) => {
+  if (_restoreMenu && !e.target.closest('#_restoreMenu')) hideRestoreMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideRestoreMenu();
 });
 
 // =============== 右侧今日概览仪表盘 ===============
