@@ -244,9 +244,11 @@ body::after {
 .nav-item:hover { color: var(--gold-deep); background: rgba(224, 186, 104, 0.20); transform: translateY(-1px); }
 .nav-item.active {
   color: var(--gold-deep);
-  background: linear-gradient(160deg, rgba(224, 186, 104, 0.55), rgba(224, 186, 104, 0.30));
-  box-shadow: 0 3px 10px rgba(110, 80, 30, 0.18), inset 0 0 0 1px var(--border-mid);
-  border-color: rgba(154, 123, 26, 0.3);
+  /* v5.14e：active 背景加深（0.55+0.30 → 0.85+0.6）让 .ico 容器内层更显眼，
+     之前半透明叠加浅色 card 背景 ≈ 白，boss 反馈"看不见侧边栏"就是这个 */
+  background: linear-gradient(160deg, rgba(224, 186, 104, 0.85), rgba(224, 186, 104, 0.60));
+  box-shadow: 0 3px 12px rgba(110, 80, 30, 0.25), inset 0 0 0 1px rgba(154, 123, 26, 0.5);
+  border-color: rgba(154, 123, 26, 0.5);
 }
 /* active 左侧金色竖线（不旋转） */
 .nav-item.active::before {
@@ -271,6 +273,7 @@ body::after {
 .nav-item:hover .ico { transform: scale(1.08); }
 .nav-item.active .ico { box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.1), 0 0 10px var(--glow-gold); }
 .ico-overview { background: linear-gradient(135deg, #A78BFA, #5B3FB0); }
+.ico-today    { background: linear-gradient(135deg, #F5B95D, #C98432); }   /* v5.14e：今日图标（橘黄）—— 之前没定义导致 .ico 容器空白 */
 .ico-daily    { background: linear-gradient(135deg, #5BA3D0, #2E6FA0); }
 .ico-goal     { background: linear-gradient(135deg, #B49BE0, #7E62A6); }  /* boss #16：补目标任务图标 */
 .ico-lim      { background: linear-gradient(135deg, #D88A3F, #A55F1A); }
@@ -283,6 +286,36 @@ body::after {
 .nav-spacer { flex: 1; }
 /* 历史项：只用间距分隔（原来的 padding-top 会把图标压低 7px，与其它 4 项不对齐） */
 .nav-item.repo { margin-top: 8px; }
+
+/* v5.14e：今日视图"添加"按钮（boss 反馈"追加任务应该在最上面"） */
+.today-view-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.today-view-header .vh-add-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  background: linear-gradient(160deg, var(--gold-light), var(--gold-deep));
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px var(--glow-gold);
+  letter-spacing: 0.5px;
+}
+.today-view-header .vh-add-btn:hover { box-shadow: 0 4px 14px var(--glow-gold); }
+
+/* v5.14e：dashboard greeting 旁大头像（32×32） */
+.dash-greet-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  color: #fff;
+  font-size: 16px; font-weight: 700;
+  box-shadow: 0 0 8px var(--glow-gold), inset 0 0 0 1px rgba(255,255,255,0.2);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.dash-greet-avatar svg { width: 18px; height: 18px; }
 
 /* ============================================================
    中间列表区 30%

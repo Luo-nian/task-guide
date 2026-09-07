@@ -372,9 +372,10 @@ function renderTodayView() {
   const titleMap = { daily:'每日任务', 'time-limited':'限时任务', once:'次数任务', goal:'目标任务' };
   const iconMap = { daily:'daily', 'time-limited':'lim', once:'once', goal:'goal' };
   let html = `
-    <div class="list-view-header">
+    <div class="list-view-header today-view-header">
       <span class="vh-title">今日待办</span>
       <span class="vh-meta">${todayTasks.length} 项未完成</span>
+      <button type="button" class="vh-add-btn" id="todayAddBtn" onclick="openAdd()">${ '添加' }</button>
     </div>
     <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
@@ -1209,6 +1210,45 @@ document.querySelectorAll('#addOverlay .rem-time-btn').forEach(b => {
 function closeAdd() { addOverlay.style.display = 'none'; }
 document.getElementById('fabAdd').addEventListener('click', openAdd);
 document.querySelectorAll('[data-close-overlay="addOverlay"]').forEach(b => b.addEventListener('click', closeAdd));
+
+// v5.14e：主窗+挂件拖动 JS 兜底（lib.rs win_start_dragging IPC 已加，data-tauri-drag-region 在 WebView2 偶发失效）
+//   mousedown 时调 IPC，OS 进入 native 拖动循环（Win10/11 适配）
+function bindDragFallback(selector, label) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  let downX, downY, downT;
+  el.addEventListener('mousedown', (e) => {
+    downX = e.screenX; downY = e.screenY; downT = Date.now();
+  });
+  el.addEventListener('mouseup', (e) => {
+    if (Date.now() - downT > 150) return;          // 长按说明真在拖，不算 click
+    const dx = Math.abs(e.screenX - downX), dy = Math.abs(e.screenY - downY);
+    if (dx < 4 && dy < 4) {
+      // 短按 = 点击，不走拖动
+    }
+  });
+  // 真正的拖动触发：mousedown 后 100ms 内若 mousedown 还在 + mousemove > 3px，调 IPC
+  el.addEventListener('mousedown', (e) => {
+    const startX = e.screenX, startY = e.screenY;
+    const timer = setTimeout(() => {
+      const onMove = (mv) => {
+        if (Math.abs(mv.screenX - startX) > 3 || Math.abs(mv.screenY - startY) > 3) {
+          clearTimeout(timer);
+          document.removeEventListener('mousemove', onMove);
+          if (window.__TAURI__ && window.__TAURI__.core) {
+            window.__TAURI__.core.invoke('win_start_dragging', { label }).catch(() => {});
+          }
+        }
+      };
+      document.addEventListener('mousemove', onMove);
+    }, 100);
+    const cleanup = () => clearTimeout(timer);
+    el.addEventListener('mouseup', cleanup, { once: true });
+    el.addEventListener('mouseleave', cleanup, { once: true });
+  });
+}
+bindDragFallback('#topbar', 'main');
+// widget 单独绑（widget.html 也在 ui/ 下但脚本不同）
 
 // 次数"默认 N 次 · 修改"：点修改展开输入，点确定写回本次次数
 document.getElementById('addCountEditBtn').addEventListener('click', () => {

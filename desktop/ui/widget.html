@@ -145,10 +145,25 @@
     await refresh();
   });
 
-  let downX = 0, downY = 0;
+  let downX = 0, downY = 0, downT = 0;
   document.getElementById('card').addEventListener('mousedown', function(ev) {
     if (ev.target.closest('.advance')) return;  // 推进键不触发唤起
-    downX = ev.screenX; downY = ev.screenY;
+    downX = ev.screenX; downY = ev.screenY; downT = Date.now();
+    // v5.14e：拖动 JS 兜底（WebView2 data-tauri-drag-region 偶发失效——100ms 后若 mousemove > 3px 调 win_start_dragging）
+    const startX = ev.screenX, startY = ev.screenY;
+    const timer = setTimeout(function() {
+      const onMove = function(mv) {
+        if (Math.abs(mv.screenX - startX) > 3 || Math.abs(mv.screenY - startY) > 3) {
+          clearTimeout(timer);
+          document.removeEventListener('mousemove', onMove);
+          invoke('win_start_dragging', { label: 'widget' }).catch(function(){});
+        }
+      };
+      document.addEventListener('mousemove', onMove);
+    }, 100);
+    const cleanup = function() { clearTimeout(timer); };
+    document.getElementById('card').addEventListener('mouseup', cleanup, { once: true });
+    document.getElementById('card').addEventListener('mouseleave', cleanup, { once: true });
   });
   document.getElementById('card').addEventListener('mouseup', function(ev) {
     if (ev.target.closest('.advance')) return;
