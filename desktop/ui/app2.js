@@ -585,25 +585,19 @@ function renderDashboard() {
 
 function renderLevelBadge() {
   const lv = level || levelOf(points);
-  // boss E：顶栏徽章左侧 .level-icon 优先显示用户头像（settings.avatar_img），
+  // boss E：顶栏徽章左侧 .level-icon 优先显示用户头像（settings.avatar_img / avatar_idx），
   // 没有头像则降级显示等级 SVG 图标
+  // v5.13k：走 renderUserAvatar() 统一三处逻辑（顶栏/下午好/profile）
   const ic = document.getElementById('levelIcon');
-  // v5.13j：根据等级设分档 class（10 档配色 + 质感差异）
   const rankCls = 'rank-lv' + (lv.lv || 1);
   if (settings.avatar_img) {
-    ic.innerHTML = '';
-    ic.className = 'level-icon';   // 自定义头像时不分档
-    ic.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
-    ic.style.backgroundSize = 'cover';
-    ic.style.backgroundPosition = 'center';
-    ic.style.backgroundRepeat = 'no-repeat';
-    ic.style.background = 'transparent';
+    // 自定义头像时不分档
+    ic.className = 'level-icon';
   } else {
-    ic.style.backgroundImage = '';
-    ic.style.background = '';
     ic.className = 'level-icon ' + rankCls;
-    ic.innerHTML = svgIcon(lv.ico || 'lv1', 13, 2);
   }
+  // 头像渲染（avatar_img / lucide idx / 等级图标）三档都在 renderUserAvatar 里
+  renderUserAvatar();
   document.getElementById('levelText').textContent = lv.name;
 }
 function renderLevelCard() {
@@ -615,6 +609,8 @@ function renderLevelCard() {
   lch.className = 'level-character rank-lv' + (lv.lv || 1);
   document.getElementById('levelChar').innerHTML = svgIcon(lv.ico || 'lv1', 30, 1.7);
   document.getElementById('levelName').textContent = lv.name;
+  // 同步 user 头像到三处（顶栏/下午好/profile）
+  renderUserAvatar();
   // boss：title 全删，元素自身隐藏避免占行
   const ltEl = document.getElementById('levelTitle');
   if (ltEl) { ltEl.textContent = lv.title || ''; ltEl.style.display = lv.title ? '' : 'none'; }
@@ -1159,11 +1155,14 @@ document.getElementById('addSubmit').addEventListener('click', async () => {
     const factor = unit === 'day' ? 86400000 : unit === 'hour' ? 3600000 : 60000;
     deadlineKey = 'custom:' + (num * factor);
   }
+  // v5.13k：所有类型任务都能传 count>1（后端会自动生成 N 个步骤）
+  //   之前 v4.13.5 只 once 类别允许 count>1，boss 决定所有任务统一用步骤推进
+  const submitCount = Math.max(1, parseInt(draftCount, 10) || 1);
   await call('add_task', {
     title, category: draftCat,
     deadlineKey,
     priority: draftPrio,
-    count: draftCat === 'once' ? draftCount : 1
+    count: submitCount
   });
   closeAdd();
   render();
@@ -1228,10 +1227,21 @@ document.querySelectorAll('[data-save-edit]').forEach(btn => {
 });
 
 // =============== 个人信息 modal ===============
-// 头像用 emoji 或字符当占位（先用等级 SVG，后面可以换 Gravatar / 文件上传）
-const AVATAR_GLYPHS = ['✦','✧','☀','☾','⚡','❄','♨','⚓','⚝','❀','✿','❁','✪','✯','✰','✸','✱','✲'];
+// v5.13k：把'字符占位'升级为'lucide 内置头像'（8 个真实矢量图形，冒险者主题）。
+//   上传的自定义图（settings.avatar_img base64）仍优先于内置头像。
+//   选头像 → settings.avatar_idx；上传图 → settings.avatar_img。
+const AVATAR_GLYPHS = [
+  { name: '火焰', ico: 'flame'    },
+  { name: '星光', ico: 'star'     },
+  { name: '王冠', ico: 'crown'    },
+  { name: '闪光', ico: 'sparkles' },
+  { name: '轨道', ico: 'orbit'    },
+  { name: '盾牌', ico: 'shield'   },
+  { name: '剑',   ico: 'sword'    },
+  { name: '罗盘', ico: 'compass'  }
+];
 let avatarIdx = 0;
-function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.length]; }
+function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.length].ico; }
 
 function openProfileModal() {
   const lv = level || levelOf(points);
@@ -1245,6 +1255,27 @@ function openProfileModal() {
   const _pt2 = document.getElementById('profileLevelTitle');
   if (_pt2) { _pt2.textContent = lv.title || ''; _pt2.style.display = lv.title ? '' : 'none'; }
   document.getElementById('profilePointsNum').textContent = points;
+  // v5.13k：渲染 8 个 lucide 内置头像选择网格（仅首次打开时构建）
+  const avatarGrid = document.getElementById('avatarGrid');
+  if (avatarGrid && !avatarGrid.dataset.rendered) {
+    avatarGrid.innerHTML = AVATAR_GLYPHS.map((a, i) =>
+      `<div class="ph-av" data-idx="${i}" title="${a.name}">${svgIcon(a.ico, 18, 1.8)}</div>`
+    ).join('');
+    avatarGrid.addEventListener('click', e => {
+      const cell = e.target.closest('.ph-av');
+      if (!cell) return;
+      const i = parseInt(cell.dataset.idx, 10);
+      avatarIdx = i;
+      settings.avatar_idx = i;
+      delete settings.avatar_img;        // 选 lucide 内置时清掉上传图
+      saveSettings();
+      renderUserAvatar();
+      updateAvatarGridActive();
+    });
+    avatarGrid.dataset.rendered = '1';
+  }
+  // 同步当前选中的高亮
+  if (typeof updateAvatarGridActive === 'function') updateAvatarGridActive();
   // 经验条
   let pct = 100;
   if (next) {
@@ -1330,23 +1361,67 @@ if (_profileNickSave) _profileNickSave.addEventListener('click', () => { if (_pr
   });
 })();
 
-// 头像：自定义图（base64）优先；没有则用字符。字符模式下"换"按钮切下一个字符；
-// 有图时"换"按钮切回字符模式（清除图片 + 回到当前 avatarIdx 的字符）。
+// 头像：自定义图（base64）优先；没有则用 lucide 内置图标（按 avatar_idx）。
 function renderProfileAvatar() {
   const av = document.getElementById('profileAvatar');
   if (!av) return;
   if (settings.avatar_img) {
     // boss #20 fix：彻底改用 background-image + cover 方案，避免 img 在 flex 容器内对齐问题。
     // 容器 border-radius:50% + overflow:hidden + background-size:cover 永远完美裁圆，不会溢出。
-    av.textContent = '';
+    av.innerHTML = '';
     av.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
     av.style.backgroundSize = 'cover';
     av.style.backgroundPosition = 'center';
     av.style.backgroundRepeat = 'no-repeat';
   } else {
+    // v5.13k：lucide 图标替代字符（更精致、识别度更高）
     av.style.backgroundImage = '';
-    av.textContent = pickAvatarGlyph();
+    av.innerHTML = svgIcon(pickAvatarGlyph(), 32, 1.7);
   }
+}
+
+// 统一三处（顶栏 .level-icon / 下午好 .level-character / profile .ph-avatar）的头像渲染
+// 优先级：settings.avatar_img（上传图） > settings.avatar_idx（lucide 内置） > 等级图标
+function renderUserAvatar() {
+  // 1) 顶栏小徽章
+  const top = document.getElementById('levelIcon');
+  if (top) {
+    if (settings.avatar_img) {
+      top.innerHTML = '';
+      top.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
+      top.style.backgroundSize = 'cover';
+      top.style.backgroundPosition = 'center';
+      top.style.backgroundRepeat = 'no-repeat';
+      top.style.background = 'transparent';
+    } else {
+      top.style.backgroundImage = '';
+      top.style.background = '';
+      top.innerHTML = svgIcon(pickAvatarGlyph(), 13, 2);
+    }
+  }
+  // 2) 下午好总览（用同一个 lucide 头像，size 30）
+  const greet = document.getElementById('dashGreetGfx');
+  if (greet) {
+    if (settings.avatar_img) {
+      greet.innerHTML = '';
+      greet.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
+      greet.style.backgroundSize = 'cover';
+      greet.style.backgroundPosition = 'center';
+      greet.style.backgroundRepeat = 'no-repeat';
+    } else {
+      greet.style.backgroundImage = '';
+      greet.innerHTML = svgIcon(pickAvatarGlyph(), 28, 1.8);
+    }
+  }
+  // 3) profile modal（已用 renderProfileAvatar 走同样逻辑，再调一次确保同步）
+  renderProfileAvatar();
+  // 4) 同步头像选择网格的 active 高亮
+  updateAvatarGridActive();
+}
+function updateAvatarGridActive() {
+  document.querySelectorAll('#avatarGrid .ph-av').forEach(c => {
+    c.classList.toggle('active', parseInt(c.dataset.idx, 10) === avatarIdx);
+  });
 }
 // 字符切换
 document.getElementById('profileAvatarEdit').addEventListener('click', () => {

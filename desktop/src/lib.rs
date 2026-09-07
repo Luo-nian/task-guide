@@ -784,6 +784,18 @@ fn add_task(
              VALUES (?1,?2,?3,?4,?5,?6,?6,?7,0,'pending',?9,?8,?8)",
             params![&uuid, &typ, &title, &cat, &prio, &deadline, cnt, now, rp]
         ).ok();
+        // v5.13k：通用步骤化——count > 1 时自动生成 N 个步骤（覆盖所有 type）
+        //   之前 v4.13.5 做法是用户手动 add_step，boss 决定所有任务都用步骤推进更统一
+        if cnt > 1 {
+            for i in 1..=cnt {
+                let step_uuid = uuid::Uuid::new_v4().to_string();
+                let _ = db.execute(
+                    "INSERT INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,created_at,updated_at,deleted) \
+                     VALUES (?1,?2,?3,'todo','','',?4,?5,?5,0)",
+                    params![step_uuid, &uuid, format!("步骤 {}/{}", i, cnt), i - 1, now]
+                );
+            }
+        }
     }
     sync::push_change(&state.db, &state.server_url, "task", &uuid);
     serde_json::json!({ "uuid": uuid, "status": "ok" })

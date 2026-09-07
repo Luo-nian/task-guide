@@ -32,6 +32,20 @@
   .pfill { height: 100%; width: 0%;
     background: linear-gradient(90deg, #7A5516, #B98F2E 55%, #D8B45A 100%);
     border-radius: 3px; transition: width .5s; }
+  /* v5.13k：推进键（圆形 chevron-right，点击 = advance_step 推进一步，最后一步触发 complete） */
+  .advance {
+    flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #D8B45A, #B98F2E);
+    color: #FFF4D0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(138, 106, 28, 0.35), inset 0 0 0 1px rgba(255, 244, 208, 0.25);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .advance:hover { transform: scale(1.08); box-shadow: 0 3px 10px rgba(201, 162, 39, 0.5); }
+  .advance:active { transform: scale(0.94); }
+  .advance svg { display: block; }
+  .advance.disabled { opacity: 0.4; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -43,6 +57,7 @@
   <div class="row2">
     <span class="step" id="step">点击打开客户端</span>
     <span class="pbar"><span class="pfill" id="pfill"></span></span>
+    <div class="advance disabled" id="advance" title="推进到下一步"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
   </div>
 </div>
 <script>
@@ -50,13 +65,17 @@
   const el = {
     title: document.getElementById('title'),
     step: document.getElementById('step'),
-    pfill: document.getElementById('pfill')
+    pfill: document.getElementById('pfill'),
+    advance: document.getElementById('advance')
   };
   const invoke = (cmd, args) => window.__TAURI__ && window.__TAURI__.core
     ? window.__TAURI__.core.invoke(cmd, args || {})
     : Promise.reject(new Error('no-tauri'));
 
   let lastKey = '';
+  let currentStepUuid = null;  // v5.13k：挂件可推进的 step uuid
+  let currentTaskUuid = null;
+  let advancing = false;
   async function refresh() {
     try {
       const cards = await invoke('get_track_cards');
@@ -64,23 +83,34 @@
         el.title.textContent = '暂无追踪任务';
         el.step.textContent = '点击打开客户端';
         el.pfill.style.width = '0%';
+        currentStepUuid = null; currentTaskUuid = null;
+        el.advance.classList.add('disabled');
         return;
       }
       const c = cards[0];
       const t = c.task || {};
-      // v5.13d：优先用 task.count（次数任务的真实计数），只有真正的步骤化任务（count=1 + 有 steps）才用 steps 计数
       const isCountTask = !!(t.count && t.count > 1);
       const total = isCountTask ? t.count : Math.max(c.total_steps || 0, 1);
       const done = isCountTask ? (t.done_count || 0) : (c.total_steps > 0 ? c.done_steps : (t.done_count || 0));
-      // 行文案：次数任务显示"已完成 N/M"；步骤化任务显示"步骤 N/M · 当前步骤名"
       if (isCountTask) {
         el.step.textContent = '已完成 ' + done + '/' + total;
+        // 次数任务：仍允许点击推进（advances 完所有 count 后整个任务 done）
+        // 通过 toggleStep 路径推 count（与 step 走相同 advance_step 框架）
+        currentStepUuid = null;
+        currentTaskUuid = t.uuid;
+        el.advance.classList.remove('disabled');
+        el.advance.title = '推进 1 次（已 ' + done + '/' + total + '）';
       } else if (c.current_step) {
         el.step.textContent = '步骤 ' + (done + 1) + '/' + total + ' · ' + c.current_step.title;
+        currentStepUuid = c.current_step.uuid;
+        currentTaskUuid = t.uuid;
+        el.advance.classList.remove('disabled');
+        el.advance.title = '推进到下一步（' + (done + 1) + '/' + total + '）';
       } else {
-        el.step.textContent = '进行中';
+        el.step.textContent = '全部已完成';
+        currentStepUuid = null; currentTaskUuid = null;
+        el.advance.classList.add('disabled');
       }
-      // 进度条（按比例）
       const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((done / total) * 100))) : 0;
       const key = t.title + '|' + done + '/' + total;
       if (key !== lastKey) { el.pfill.style.width = pct + '%'; lastKey = key; }
@@ -89,14 +119,39 @@
       el.title.textContent = '客户端未启动';
       el.step.textContent = '点击唤起';
       el.pfill.style.width = '0%';
+      el.advance.classList.add('disabled');
     }
   }
 
+  // 推进键：步骤化任务调 advance_step，最后一步后端自动 complete + 积分
+  // 次数任务：调 complete_task（直接完成+积分，对单次推进体验更直接）
+  el.advance.addEventListener('click', async function(ev) {
+    ev.stopPropagation();
+    if (advancing) return;
+    if (!currentTaskUuid) return;
+    advancing = true;
+    try {
+      if (currentStepUuid) {
+        await invoke('advance_step', { stepUuid: currentStepUuid, taskUuid: currentTaskUuid, status: 'done' });
+      } else {
+        // 次数任务：toggleStep-like 路径
+        await invoke('complete_task', { taskUuid: currentTaskUuid });
+      }
+    } catch (e) {
+      console.error('推进失败', e);
+    }
+    advancing = false;
+    // 立即本地刷新（不等 5s 轮询）
+    await refresh();
+  });
+
   let downX = 0, downY = 0;
   document.getElementById('card').addEventListener('mousedown', function(ev) {
+    if (ev.target.closest('.advance')) return;  // 推进键不触发唤起
     downX = ev.screenX; downY = ev.screenY;
   });
   document.getElementById('card').addEventListener('mouseup', function(ev) {
+    if (ev.target.closest('.advance')) return;
     const dx = Math.abs(ev.screenX - downX), dy = Math.abs(ev.screenY - downY);
     if (dx < 5 && dy < 5) invoke('show_main_window').catch(function(){});
   });

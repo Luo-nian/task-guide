@@ -1626,6 +1626,35 @@ input::placeholder { color: var(--ink-faint); }
   color: var(--gold-light); font-size: 11px; font-weight: 600;
   cursor: pointer;
 }
+/* v5.13k：8 个 lucide 内置头像选择网格（profile modal 里点选即生效 + 三处同步） */
+.ph-avatar-picker { margin: 14px 0 4px; width: 100%; }
+.ph-picker-hint { font-size: 10.5px; color: var(--ink-mute); margin-bottom: 8px; letter-spacing: 1px; }
+.ph-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 7px;
+}
+.ph-avatar-grid .ph-av {
+  aspect-ratio: 1/1;
+  border: 1.5px solid var(--border-soft);
+  border-radius: 50%;
+  background: rgba(255, 253, 248, 0.7);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--ink);
+}
+.ph-avatar-grid .ph-av:hover {
+  transform: scale(1.1);
+  border-color: var(--gold-deep);
+  box-shadow: 0 0 8px var(--glow-gold);
+}
+.ph-avatar-grid .ph-av.active {
+  border-color: var(--gold-deep);
+  background: var(--gold-deep);
+  color: #FFF4D0;
+  box-shadow: 0 0 10px var(--glow-gold);
+}
 .ph-info { flex: 1; min-width: 0; }
 .ph-nick-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .ph-nick-input {
