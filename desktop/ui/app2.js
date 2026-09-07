@@ -1494,19 +1494,25 @@ document.getElementById('setUnpair').addEventListener('click', async () => {
   persistSettingsServer();
 });
 
-// 任务完成时的奖励弹窗（原神风 +N 经验 + 任务名）已在 completeTask 中通过 showBless 触发，无需额外回放列表
+// v5.13c 独立桌面挂件：点击设置里的"开启挂件"→ 打开独立 widget 小窗 + 隐藏主窗
+// （boss：桌面挂件不用客户端在 —— 独立窗口常驻桌面，主窗关掉挂件仍在）
 document.getElementById('setWidgetMode').addEventListener('click', () => {
   document.getElementById('settingsOverlay').style.display = 'none';
-  const app = document.getElementById('app');
-  app.classList.add('widget-mode');
-  document.getElementById('overviewView').style.display = 'none';
-  document.getElementById('listView').style.display = 'none';
-  document.getElementById('detailView').style.display = 'none';
-  document.getElementById('dashboardView').style.display = 'none';
-  document.getElementById('foldedView').style.display = '';
-  renderFolded();
-  // boss #38：不再 set_window_size 缩窗口到 360×88（resize 异步 + Tauri transparent 窗口下
-  // 时机问题导致截图抓到中间状态）。改为保留主窗口尺寸，widget 浮动在右下角
+  if (!isTauriEnv) {
+    // mock 预览环境：退化为旧 CSS 折叠态（右下角浮条），方便 preview-server 调试
+    const app = document.getElementById('app');
+    app.classList.add('widget-mode');
+    document.getElementById('overviewView').style.display = 'none';
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('detailView').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'none';
+    document.getElementById('foldedView').style.display = '';
+    renderFolded();
+    return;
+  }
+  // Tauri 真环境：显示独立 widget 窗口（widget.html），主窗隐藏
+  call('show_widget').catch(()=>{});
+  call('win_hide').catch(()=>{});
 });
 
 // 等级徽章点击 → 个人信息（昵称 / 头像 / 经验条都在那）

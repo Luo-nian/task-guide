@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::WindowEvent;
+use tauri::Manager;
 use chrono::{Datelike, Local, TimeZone, Timelike};
 
 mod sync;
@@ -35,6 +36,8 @@ pub struct Task {
     pub done: i64,
     pub done_at: Option<i64>,
     pub delayed_count: i64,
+    pub count: i64,           // 次数任务总数（count<=1 表示非次数任务）
+    pub done_count: i64,      // 次数任务已完成次数
     pub reward_points: i64,
     #[serde(default)]
     pub reminder_strength: Option<String>,  // 每任务提醒强度：standard|repeat|alarm；null=跟随默认
@@ -290,6 +293,8 @@ pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
         done: r.get("done")?,
         done_at: r.get("done_at")?,
         delayed_count: r.get("delayed_count")?,
+        count: r.get("count")?,
+        done_count: r.get("done_count")?,
         reward_points: r.get("reward_points")?,
         reminder_strength: r.get("reminder_strength").ok(),
         created_at: r.get("created_at")?,
@@ -815,17 +820,46 @@ fn set_display_mode(window: tauri::Window, mode: String) {
 
 // v4.10 顶栏三键命令：最小化 / 切换最大化 / 隐藏（保留后台，前端不再被 X 强行退出）
 #[tauri::command]
-fn win_minimize(window: tauri::Window) { let _ = window.minimize(); }
+fn win_minimize(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") { let _ = w.minimize(); }
+}
 #[tauri::command]
-fn win_toggle_maximize(window: tauri::Window) {
-    if window.is_maximized().unwrap_or(false) {
-        let _ = window.unmaximize();
-    } else {
-        let _ = window.maximize();
+fn win_toggle_maximize(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.is_maximized().unwrap_or(false) {
+            let _ = w.unmaximize();
+        } else {
+            let _ = w.maximize();
+        }
     }
 }
 #[tauri::command]
-fn win_hide(window: tauri::Window) { let _ = window.hide(); }
+fn win_hide(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") { let _ = w.hide(); }
+}
+
+// =============== v5.13c 独立桌面挂件（widget 独立小窗，不依赖主窗口） ===============
+#[tauri::command]
+fn show_widget(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("widget") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+#[tauri::command]
+fn hide_widget(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("widget") {
+        let _ = w.hide();
+    }
+}
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = w.unminimize();
+    }
+}
 
 #[tauri::command]
 fn connect_server(state: tauri::State<AppState>, url: String) -> String {
@@ -1327,6 +1361,7 @@ pub fn run() {
             get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
             advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             set_display_mode, set_window_size,
+            show_widget, hide_widget, show_main_window, win_minimize, win_toggle_maximize, win_hide,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
             discover_devices, seed_default_tasks

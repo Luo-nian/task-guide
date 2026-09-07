@@ -23,6 +23,22 @@
         "alwaysOnTop": false,
         "resizable": true,
         "shadow": false
+      },
+      {
+        "label": "widget",
+        "title": "任务挂件",
+        "url": "widget.html",
+        "width": 360,
+        "height": 92,
+        "x": 40,
+        "y": 120,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": false
       }
     ],
     "security": {

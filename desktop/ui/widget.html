@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务挂件</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; user-select: none;
+    font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
+  .w { position: relative; width: 360px; height: 92px; padding: 10px 14px;
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    background: rgba(255, 253, 248, 0.86);
+    backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3);
+    border: 1px solid rgba(201, 162, 39, 0.38);
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(90, 72, 40, 0.16);
+    cursor: pointer; }
+  .row1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ico { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 7px;
+    background: linear-gradient(135deg, #E8CB7F, #8A6A1C);
+    display: flex; align-items: center; justify-content: center; color: #fff; }
+  .ico svg { display-width: 12px; height: 12px; }
+  .title { font-size: 14px; font-weight: 500; color: #2C2C2A; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .row2 { display: flex; align-items: center; gap: 8px; padding-left: 30px; min-width: 0; }
+  .step { flex: 1; font-size: 12px; color: #5F5E5A; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .pbar { flex: 0 0 86px; height: 6px; border-radius: 3px;
+    background: rgba(90, 72, 40, 0.12); border: 1px solid rgba(138, 106, 28, 0.16);
+    overflow: hidden; }
+  .pfill { height: 100%; width: 0%;
+    background: linear-gradient(90deg, #7A5516, #B98F2E 55%, #D8B45A 100%);
+    border-radius: 3px; transition: width .5s; }
+</style>
+</head>
+<body>
+<div class="w" id="card" data-tauri-drag-region="true">
+  <div class="row1">
+    <span class="ico" id="ico"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg></span>
+    <span class="title" id="title">暂无追踪任务</span>
+  </div>
+  <div class="row2">
+    <span class="step" id="step">点击打开客户端</span>
+    <span class="pbar"><span class="pfill" id="pfill"></span></span>
+  </div>
+</div>
+<script>
+(function(){
+  const el = {
+    title: document.getElementById('title'),
+    step: document.getElementById('step'),
+    pfill: document.getElementById('pfill')
+  };
+  const invoke = (cmd, args) => window.__TAURI__ && window.__TAURI__.core
+    ? window.__TAURI__.core.invoke(cmd, args || {})
+    : Promise.reject(new Error('no-tauri'));
+
+  let lastKey = '';
+  async function refresh() {
+    try {
+      const cards = await invoke('get_track_cards');
+      if (!cards || cards.length === 0) {
+        el.title.textContent = '暂无追踪任务';
+        el.step.textContent = '点击打开客户端';
+        el.pfill.style.width = '0%';
+        return;
+      }
+      const c = cards[0];
+      const t = c.task || {};
+      // v5.13d：优先用 task.count（次数任务的真实计数），只有真正的步骤化任务（count=1 + 有 steps）才用 steps 计数
+      const isCountTask = !!(t.count && t.count > 1);
+      const total = isCountTask ? t.count : Math.max(c.total_steps || 0, 1);
+      const done = isCountTask ? (t.done_count || 0) : (c.total_steps > 0 ? c.done_steps : (t.done_count || 0));
+      // 行文案：次数任务显示"已完成 N/M"；步骤化任务显示"步骤 N/M · 当前步骤名"
+      if (isCountTask) {
+        el.step.textContent = '已完成 ' + done + '/' + total;
+      } else if (c.current_step) {
+        el.step.textContent = '步骤 ' + (done + 1) + '/' + total + ' · ' + c.current_step.title;
+      } else {
+        el.step.textContent = '进行中';
+      }
+      // 进度条（按比例）
+      const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((done / total) * 100))) : 0;
+      const key = t.title + '|' + done + '/' + total;
+      if (key !== lastKey) { el.pfill.style.width = pct + '%'; lastKey = key; }
+      el.title.textContent = t.title || '任务';
+    } catch (e) {
+      el.title.textContent = '客户端未启动';
+      el.step.textContent = '点击唤起';
+      el.pfill.style.width = '0%';
+    }
+  }
+
+  let downX = 0, downY = 0;
+  document.getElementById('card').addEventListener('mousedown', function(ev) {
+    downX = ev.screenX; downY = ev.screenY;
+  });
+  document.getElementById('card').addEventListener('mouseup', function(ev) {
+    const dx = Math.abs(ev.screenX - downX), dy = Math.abs(ev.screenY - downY);
+    if (dx < 5 && dy < 5) invoke('show_main_window').catch(function(){});
+  });
+  document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    invoke('hide_widget').catch(function(){});
+  });
+
+  refresh();
+  setInterval(refresh, 5000);
+})();
+</script>
+</body>
+</html>
