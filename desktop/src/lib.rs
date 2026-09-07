@@ -850,6 +850,14 @@ fn win_toggle_maximize(app: tauri::AppHandle) {
 fn win_hide(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") { let _ = w.hide(); }
 }
+// v5.14d：JS 兜底拖动（boss 反馈主窗+挂件 data-tauri-drag-region 在 WebView2 偶发失效）
+//   前端 mousedown 调这个 IPC，调用 start_dragging() 让 OS 进入拖动循环（Win10/11 都支持）
+#[tauri::command]
+fn win_start_dragging(app: tauri::AppHandle, label: String) {
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.start_dragging();
+    }
+}
 
 // =============== v5.13c 独立桌面挂件（widget 独立小窗，不依赖主窗口） ===============
 #[tauri::command]
@@ -1524,7 +1532,7 @@ pub fn run() {
             advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             restore_task,
             set_display_mode, set_window_size,
-            show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide,
+            show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide, win_start_dragging,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
             discover_devices, seed_default_tasks

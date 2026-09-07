@@ -45,6 +45,11 @@
       <span class="ico ico-overview" data-icon="overview" data-icon-size="15"></span>
       <span class="nav-tip">总览</span>
     </button>
+    <!-- v5.14d：boss 要求"今日"项放在总览下面，打开客户端默认看到今日 -->
+    <button class="nav-item" data-nav="today" title="今日待办">
+      <span class="ico ico-today" data-icon="sun" data-icon-size="15"></span>
+      <span class="nav-tip">今日</span>
+    </button>
     <button class="nav-item" data-nav="daily" title="每日任务">
       <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
       <span class="nav-tip">每日任务</span>
@@ -272,9 +277,9 @@
             <button class="ph-avatar-upload" id="profileAvatarUpload" title="用自己的图片当头像">图</button>
             <input type="file" id="profileAvatarFile" accept="image/*" hidden />
           </div>
-          <!-- v5.13k：8 个 lucide 内置头像选择网格（点选即生效 + 三处同步） -->
-          <div class="ph-avatar-picker" id="avatarPicker">
-            <div class="ph-picker-hint">内置头像</div>
+          <!-- v5.13k：8 个 lucide 内置头像选择网格（默认折叠，点"换"才展开 — boss 反馈之前 modal 拉得很长） -->
+          <div class="ph-avatar-picker" id="avatarPicker" style="display:none">
+            <div class="ph-picker-hint">内置头像 · 点选即生效</div>
             <div class="ph-avatar-grid" id="avatarGrid"></div>
           </div>
           <div class="ph-info">
@@ -368,68 +373,26 @@
           <div class="ss-title">追踪与提醒</div>
           <!-- v5.14c：boss 要求 提醒设置：端→方式→时间 顺序 + 条件显示 + 默认值联动 -->
           <div class="setting-row remind-section">
-            <label class="lbl-head">提醒</label>
-            <span class="hint">添加任务时自动套用这里的默认提醒设置</span>
+            <label class="lbl-head">默认提醒</label>
+            <span class="hint">新建任务自动套用这些默认设置（可在新建/编辑时单独调整）</span>
           </div>
-          <!-- 1) 端选择（必选第一步） -->
           <div class="setting-row">
-            <label>接收端</label>
+            <label>方式</label>
+            <div class="rem-strength-row">
+              <label class="chk-pill"><input type="checkbox" id="setRemindNotif" /> <span>通知栏</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setRemindVibrate" /> <span>振动</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setRemindSound" /> <span>铃声</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setRemindLoop" /> <span>循环</span></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>范围</label>
             <div class="rem-device-row">
-              <button type="button" class="rem-device-btn" data-device="desktop" id="remDevDesktop">电脑端</button>
-              <button type="button" class="rem-device-btn" data-device="mobile" id="remDevMobile">手机端</button>
-              <button type="button" class="rem-device-btn" data-device="both" id="remDevBoth">双端</button>
-              <button type="button" class="rem-device-btn" data-device="none" id="remDevNone">不提醒</button>
+              <button type="button" class="rem-device-btn" data-device="none" id="setRangeNone">不提醒</button>
+              <button type="button" class="rem-device-btn" data-device="mobile" id="setRangeMobile">仅手机端</button>
+              <button type="button" class="rem-device-btn" data-device="desktop" id="setRangeDesktop">仅电脑端</button>
+              <button type="button" class="rem-device-btn" data-device="both" id="setRangeBoth">双端提醒</button>
             </div>
-          </div>
-          <!-- 2) 提醒方式（条件显示：选了"不提醒"就整块隐藏；选了端就显示该端的提醒方式） -->
-          <div class="rem-strength-block" id="remStrengthBlock">
-            <!-- 电脑端提醒方式 -->
-            <div class="setting-row rem-strength-desktop" style="display:none">
-              <label>电脑提醒</label>
-              <div class="rem-strength-row">
-                <label class="chk-pill"><input type="checkbox" id="remDeskNotif" /> <span>通知栏</span></label>
-                <label class="chk-pill"><input type="checkbox" id="remDeskSound" /> <span>提示音</span></label>
-                <label class="chk-pill"><input type="checkbox" id="remDeskPop" /> <span>弹窗</span></label>
-              </div>
-            </div>
-            <!-- 手机端提醒方式 -->
-            <div class="setting-row rem-strength-mobile" style="display:none">
-              <label>手机提醒</label>
-              <div class="rem-strength-row">
-                <label class="chk-pill"><input type="checkbox" id="remMobNotif" /> <span>通知栏</span></label>
-                <label class="chk-pill"><input type="checkbox" id="remMobVibrate" /> <span>振动</span></label>
-                <label class="chk-pill"><input type="checkbox" id="remMobSound" /> <span>铃声</span></label>
-              </div>
-            </div>
-          </div>
-          <!-- 3) 提醒时间（选了端才显示） -->
-          <div class="rem-time-block" id="remTimeBlock" style="display:none">
-            <div class="setting-row">
-              <label>提前提醒</label>
-              <div class="rem-time-row">
-                <button type="button" class="rem-time-btn" data-min="0">准时</button>
-                <button type="button" class="rem-time-btn" data-min="15">15分钟前</button>
-                <button type="button" class="rem-time-btn" data-min="60">1小时前</button>
-                <button type="button" class="rem-time-btn" data-min="1440">1天前</button>
-              </div>
-            </div>
-            <div class="setting-row">
-              <label>每日例行提醒</label>
-              <div class="rem-time-row">
-                <button type="button" class="rem-time-btn" data-time="06:00">起床 06:00</button>
-                <button type="button" class="rem-time-btn" data-time="21:00">睡前 21:00</button>
-              </div>
-            </div>
-          </div>
-          <!-- 自定义分类（boss 提"工作/生活/锻炼"分类） -->
-          <div class="setting-row">
-            <label>分类标签</label>
-            <div class="rem-cat-row">
-              <button type="button" class="rem-cat-btn" data-cat="工作">工作</button>
-              <button type="button" class="rem-cat-btn" data-cat="生活">生活</button>
-              <button type="button" class="rem-cat-btn" data-cat="锻炼">锻炼</button>
-            </div>
-            <span class="hint">选中后该分类任务添加时自动打标</span>
           </div>
           <div class="setting-row">
             <label>同时追踪上限</label>
@@ -572,6 +535,33 @@
           <button type="button" class="prio-btn" data-prio="low">低</button>
         </div>
 
+        <!-- v5.14d：boss 要求 新建/编辑任务时"端→方式→时间"条件显示（点不提醒就整块隐藏） -->
+        <label class="label">提醒</label>
+        <!-- 1) 端选择 -->
+        <div class="add-rem-row">
+          <button type="button" class="rem-device-btn" data-device="none" id="addRemNone" onclick="_addRemSet('none')">不提醒</button>
+          <button type="button" class="rem-device-btn" data-device="mobile" id="addRemMobile" onclick="_addRemSet('mobile')">仅手机端</button>
+          <button type="button" class="rem-device-btn" data-device="desktop" id="addRemDesktop" onclick="_addRemSet('desktop')">仅电脑端</button>
+          <button type="button" class="rem-device-btn" data-device="both" id="addRemBoth" onclick="_addRemSet('both')">双端</button>
+        </div>
+        <!-- 2) 提醒方式（条件显示：选了端才显示） -->
+        <div class="add-rem-strength" id="addRemStrength" style="display:none">
+          <div class="add-rem-method">
+            <label class="chk-pill"><input type="checkbox" id="addRemNotif" /> <span>通知栏</span></label>
+            <label class="chk-pill"><input type="checkbox" id="addRemVibrate" /> <span>振动</span></label>
+            <label class="chk-pill"><input type="checkbox" id="addRemSound" /> <span>铃声</span></label>
+          </div>
+        </div>
+        <!-- 3) 提前时间（条件显示） -->
+        <div class="add-rem-time" id="addRemTime" style="display:none">
+          <div class="rem-time-row">
+            <button type="button" class="rem-time-btn" data-min="0">准时</button>
+            <button type="button" class="rem-time-btn" data-min="15">15分钟前</button>
+            <button type="button" class="rem-time-btn" data-min="60">1小时前</button>
+            <button type="button" class="rem-time-btn" data-min="1440">1天前</button>
+          </div>
+        </div>
+
         <div class="action-row">
           <button class="ghost" data-close-overlay="addOverlay">取消</button>
           <button class="primary" id="addSubmit">创建</button>
@@ -646,6 +636,6 @@
   </div>
 </div>
 
-<script src="app2.js?v=v83"></script>
+<script src="app3.js?v=v1"></script>
 </body>
 </html>

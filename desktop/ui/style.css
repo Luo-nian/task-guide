@@ -153,11 +153,11 @@ body::after {
 
 /* 等级徽章 —— 黑金招牌（与手机端等级卡呼应：墨黑底+金边+金色文字，全 UI 唯一黑底元素） */
 .level-badge {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px;
   background: linear-gradient(135deg, var(--ink-black-soft), var(--ink-black));
   border: 1px solid var(--gold);
-  border-radius: 14px;
-  padding: 2px 9px 2px 5px;
+  border-radius: 16px;
+  padding: 3px 10px 3px 5px;
   box-shadow: 0 0 10px var(--glow-gold), inset 0 0 0 1px rgba(230, 199, 122, 0.22);
   cursor: pointer;
   transition: all .2s;
@@ -165,7 +165,7 @@ body::after {
 .level-badge:hover { box-shadow: 0 0 16px var(--glow-gold), 0 4px 12px rgba(22, 18, 12, 0.35); }
 .level-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px;
+  width: 28px; height: 28px;        /* v5.14d：20→28 顶栏头像加大（boss 反馈"没同步到主页"） */
   --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
   background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
   color: var(--rank-ico);
@@ -228,14 +228,19 @@ body::after {
 }
 .nav-item {
   position: relative;
-  width: 44px; height: 44px;   /* v5.13g 加大：38→44 */
+  width: 44px; height: 44px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 11px; cursor: pointer;
   color: var(--ink-mute);
   background: transparent;
   border: 1px solid transparent;
   transition: all .2s;
+  /* v5.14d：boss 反馈点击切换 nav 时整页灰色蒙一瞬 —— WebView2 焦点 outline 造成
+     加 outline:none + -webkit-tap-highlight-color:transparent 消除点击高光 */
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
+.nav-item:focus, .nav-item:focus-visible, .nav-item:active { outline: none; box-shadow: none; }
 .nav-item:hover { color: var(--gold-deep); background: rgba(224, 186, 104, 0.20); transform: translateY(-1px); }
 .nav-item.active {
   color: var(--gold-deep);

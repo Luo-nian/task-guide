@@ -258,11 +258,6 @@ function applySettingsToUi() {
       applySettingsToUi();
     };
   });
-      settings[CAT_KEY] = settings[CAT_KEY] === b.dataset.cat ? '' : b.dataset.cat;
-      saveSettings();
-      applySettingsToUi();
-    };
-  });
   // 持久化到后端 settings
   if (!settings._remSynced) { settings._remSynced = true; }
   if (unpair) {
@@ -395,12 +390,15 @@ function renderTodayView() {
     html += `<div class="empty-tip">今日所有任务都已完成 ✦</div>`;
   }
   lvEl.innerHTML = html;
-  // v5.14d：修侧边栏切换灰色蒙 —— 短暂取消 body 渐变背景避免重渲染时露底
-  document.body.style.background = 'var(--card)';
-  setTimeout(() => { document.body.style.background = ''; }, 200);
-  // boss 反馈：去掉"完成任务 这小步已被记下"啰嗦文案 → 改为简洁"任务已完成"
-  // （showBless 函数 msg 默认值）
-  window.__showBlessMsgDefault = '任务已完成';
+  lvEl.style.display = '';   // v5.14d 修：原本 listView display:none，renderTodayView 写进去看不见
+  // 同步隐藏 overview dashboard
+  const overviewEl = document.getElementById('overviewView');
+  const dashEl = document.getElementById('dashboardView');
+  if (overviewEl) overviewEl.style.display = 'none';
+  if (dashEl) dashEl.style.display = 'none';
+  // 同步显示 listView 容器（listPane 整个显示）
+  const listPane = document.getElementById('listPane');
+  if (listPane) listPane.style.display = '';
 }
 document.querySelectorAll('.nav-item').forEach(n => {
   n.addEventListener('click', () => {
@@ -1556,7 +1554,7 @@ document.getElementById('profileAvatarEdit').addEventListener('click', () => {
 let _avatarLongPressTimer = null;
 const _profileAvatarEl = document.getElementById('profileAvatar');
 if (_profileAvatarEl) {
-  _profileAvatarEl.addEventListener('('mousedown', () => {
+  _profileAvatarEl.addEventListener('mousedown', () => {
     _avatarLongPressTimer = setTimeout(() => {
       const picker = document.getElementById('avatarPicker');
       if (picker) picker.style.display = picker.style.display === 'none' ? '' : 'none';
