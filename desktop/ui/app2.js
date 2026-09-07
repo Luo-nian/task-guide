@@ -97,13 +97,19 @@ const ICONS = {
   // 改用闭合路径（每个子组件独立闭合）让 fill 渲染为清晰图形
   lv3: '<path d="M12 2 L8.4 7 L15.6 7 Z"/><path d="M11 7 L13 7 L13 21.5 L11 21.5 Z"/><path d="M6.8 9 L17.2 9 L17.2 10.6 L6.8 10.6 Z"/><path d="M2.5 13.6 C 4.8 11.9 7.2 11.9 9.5 13.6 C 11.8 15.3 14.2 15.3 16.5 13.6 C 18.2 12.4 19.5 12.3 21.5 13 L 21.5 15 C 19.7 14.2 18.5 14.3 16.5 15.6 C 14.2 17.3 11.8 17.3 9.5 15.6 C 7.2 13.9 4.8 13.9 2.5 15.6 Z"/><path d="M2.5 17.6 C 4.8 15.9 7.2 15.9 9.5 17.6 C 11.8 19.3 14.2 19.3 16.5 17.6 C 18.2 16.4 19.5 16.3 21.5 17 L 21.5 19 C 19.7 18.2 18.5 18.3 16.5 19.6 C 14.2 21.3 11.8 21.3 9.5 19.6 C 7.2 17.9 4.8 17.9 2.5 19.6 Z"/>',
   lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
-  lv5: '<path d="M4.2 17.6h15.6M4.4 17.6 3 7.2l5.2 4L12 4.8l3.8 6.4L21 7.2l-1.4 10.4"/>',
-  // —— 10 级高级称号（v5.13d 加）——
-  lv6: '<path d="M12 20.4c-5.8-2.4-8.2-6.4-8.2-10.6l4.1.6C7.4 7.6 9 5.8 12 5.2c3 .6 4.6 2.4 4.1 5.2l4.1-.6c0 4.2-2.4 8.2-8.2 10.6Z"/><path d="M12 6v14.4"/>',
-  lv7: '<path d="M12 2.8 8.4 7h7.2L12 2.8Z"/><path d="M11.2 7v13.2M6.8 10.6l4.4 4.4-4.4 4.4M17.2 10.6l-4.4 4.4 4.4 4.4M11.2 17.4h1.6M9 20.4h6"/>',
-  lv8: '<path d="M3.6 17.4 2.8 7.6 8 12.2l4-7.4 4 7.4 5.2-4.6-.8 9.8H3.6Z"/><path d="M8 20.4h8M6.4 17.4h11.2"/>',
-  lv9: '<path d="M12 7.4v13.2M8.6 20.4h6.8"/><circle cx="12" cy="5.4" r="2.6"/><path d="M12 10.6c3 0 5.4-1.2 5.4-2.6 0-2.4-2.6-3.4-5.4-3.4s-5.4 1-5.4 3.4c0 1.4 2.4 2.6 5.4 2.6Z"/>',
-  lv10:'<circle cx="12" cy="12" r="4.4"/><path d="M12 12c-4.2 5.6-8.2 7.4-10 7M12 12c4.2-5.6 8.2-7.4 10-7"/><path d="M2 21h20"/>',
+  // v5.13g 等级图标重做（含义优先）：lv5+ 修真，更帅、配得上"传奇"等高阶
+  // lv5 传奇勇者：双手剑交叉 + 中心宝石
+  lv5: '<path d="M3.5 3.5l8.5 8.5M20.5 3.5l-8.5 8.5M3.5 20.5l8.5-8.5M20.5 20.5l-8.5-8.5"/><path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>',
+  // lv6 苍穹守护者：展翼 + 中心（盾/星）
+  lv6: '<path d="M12 21V12M3.5 9c0-3.5 2.5-6 8.5-6 6 0 8.5 2.5 8.5 6"/><path d="M3.5 9C2 9 1.2 7.5 1.2 5.5M20.5 9c1.5 0 2.3-1.5 2.3-3.5"/><path d="M8 12c0 1.5 1 2.5 2 3h4c1-0.5 2-1.5 2-3"/>',
+  // lv7 深渊征服者：三叉戟（中心矛 + 两侧月牙）
+  lv7: '<path d="M12 2.4V21.6M5.5 8.5v-2.5M18.5 8.5v-2.5M9.5 21.5h5"/><path d="M3 9.5l4 5M21 9.5l-4 5"/><circle cx="12" cy="6" r="1.4" fill="currentColor" stroke="none"/>',
+  // lv8 星辰霸主：皇家王冠（5 尖顶 + 中央宝石）
+  lv8: '<path d="M3.5 9.5 12 4l8.5 5.5-1.8 9H5.3z"/><path d="M7 12l5 4 5-4M5 18.5h14"/><circle cx="12" cy="11" r="1.4" fill="currentColor" stroke="none"/>',
+  // lv9 天命传奇：法杖 + 顶部晶球
+  lv9: '<circle cx="12" cy="5.5" r="2.8"/><path d="M12 8.3V21.7M8 21.5h8M5.5 5.5 9 4M18.5 5.5 15 4"/><path d="M10 5.5h4"/>',
+  // lv10 寰宇传说：双环 + 四芒星（龙简化为环+星）
+  lv10: '<circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="9.5" transform="rotate(20 12 12)"/><path d="M12 1.5l1.4 3.4h3.5L14 6.7l1 3.3-3-1.8-3 1.8 1-3.3-2.9-1.8h3.5z" transform="translate(0 -2) scale(0.8) translate(1.5 2.5)"/>',
   // —— 通用 ——
   // boss：之前 gear 是"中心圆 + 8 条放射短线"，画出来就是太阳/星形
   // 改成 Lucide 标准齿轮（8 齿 + 中心圆），24×24 16px 都清晰
@@ -117,6 +123,7 @@ const ICONS = {
   bell:     '<path d="M18 8.6a6 6 0 1 0-12 0c0 5.4-2.2 6.9-2.2 6.9h16.4S18 14 18 8.6Z"/><path d="M13.7 19.4a2 2 0 0 1-3.4 0"/>',
   sparkle:  '<path d="M11 3.4l1.6 4.4 4.4 1.6-4.4 1.6L11 15.4 9.4 11 5 9.4l4.4-1.6L11 3.4Z"/><path d="M17.6 14.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7.7-1.9Z"/>',
   warn:     '<path d="M12 4.4 21 19.6H3L12 4.4Z"/><path d="M12 9.8v4.1"/><circle cx="12" cy="17" r="1.05" fill="currentColor" stroke="none"/>',
+  pin:     '<path d="M9 3.6h6M10.5 3.6V8.4l-3 3 1.2 1.2 3-3 1.8 1.8 1.2-1.2-1.8-1.8 3-3V3.6"/>',
   star:     '<path d="M12 3.8l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8L12 3.8Z"/>',
   bar:      '<rect x="3" y="8.6" width="18" height="6.8" rx="3.4"/><path d="M3.4 12h8.4" stroke-width="2.6"/>',
   circle:   '<circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17Z" fill="currentColor" stroke="none"/>',
@@ -274,7 +281,7 @@ async function fetchAll() {
   tasks = tasksResp || [];
   archive = archiveResp || [];
   points = typeof pointsResp === 'number' ? pointsResp : (pointsResp && pointsResp.points) || 0;
-  level = levelResp || levelOf(points);
+  level = levelOf(points);   // v5.13g：忽略后端 get_level 硬编码旧 5 级曲线（Rust 端未同步升级），用前端新 10 级 LEVELS
   progressInfo = progressResp || progressInfo;
   trackCards = trackResp || [];
   if (levelResp && levelResp.style) settings.progress_style = levelResp.style;
@@ -585,8 +592,10 @@ function renderLevelBadge() {
     ic.style.backgroundSize = 'cover';
     ic.style.backgroundPosition = 'center';
     ic.style.backgroundRepeat = 'no-repeat';
+    ic.style.background = 'transparent';  // v5.13g：清掉 .level-icon 自带金色渐变，避免覆盖自定义头像
   } else {
     ic.style.backgroundImage = '';
+    ic.style.background = '';   // 让 .level-icon CSS 默认金色渐变回归
     ic.innerHTML = svgIcon(lv.ico || 'lv1', 13, 2);
   }
   document.getElementById('levelText').textContent = lv.name;
@@ -618,7 +627,7 @@ function renderLevelCard() {
     // 0 分时空态给引导文案；>0 时显示距下一级具体分数
     if (phint) phint.textContent = points <= 0
       ? '开始你的第一项任务吧'
-      : '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
+      : '距下一级（' + next.name + '）还差 ' + Math.max(0, next.min - points) + ' 分';
   } else {
     if (pfill) pfill.style.width = '100%';
     if (phint) phint.textContent = '已至巅峰，满级成就达成';
@@ -1231,7 +1240,7 @@ function openProfileModal() {
     // 0 分时空态给引导文案；>0 时显示距下一级具体分数
     document.getElementById('profileExpHint').textContent = points <= 0
       ? '开始你的第一项任务吧'
-      : '距下一级（' + next.name + '）还差 ' + Math.max(0, lv.max - points) + ' 分';
+      : '距下一级（' + next.name + '）还差 ' + Math.max(0, next.min - points) + ' 分';
   } else {
     pct = 100;
     document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';
@@ -1588,6 +1597,24 @@ const _winClose = document.getElementById('winClose');
 if (_winMin) _winMin.addEventListener('click', () => isTauriEnv && call('win_minimize').catch(()=>{}));
 if (_winMax) _winMax.addEventListener('click', () => isTauriEnv && call('win_toggle_maximize').catch(()=>{}));
 if (_winClose) _winClose.addEventListener('click', () => isTauriEnv && call('win_hide').catch(()=>{}));
+
+// v5.13g 顶栏挂件开关：直接调用 show_widget / hide_widget（不再进设置点）
+const _widgetToggle = document.getElementById('widgetToggle');
+if (_widgetToggle) {
+  _widgetToggle.addEventListener('click', () => {
+    if (!isTauriEnv) { showToast('预览环境无 widget'); return; }
+    // 轮询：当前 widget 不可见就显示，可见就隐藏（get_webview_window + is_visible）
+    (async () => {
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const w = invoke('get_widget_visible', {});
+        const visible = await w;
+        if (visible) { await invoke('hide_widget'); }
+        else { await invoke('show_widget'); await invoke('win_hide'); }
+      } catch (e) { showToast('挂件切换失败'); }
+    })();
+  });
+}
 
 // =============== 紧急任务弹窗 ===============
 function checkEmergency() {

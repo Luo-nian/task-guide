@@ -186,8 +186,8 @@ body::after {
   background: rgba(255, 254, 251, 0.95);
   border: 1px solid var(--border-soft);
   color: var(--ink-soft);
-  width: 22px; height: 22px; border-radius: 6px;
-  cursor: pointer; font-size: 12px;
+  width: 30px; height: 30px; border-radius: 8px;   /* v5.13g 加大：22→30 */
+  cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   transition: all .2s;
 }
@@ -207,9 +207,9 @@ body::after {
 }
 .nav-item {
   position: relative;
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;   /* v5.13g 加大：38→44 */
   display: flex; align-items: center; justify-content: center;
-  border-radius: 10px; cursor: pointer;
+  border-radius: 11px; cursor: pointer;
   color: var(--ink-mute);
   background: transparent;
   border: 1px solid transparent;

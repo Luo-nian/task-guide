@@ -859,6 +859,13 @@ fn show_main_window(app: tauri::AppHandle) {
         let _ = w.unminimize();
     }
 }
+// v5.13g 顶栏挂件开关需要查询 widget 窗可见性
+#[tauri::command]
+fn get_widget_visible(app: tauri::AppHandle) -> bool {
+    if let Some(w) = app.get_webview_window("widget") {
+        w.is_visible().unwrap_or(false)
+    } else { false }
+}
 
 #[tauri::command]
 fn connect_server(state: tauri::State<AppState>, url: String) -> String {
@@ -1377,7 +1384,7 @@ pub fn run() {
             advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
             restore_task,
             set_display_mode, set_window_size,
-            show_widget, hide_widget, show_main_window, win_minimize, win_toggle_maximize, win_hide,
+            show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
             discover_devices, seed_default_tasks
