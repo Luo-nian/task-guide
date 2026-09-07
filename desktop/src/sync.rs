@@ -50,6 +50,12 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
 
     let conn = db.lock().map_err(|e| e.to_string())?;
     for t in resp.tasks {
+        // v5.15 P0 last-write-wins：本地的 task 更新（updated_at 更大）则不覆盖
+        let local_newer = conn.query_row(
+            "SELECT updated_at FROM tasks WHERE uuid=?1", params![&t.uuid],
+            |r| r.get::<_, i64>(0)
+        ).ok().map(|u| u > t.updated_at).unwrap_or(false);
+        if local_newer { continue; }
         let _ = conn.execute(
             "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,reward_points,reminder_strength,created_at,updated_at,deleted) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)",
@@ -57,6 +63,11 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
         );
     }
     for s in resp.steps {
+        let local_newer = conn.query_row(
+            "SELECT updated_at FROM steps WHERE uuid=?1", params![&s.uuid],
+            |r| r.get::<_, i64>(0)
+        ).ok().map(|u| u > s.updated_at).unwrap_or(false);
+        if local_newer { continue; }
         let _ = conn.execute(
             "INSERT OR REPLACE INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,done_at,created_at,updated_at,deleted) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
@@ -150,6 +161,12 @@ fn apply_change(db: &Arc<Mutex<Connection>>, op: &ChangeOp) {
         ("upsert", "task") => {
             if let Some(d) = &op.data {
                 if let Ok(t) = serde_json::from_str::<Task>(d) {
+                    // v5.15 P0 last-write-wins：本地的 task 更新则不覆盖
+                    let local_newer = conn.query_row(
+                        "SELECT updated_at FROM tasks WHERE uuid=?1", params![&t.uuid],
+                        |r| r.get::<_, i64>(0)
+                    ).ok().map(|u| u > t.updated_at).unwrap_or(false);
+                    if local_newer { return; }
                     let _ = conn.execute(
                         "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,reward_points,reminder_strength,created_at,updated_at,deleted) \
                          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)",
@@ -161,6 +178,11 @@ fn apply_change(db: &Arc<Mutex<Connection>>, op: &ChangeOp) {
         ("upsert", "step") => {
             if let Some(d) = &op.data {
                 if let Ok(s) = serde_json::from_str::<Step>(d) {
+                    let local_newer = conn.query_row(
+                        "SELECT updated_at FROM steps WHERE uuid=?1", params![&s.uuid],
+                        |r| r.get::<_, i64>(0)
+                    ).ok().map(|u| u > s.updated_at).unwrap_or(false);
+                    if local_newer { return; }
                     let _ = conn.execute(
                         "INSERT OR REPLACE INTO steps (uuid,task_uuid,title,status,attr_label,attr_value,sort_order,done_at,created_at,updated_at,deleted) \
                          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",

@@ -87,6 +87,8 @@ pub struct ReminderInfo {
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub server_url: Arc<Mutex<String>>,
+    // v5.15 P0：device_id 改为「配对手机的唯一标识（ANDROID_ID，来自 mDNS TXT）」，
+    // 用于手机 IP 变化时自动重连识别同一台手机。旧语义（桌面自己 uuid）已废弃。
     pub device_id: Arc<Mutex<String>>,
     pub config_dir: Arc<Mutex<String>>,
 }
@@ -880,13 +882,21 @@ fn get_widget_visible(app: tauri::AppHandle) -> bool {
 }
 
 #[tauri::command]
-fn connect_server(state: tauri::State<AppState>, url: String) -> String {
+fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<String>) -> String {
+    // v5.15 P0：记住配对的手机 deviceId（mDNS TXT 的 ANDROID_ID），
+    // 手机 IP 变化后 auto_reconnect 靠它重新识别同一台手机。
+    if let Some(did) = device_id {
+        if !did.is_empty() {
+            *state.device_id.lock().unwrap() = did;
+        }
+    }
     *state.server_url.lock().unwrap() = url.clone();
     save_pairing_to_disk(&state);
     // boss #40：反向通知手机端"已配对"，让手机 SettingsScreen 显示"已配对：BOOS PC"
     //   修复"配对后仍显示未配对" —— 桌面 settings.pairing 与手机 settings.paired_device
     //   原本是两个独立状态，互不通知，现在连接成功后反向 POST 手机 /api/pair
     let url_arc = state.server_url.clone();
+    let did_arc = state.device_id.clone();   // v5.15 P0：闭包外 clone，避免 move state
     let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -895,10 +905,13 @@ fn connect_server(state: tauri::State<AppState>, url: String) -> String {
             sync::server_base(&g)
         };
         if base.is_empty() { return; }
+        // v5.15 P0：改 /api/pair 的 body 为 { name, deviceName, deviceId } —— 手机端 ApiRoutes
+        //   读的是 deviceName（旧实现只发 name，手机端永远收到 null → 记成默认"电脑"）；
+        //   deviceId 用于桌面重新发现配对（安卓在 SyncService 里读同一 ANDROID_ID）
         let _ = reqwest::blocking::Client::new()
             .post(format!("{}/api/pair", base))
             .timeout(std::time::Duration::from_secs(5))
-            .json(&serde_json::json!({ "name": pc_name }))
+            .json(&serde_json::json!({ "name": pc_name, "deviceName": pc_name, "deviceId": did_arc.lock().unwrap().clone() }))
             .send();
     });
     // 启动时也尝试立即同步一次
@@ -1177,7 +1190,10 @@ fn get_setting(state: tauri::State<AppState>, key: String) -> Option<String> {
 
 #[tauri::command]
 fn save_pairing(state: tauri::State<AppState>, url: String, device_id: String) {
-    let _ = device_id;
+    // v5.15 P0：持久化配对时把手机 deviceId 也存上（旧实现忽略了 device_id 参数）
+    if !device_id.is_empty() {
+        *state.device_id.lock().unwrap() = device_id;
+    }
     *state.server_url.lock().unwrap() = url;
     save_pairing_to_disk(&state);
 }
@@ -1208,12 +1224,19 @@ fn discover_devices(timeout_ms: u64) -> Vec<serde_json::Value> {
                     .map(|a| a.to_string()).unwrap_or_default();
                 let port = info.get_port();
                 let name = info.get_fullname();
+                // v5.15 P0：读 mDNS TXT 里的 deviceId/deviceName —— 手机端 MdnsRegistrar
+                // 注册时带 deviceId(ANDROID_ID) + deviceName(型号)。桌面端用 deviceId
+                // 识别"同一台手机"，这样手机 IP 变了（DHCP 重分配）也能自动重连。
+                let device_id = info.get_property_val_str("deviceId").unwrap_or("").to_string();
+                let device_name = info.get_property_val_str("deviceName").unwrap_or("").to_string();
                 if !addr.is_empty() {
                     out.push(serde_json::json!({
                         "name": name,
                         "addr": addr,
                         "port": port,
-                        "url": format!("http://{}:{}", addr, port)
+                        "url": format!("http://{}:{}", addr, port),
+                        "deviceId": device_id,
+                        "deviceName": device_name
                     }));
                 }
             }
@@ -1258,10 +1281,105 @@ fn load_pairing_from_disk(state: &AppState) -> Option<String> {
     let raw = std::fs::read_to_string(&path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
     let url = v.get("url")?.as_str()?.to_string();
+    // v5.15 P0：读回手机 deviceId（若旧 pairing.json 只有 url 没有 deviceId，则保持空）
     if let Some(d) = v.get("deviceId").and_then(|x| x.as_str()) {
-        *state.device_id.lock().unwrap() = d.to_string();
+        if !d.is_empty() {
+            *state.device_id.lock().unwrap() = d.to_string();
+        }
     }
     Some(url)
+}
+
+// v5.15 P0 自动重连守护线程：
+// 每 8s：ping 已配对 url → 成功则什么都不做；失败（手机换 IP / 断网恢复 / 手机刚开机）→
+// mDNS 重新发现 _taskguide._tcp. 中 deviceId 匹配的手机 → 自动重连（换 url + 反 POST /api/pair + full_sync）。
+// 这样"断网→联网自动重连"、"同一网络自动连接"都由它兜底。
+fn auto_reconnect_loop(
+    db: Arc<Mutex<rusqlite::Connection>>,
+    url: Arc<Mutex<String>>,
+    device_id: Arc<Mutex<String>>,
+    config_dir: String,
+) {
+    use mdns_sd::{ServiceDaemon, ServiceEvent};
+    std::thread::sleep(std::time::Duration::from_secs(6)); // 等 ws_loop 先跑一次
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(8));
+        let cur_url = { url.lock().unwrap().clone() };
+        if cur_url.is_empty() { continue; }  // 未配对，无事可做
+        let did = { device_id.lock().unwrap().clone() };
+
+        // 1) ping 当前 url：通 → 维持现状（ws_loop 自己维护长连接）
+        let base = sync::server_base(&cur_url);
+        let alive = reqwest::blocking::Client::new()
+            .get(format!("{}/api/ping", base))
+            .timeout(std::time::Duration::from_secs(3))
+            .send()
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+        if alive { continue; }
+
+        // 2) ping 不通 → mDNS 重新发现（同一 network 自动连）
+        log::info!("配对目标不可达({}), 尝试 mDNS 重发现 deviceId={}", base, did);
+        let Ok(daemon) = ServiceDaemon::new() else { continue };
+        let Ok(receiver) = daemon.browse("_taskguide._tcp.local.") else {
+            let _ = daemon.shutdown();
+            continue;
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+        let mut found: Option<String> = None;         // 候选 url（含 deviceId 匹配的优先）
+        let mut found_no_id: Option<String> = None;    // 兜底：没有 deviceId 但服务存在
+        while std::time::Instant::now() < deadline {
+            match receiver.recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(ServiceEvent::ServiceResolved(info)) => {
+                    let addr = info.get_addresses().iter()
+                        .find(|a| a.is_ipv4()).map(|a| a.to_string()).unwrap_or_default();
+                    if addr.is_empty() { continue; }
+                    let port = info.get_port();
+                    let cand_url = format!("http://{}:{}", addr, port);
+                    let cand_did = info.get_property_val_str("deviceId").unwrap_or("").to_string();
+                    if !did.is_empty() && cand_did == did {
+                        found = Some(cand_url);
+                        break;
+                    }
+                    if cand_did.is_empty() && found_no_id.is_none() {
+                        found_no_id = Some(cand_url);   // 旧版手机端无 deviceId，兜底用
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => {}
+            }
+        }
+        let _ = daemon.shutdown();
+        let new_url = found.or(found_no_id);
+        if let Some(nu) = new_url {
+            log::info!("mDNS 重新发现手机 {}，自动重连", nu);
+            { *url.lock().unwrap() = nu.clone(); }
+            // 反 POST 手机 /api/pair（手机端 settings.paired_device 记录，让手机显示"已配对"）
+            let url_arc2 = url.clone();
+            let did_arc2 = device_id.clone();
+            let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
+            std::thread::spawn(move || {
+                let base = { sync::server_base(&url_arc2.lock().unwrap()) };
+                let _ = reqwest::blocking::Client::new()
+                    .post(format!("{}/api/pair", base))
+                    .timeout(std::time::Duration::from_secs(4))
+                    .json(&serde_json::json!({ "name": pc_name, "deviceId": did_arc2.lock().unwrap().clone() }))
+                    .send();
+            });
+            // full_sync 拉手机数据到本地（last-write-wins 在 sync::full_sync 内做）
+            let _ = sync::full_sync(&db, &url);
+            // 更新 pairing.json 里的 url（保留 deviceId）
+            let mut dir = std::path::PathBuf::from(config_dir.clone());
+            if !dir.exists() { let _ = std::fs::create_dir_all(&dir); }
+            dir.push("pairing.json");
+            if let Ok(raw) = std::fs::read_to_string(&dir) {
+                if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                    v["url"] = serde_json::Value::String(nu);
+                    let _ = std::fs::write(&dir, serde_json::to_string_pretty(&v).unwrap_or_default());
+                }
+            }
+        }
+    }
 }
 
 // =============== 紧急任务后台 tick（每 60s） ===============
@@ -1355,8 +1473,7 @@ pub fn run() {
     let config_dir = std::env::var("TASKGUIDE_HOME")
         .unwrap_or_else(|_| format!("{}/.taskguide", std::env::var("USERPROFILE").unwrap_or_else(|_| ".".into())));
 
-    let device_id = uuid::Uuid::new_v4().to_string();
-
+    let device_id = String::new();  // v5.15 P0：改为空；配对成功时写入手机 ANDROID_ID（见 connect_server）
     let state = AppState {
         db: conn.clone(),
         server_url: Arc::new(Mutex::new(String::new())),
@@ -1364,7 +1481,7 @@ pub fn run() {
         config_dir: Arc::new(Mutex::new(config_dir.clone())),
     };
 
-    // 启动时尝试读取已配对的 url
+    // 启动时尝试读取已配对的 url + 手机 deviceId
     if let Some(url) = load_pairing_from_disk(&state) {
         *state.server_url.lock().unwrap() = url.clone();
         log::info!("自动加载配对：{}", url);
@@ -1376,6 +1493,17 @@ pub fn run() {
         let url_arc = state.server_url.clone();
         std::thread::spawn(move || {
             sync::ws_loop(db_arc, url_arc);
+        });
+    }
+
+    // v5.15 P0：自动重连守护线程（配对后周期 ping → 失败 → mDNS 重新发现同 deviceId → 换 url 重连）
+    {
+        let db_arc = state.db.clone();
+        let url_arc = state.server_url.clone();
+        let did_arc = state.device_id.clone();
+        let cfg = config_dir.clone();
+        std::thread::spawn(move || {
+            auto_reconnect_loop(db_arc, url_arc, did_arc, cfg);
         });
     }
 

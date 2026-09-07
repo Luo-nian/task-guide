@@ -1599,7 +1599,7 @@ document.getElementById('setPairBtn').addEventListener('click', async () => {
   if (!url) return;
   const full = url.startsWith('http') ? url : 'http://' + url;
   try {
-    await call('connect_server', { url: full });
+    await call('connect_server', { url: full, deviceId: '' });
     settings.pairing = { url: full, deviceId: '' };
     saveSettings();
     persistSettingsServer();
@@ -1630,8 +1630,9 @@ document.getElementById('setScanBtn').addEventListener('click', async () => {
     btn.textContent = '配对';
     btn.onclick = async () => {
       try {
-        await call('connect_server', { url: d.url });
-        settings.pairing = { url: d.url, deviceId: '' };
+        // v5.15 P0：把 mDNS 发现的手机 deviceId 存起来 → 手机 IP 变了也能自动重连同一台
+        await call('connect_server', { url: d.url, deviceId: d.deviceId || '' });
+        settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
         saveSettings();
         persistSettingsServer();
         box.innerHTML = '✓ 已配对：' + d.url;
