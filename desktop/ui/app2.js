@@ -60,16 +60,21 @@ function catOf(t) {
 }
 const CAT_LABEL = { 'daily':'每日任务', 'goal':'目标任务', 'time-limited':'限时任务', 'once':'次数任务' };
 
-// =============== 5 段等级（集满积分升级，励志角色） ===============
+// =============== 10 段等级（v5.13d 拉长升级曲线：boss 反馈 5-6 天就登顶太快） ===============
+// 曲线设计：每日 ~60-100 分 → 前 5 级 2-3 天体验晋升爽感，lv5 后大幅拉长，40+ 天才登顶
+// max = 下一级门槛（渲染进度条用）；末级 max 不参与（nextLevelOf 为 null）
 // ico 指向 ICONS 里的 SVG 图标名（不再用 emoji / 数字，避免系统字体渲染成彩色符号）
 const LEVELS = [
-  // boss：之前 5 个 title 写的是鸡汤（"再小的开始也是一大步"等），被嫌尬。
-  // 删成空串，渲染处用 lv.title || '' 保护，避免空 div。
-  { lv:1, name:'历练学徒',  title:'',                  ico:'lv1', min:0,   max:20  },
-  { lv:2, name:'风华游侠',  title:'',                  ico:'lv2', min:20,  max:60  },
-  { lv:3, name:'破浪骑士',  title:'',                  ico:'lv3', min:60,  max:120 },
-  { lv:4, name:'群星行者',  title:'',                  ico:'lv4', min:120, max:200 },
-  { lv:5, name:'传奇勇者',  title:'',                  ico:'lv5', min:200, max:999 }
+  { lv:1, name:'历练学徒',  title:'',                  ico:'lv1', min:0,    max:50   },
+  { lv:2, name:'风华游侠',  title:'',                  ico:'lv2', min:50,   max:130  },
+  { lv:3, name:'破浪骑士',  title:'',                  ico:'lv3', min:130,  max:250  },
+  { lv:4, name:'群星行者',  title:'',                  ico:'lv4', min:250,  max:420  },
+  { lv:5, name:'传奇勇者',  title:'',                  ico:'lv5', min:420,  max:660  },
+  { lv:6, name:'苍穹守护者',title:'',                  ico:'lv6', min:660,  max:1000 },
+  { lv:7, name:'深渊征服者',title:'',                  ico:'lv7', min:1000, max:1500 },
+  { lv:8, name:'星辰霸主',  title:'',                  ico:'lv8', min:1500, max:2200 },
+  { lv:9, name:'天命传奇',  title:'',                  ico:'lv9', min:2200, max:3200 },
+  { lv:10,name:'寰宇传说',  title:'',                  ico:'lv10', min:3200,max:99999}
 ];
 
 // =============== 内联 SVG 图标库 ===============
@@ -93,6 +98,12 @@ const ICONS = {
   lv3: '<path d="M12 2 L8.4 7 L15.6 7 Z"/><path d="M11 7 L13 7 L13 21.5 L11 21.5 Z"/><path d="M6.8 9 L17.2 9 L17.2 10.6 L6.8 10.6 Z"/><path d="M2.5 13.6 C 4.8 11.9 7.2 11.9 9.5 13.6 C 11.8 15.3 14.2 15.3 16.5 13.6 C 18.2 12.4 19.5 12.3 21.5 13 L 21.5 15 C 19.7 14.2 18.5 14.3 16.5 15.6 C 14.2 17.3 11.8 17.3 9.5 15.6 C 7.2 13.9 4.8 13.9 2.5 15.6 Z"/><path d="M2.5 17.6 C 4.8 15.9 7.2 15.9 9.5 17.6 C 11.8 19.3 14.2 19.3 16.5 17.6 C 18.2 16.4 19.5 16.3 21.5 17 L 21.5 19 C 19.7 18.2 18.5 18.3 16.5 19.6 C 14.2 21.3 11.8 21.3 9.5 19.6 C 7.2 17.9 4.8 17.9 2.5 19.6 Z"/>',
   lv4: '<path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.6Z"/>',
   lv5: '<path d="M4.2 17.6h15.6M4.4 17.6 3 7.2l5.2 4L12 4.8l3.8 6.4L21 7.2l-1.4 10.4"/>',
+  // —— 10 级高级称号（v5.13d 加）——
+  lv6: '<path d="M12 20.4c-5.8-2.4-8.2-6.4-8.2-10.6l4.1.6C7.4 7.6 9 5.8 12 5.2c3 .6 4.6 2.4 4.1 5.2l4.1-.6c0 4.2-2.4 8.2-8.2 10.6Z"/><path d="M12 6v14.4"/>',
+  lv7: '<path d="M12 2.8 8.4 7h7.2L12 2.8Z"/><path d="M11.2 7v13.2M6.8 10.6l4.4 4.4-4.4 4.4M17.2 10.6l-4.4 4.4 4.4 4.4M11.2 17.4h1.6M9 20.4h6"/>',
+  lv8: '<path d="M3.6 17.4 2.8 7.6 8 12.2l4-7.4 4 7.4 5.2-4.6-.8 9.8H3.6Z"/><path d="M8 20.4h8M6.4 17.4h11.2"/>',
+  lv9: '<path d="M12 7.4v13.2M8.6 20.4h6.8"/><circle cx="12" cy="5.4" r="2.6"/><path d="M12 10.6c3 0 5.4-1.2 5.4-2.6 0-2.4-2.6-3.4-5.4-3.4s-5.4 1-5.4 3.4c0 1.4 2.4 2.6 5.4 2.6Z"/>',
+  lv10:'<circle cx="12" cy="12" r="4.4"/><path d="M12 12c-4.2 5.6-8.2 7.4-10 7M12 12c4.2-5.6 8.2-7.4 10-7"/><path d="M2 21h20"/>',
   // —— 通用 ——
   // boss：之前 gear 是"中心圆 + 8 条放射短线"，画出来就是太阳/星形
   // 改成 Lucide 标准齿轮（8 齿 + 中心圆），24×24 16px 都清晰
@@ -475,15 +486,34 @@ function arcItemHtml(t) {
   // 完成时间容错：后端可能只给 track_status=done 而 done_at 为空，退回 updated_at
   const doneTs = t.done_at || (t.track_status === 'done' ? t.updated_at : null);
   return `
-    <div class="arc-item">
+    <div class="arc-item" data-uuid="${t.uuid}" title="右键 = 恢复此任务到今日待办">
       <span class="arc-ico cat-${catOf(t)}">${doneTs ? svgIcon('check',11,2.8) : '<i class="arc-dot"></i>'}</span>
       <div class="arc-main">
         <div class="arc-title">${esc(t.title)}</div>
-        <div class="arc-sub">${CAT_LABEL[catOf(t)] || '未分类'} · 完成于 ${doneTs ? fmtDue(doneTs) : '—'}</div>
+        <div class="arc-sub">${CAT_LABEL[catOf(t)] || '未分类'} · 完成于 ${doneTs ? fmtDue(doneTs) : '—'} · 右键恢复</div>
       </div>
       <span class="arc-points">+${t.reward_points || 10}</span>
     </div>`;
 }
+// v5.13d 历史任务右键 = 恢复到今日待办（boss：历史里任务可以恢复）
+document.getElementById('archiveBody').addEventListener('contextmenu', (e) => {
+  const item = e.target.closest('.arc-item');
+  if (!item) return;
+  e.preventDefault();
+  const uuid = item.dataset.uuid;
+  const t = archive.find(x => x.uuid === uuid);
+  (async () => {
+    try {
+      await call('restore_task', { taskUuid: uuid });
+      showToast('已恢复到今日任务');
+    } catch (err) {
+      showToast('恢复失败');
+    }
+    await fetchAll();
+    render();
+    renderArchiveModal();
+  })();
+});
 
 // =============== 右侧今日概览仪表盘 ===============
 function renderDashboard() {

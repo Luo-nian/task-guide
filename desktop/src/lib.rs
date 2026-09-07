@@ -996,6 +996,22 @@ fn stop_tracking(state: tauri::State<AppState>, task_uuid: String) {
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
 }
 
+// =============== v5.13d 恢复历史任务（boss：历史里右键任务可恢复到今日待办） ===============
+#[tauri::command]
+fn restore_task(state: tauri::State<AppState>, task_uuid: String) -> Result<(), String> {
+    let now = chrono::Local::now().timestamp_millis();
+    {
+        let db = state.db.lock().unwrap();
+        db.execute(
+            "UPDATE tasks SET track_status='pending', done=0, done_at=NULL, done_count=0, updated_at=?1 \
+             WHERE uuid=?2 AND deleted=0",
+            params![now, &task_uuid]
+        ).map_err(|e| e.to_string())?;
+    }
+    sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    Ok(())
+}
+
 #[tauri::command]
 fn set_setting(state: tauri::State<AppState>, key: String, value: String) {
     let db = state.db.lock().unwrap();
@@ -1360,6 +1376,7 @@ pub fn run() {
             get_habits_status, get_task_detail, get_total_points,
             get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
             advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
+            restore_task,
             set_display_mode, set_window_size,
             show_widget, hide_widget, show_main_window, win_minimize, win_toggle_maximize, win_hide,
             connect_server, disconnect_server, get_server_url,
