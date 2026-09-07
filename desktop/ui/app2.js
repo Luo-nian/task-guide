@@ -579,6 +579,13 @@ function renderDashboard() {
   document.getElementById('statTrackingTrend').textContent = tracking > 0 ? '进行时' : '未追踪';
   document.getElementById('statWeek').innerHTML = (progressInfo.week || 0) + '<span class="unit">项</span>';
   document.getElementById('statWeekTrend').textContent = '稳步前行';
+  // v5.14b：stat-badge 数字徽章（boss 反馈"右上角那个UI太小"）
+  const badgeR = document.getElementById('statBadgeRemain');
+  const badgeT = document.getElementById('statBadgeTrack');
+  const badgeW = document.getElementById('statBadgeWeek');
+  if (badgeR) badgeR.textContent = remain;
+  if (badgeT) badgeT.textContent = tracking;
+  if (badgeW) badgeW.textContent = (progressInfo.week || 0);
 
   // boss 反馈：22:00 提醒提示很没必要 → tipCard 已删整块（HTML+JS），不再渲染
 }

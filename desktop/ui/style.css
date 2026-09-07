@@ -629,12 +629,36 @@ body::after {
   position: relative;
   overflow: hidden;
 }
+/* v5.14b：右上角金色装饰圆改为数字徽章 —— boss 反馈"太小 太迁就追踪tab键圆形形状"
+   原版：32px 金色发光圆（装饰无意义）
+   新版：在 stat-card 右上角加一个 28×28 数字徽章，显示该卡对应的实际数字 */
 .stat-card::after {
-  content: ""; position: absolute; right: -8px; top: -8px;
-  width: 32px; height: 32px;
+  content: ""; position: absolute; right: 8px; top: 8px;
+  width: 28px; height: 28px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--glow-gold), transparent 70%);
-  opacity: 0.5;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  opacity: 0.18;
+  pointer-events: none;
+}
+.stat-card.tracking::after {
+  /* 追踪中卡片：徽章更显眼，金色发光 */
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  opacity: 0.4;
+  box-shadow: 0 0 8px var(--glow-gold);
+}
+/* 数字徽章覆盖在装饰圆上 */
+.stat-badge {
+  position: absolute; right: 14px; top: 12px;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  background: var(--gold-deep);
+  color: #FFF4D0;
+  font-size: 10.5px; font-weight: 700;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: 0.3px;
+  box-shadow: 0 0 6px var(--glow-gold);
+  z-index: 2;
 }
 .stat-label { color: var(--ink-mute); font-size: 10.5px; letter-spacing: 0.5px; margin-bottom: 4px; }
 .stat-value { color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.1; }
@@ -819,15 +843,23 @@ body::after {
 }
 .goal-item:last-child { border-bottom: none; }
 .goal-item .g-play {
-  flex: 0 0 18px; width: 18px; height: 18px;
+  flex: 0 0 24px; width: 24px; height: 24px;
   background: rgba(201, 162, 39, 0.18);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: var(--gold-deep); font-size: 10px;
-  border: 1px solid rgba(201, 162, 39, 0.4);
+  color: var(--gold-deep); font-size: 12px;
+  border: 1.5px solid rgba(201, 162, 39, 0.45);
   transition: all .2s;
+  cursor: pointer;
 }
-.goal-item:hover .g-play { background: rgba(201, 162, 39, 0.35); }
+/* v5.14b：打卡键 hover 反馈（boss 反馈打卡键不好看） */
+.goal-item:hover .g-play {
+  background: rgba(201, 162, 39, 0.42);
+  border-color: var(--gold-deep);
+  box-shadow: 0 0 8px var(--glow-gold);
+  transform: scale(1.06);
+}
+.goal-item .g-play:active { transform: scale(0.92); }
 .goal-item .g-text { flex: 1; color: var(--ink); font-size: 12.5px; }
 .goal-item .g-attr { color: var(--orange); font-size: 10.5px; }
 .goal-item.done { opacity: 0.78; }
@@ -961,20 +993,21 @@ body::after {
 
 /* 底部按钮 —— 竖排小号椭圆（收窄到 190px，不再占半屏） */
 .btn-row {
-  display: flex; flex-direction: column; gap: 7px;
-  margin-top: 12px;
-  max-width: 190px;
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 14px;
+  max-width: 210px;
   margin-left: auto; margin-right: auto;
 }
 .btn-row button {
   width: 100%;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 7px 14px;                 /* 小尺寸 */
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 16px;                 /* v5.14b：7→9px 加大点击区（boss 反馈打卡键/完成键太小） */
   border-radius: 999px;              /* 椭圆 */
   cursor: pointer;
-  font-size: 12px; font-weight: 600;
+  font-size: 12.5px; font-weight: 600;
   border: 1px solid var(--border-mid);
   transition: all .2s;
+  letter-spacing: 0.3px;
   letter-spacing: 0.5px;
 }
 /* 按钮内图标：统一 SVG，不用 ◆■✓ 字符 */
@@ -1268,11 +1301,14 @@ input::placeholder { color: var(--ink-faint); }
   box-shadow: 0 0 60px var(--glow-gold), 0 12px 40px rgba(58, 46, 26, 0.3);
   text-align: center;
   position: relative;
+  /* v5.14b：boss 反馈"飞进飞出不在卡片正中央"——transform-origin 显式 center
+     避免某些 transform 组合让弹窗偏移到屏幕一角 */
+  transform-origin: center center;
   animation: blessPop 0.5s cubic-bezier(0.4, 1.2, 0.5, 1.1);
 }
 @keyframes blessPop {
-  from { transform: scale(0.6); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  from { transform: scale(0.7) translateY(8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
 }
 .bless-card::before {
   content: ""; position: absolute; inset: 6px;
