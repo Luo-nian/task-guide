@@ -153,19 +153,20 @@ body::after {
 
 /* 等级徽章 —— 黑金招牌（与手机端等级卡呼应：墨黑底+金边+金色文字，全 UI 唯一黑底元素） */
 .level-badge {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 7px;
   background: linear-gradient(135deg, var(--ink-black-soft), var(--ink-black));
   border: 1px solid var(--gold);
-  border-radius: 16px;
-  padding: 3px 10px 3px 5px;
+  border-radius: 18px;
+  padding: 4px 12px 4px 5px;
   box-shadow: 0 0 10px var(--glow-gold), inset 0 0 0 1px rgba(230, 199, 122, 0.22);
   cursor: pointer;
   transition: all .2s;
+  position: relative;
 }
 .level-badge:hover { box-shadow: 0 0 16px var(--glow-gold), 0 4px 12px rgba(22, 18, 12, 0.35); }
 .level-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px;        /* v5.14d：20→28 顶栏头像加大（boss 反馈"没同步到主页"） */
+  width: 34px; height: 34px;        /* v5.14g：28→34 头像再加大（boss 反馈"头像不出现"） */
   --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
   background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
   color: var(--rank-ico);
@@ -174,7 +175,28 @@ body::after {
   font-size: 11px; font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: all .2s;
+  position: relative;
 }
+/* v5.14g：头像右下角等级小角标（level-icon 兄弟元素，renderUserAvatar innerHTML 不清它） */
+.lv-tag {
+  position: absolute; left: 25px; top: 21px;
+  min-width: 20px; height: 16px;
+  padding: 0 4px;
+  background: linear-gradient(160deg, #FFD97A, #C9A227);
+  color: #1F1407;
+  font-size: 9px; font-weight: 800;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--ink-black);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  line-height: 1;
+  letter-spacing: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+/* v5.14g：等级徽章双行文字 */
+.level-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; gap: 1px; }
+.level-sub { color: rgba(230, 199, 122, 0.55); font-size: 9.5px; font-weight: 400; letter-spacing: 0.3px; }
 /* v5.13j：10 档等级徽章分档配色（boss 反馈"太土/low" — 全部一个色太单调） */
 .level-icon.rank-lv1, .pc-level-icon.rank-lv1 { --rank-from: #F5DBA0; --rank-to: #C9A65A; }
 .level-icon.rank-lv2, .pc-level-icon.rank-lv2 { --rank-from: #EFCB7F; --rank-to: #B98F2E; }
@@ -274,6 +296,7 @@ body::after {
 .nav-item.active .ico { box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.1), 0 0 10px var(--glow-gold); }
 .ico-overview { background: linear-gradient(135deg, #A78BFA, #5B3FB0); }
 .ico-today    { background: linear-gradient(135deg, #F5B95D, #C98432); }   /* v5.14e：今日图标（橘黄）—— 之前没定义导致 .ico 容器空白 */
+.ico-tracking { background: linear-gradient(135deg, #B49BE0, #7E62A6); }   /* v5.14g：追踪图标（紫色菱形/准星） */
 .ico-daily    { background: linear-gradient(135deg, #5BA3D0, #2E6FA0); }
 .ico-goal     { background: linear-gradient(135deg, #B49BE0, #7E62A6); }  /* boss #16：补目标任务图标 */
 .ico-lim      { background: linear-gradient(135deg, #D88A3F, #A55F1A); }
@@ -283,6 +306,22 @@ body::after {
 .nav-item .nav-tip {
   display: none !important;            /* boss #22：隐藏旧 nav-tip，改用全局软件风 #_softTip */
 }
+/* v5.14g：追踪任务数量角标（红色） */
+.nav-count {
+  position: absolute; right: 2px; top: 1px;
+  min-width: 16px; height: 14px;
+  padding: 0 4px;
+  background: linear-gradient(160deg, #E06A5B, #C0392B);
+  color: #fff;
+  font-size: 9px; font-weight: 800;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  line-height: 1;
+  z-index: 4;
+}
+.nav-count.zero { display: none; }
 .nav-spacer { flex: 1; }
 /* 历史项：只用间距分隔（原来的 padding-top 会把图标压低 7px，与其它 4 项不对齐） */
 .nav-item.repo { margin-top: 8px; }
@@ -762,6 +801,7 @@ body::after {
   color: var(--gold-deep);
 }
 .lbl-head { font-weight: 700; color: var(--gold-deep); }
+.lbl-head-2 { font-weight: 600; color: var(--gold-deep); font-size: 12px; }   /* v5.14g 高级默认提醒小节头 */
 .remind-section { border-bottom: 1px dashed rgba(201, 162, 39, 0.3); padding-bottom: 8px; margin-bottom: 6px; }
 .rem-strength-block, .rem-time-block {
   background: rgba(255, 254, 251, 0.5);
@@ -1474,6 +1514,35 @@ input::placeholder { color: var(--ink-faint); }
   animation: blessPulse 0.5s ease-out 1;
   box-shadow: 0 0 22px var(--glow-gold), 0 0 8px var(--gold);
 }
+/* v5.14g：等级升级庆祝特效（更强金光 + 中央大徽章） */
+.bless-levelup .bless-card {
+  animation: blessLevelPulse 0.6s ease-out infinite alternate;
+  border-color: #FFD97A;
+  background: linear-gradient(160deg, rgba(255, 252, 240, 0.99), rgba(255, 217, 122, 0.45));
+}
+@keyframes blessLevelPulse {
+  from { box-shadow: 0 0 30px var(--glow-gold), 0 0 10px #FFD97A; transform: scale(1); }
+  to   { box-shadow: 0 0 55px #FFD97A, 0 0 18px var(--glow-gold); transform: scale(1.015); }
+}
+.bless-lv-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 76px; height: 76px;
+  background: linear-gradient(160deg, var(--rank-from, #E8CB7F), var(--rank-to, #B98F2E));
+  color: var(--rank-ico, #1F1407);
+  border-radius: 50%;
+  margin: 4px auto 8px;
+  box-shadow: 0 0 22px var(--glow-gold), inset 0 0 0 3px rgba(255,244,208,0.4);
+}
+.bless-lv-icon.rank-lv1 { --rank-from:#F5DBA0; --rank-to:#C9A65A; --rank-ico:#1F1407; }
+.bless-lv-icon.rank-lv2 { --rank-from:#EFCB7F; --rank-to:#B98F2E; --rank-ico:#1F1407; }
+.bless-lv-icon.rank-lv3 { --rank-from:#E8CB7F; --rank-to:#8A6A1C; --rank-ico:#1F1407; }
+.bless-lv-icon.rank-lv4 { --rank-from:#D8B45A; --rank-to:#6B4E1B; --rank-ico:#1F1407; }
+.bless-lv-icon.rank-lv5 { --rank-from:#B98F2E; --rank-to:#4A3712; --rank-ico:#FFF4D0; }
+.bless-lv-icon.rank-lv6 { --rank-from:#6B4E1B; --rank-to:#2C1E0A; --rank-ico:#FFE68A; }
+.bless-lv-icon.rank-lv7 { --rank-from:#3D2A0E; --rank-to:#1A1208; --rank-ico:#E8CB7F; }
+.bless-lv-icon.rank-lv8 { --rank-from:#2C1E0A; --rank-to:#0A0518; --rank-ico:#E8CB7F; }
+.bless-lv-icon.rank-lv9 { --rank-from:#1A0F2E; --rank-to:#0A0518; --rank-ico:#FFE68A; }
+.bless-lv-icon.rank-lv10 { --rank-from:#0A0518; --rank-to:#000; --rank-ico:#FFE68A; }
 @keyframes blessPulse {
   0%   { transform: scale(1);     box-shadow: 0 0 22px var(--glow-gold); }
   50%  { transform: scale(1.015); box-shadow: 0 0 32px var(--glow-gold); }
@@ -1761,7 +1830,10 @@ input::placeholder { color: var(--ink-faint); }
 }
 /* 头像：自动裁圆（boss #9：上传图片应自动成圆，非矩形头像+圆框）
    .ph-avatar-wrap 必须 overflow:visible 否则"换"/"图"两个浮动按钮被裁掉（boss #35） */
-.ph-avatar-wrap { position: relative; }
+.ph-avatar-wrap {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;   /* v5.14g：头像+hint 纵向堆叠 */
+}
 .ph-avatar {
   width: 64px; height: 64px; border-radius: 50%;
   background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
@@ -1784,6 +1856,19 @@ input::placeholder { color: var(--ink-faint); }
   color: var(--gold-light); font-size: 11px; font-weight: 600;
   cursor: pointer;
 }
+/* v5.14g：头像下方"点击更换 / 上传图片"提示条 */
+.ph-avatar-hint {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 10.5px; color: var(--ink-mute);
+  background: rgba(255, 254, 251, 0.85);
+  border: 1px dashed var(--border-mid);
+  border-radius: 999px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.ph-avatar-hint:hover { color: var(--gold-deep); border-color: var(--gold); background: rgba(255, 254, 251, 1); }
 /* v5.13k：8 个 lucide 内置头像选择网格（profile modal 里点选即生效 + 三处同步） */
 .ph-avatar-picker { margin: 14px 0 4px; width: 100%; }
 .ph-picker-hint { font-size: 10.5px; color: var(--ink-mute); margin-bottom: 8px; letter-spacing: 1px; }

@@ -1298,10 +1298,11 @@ fn load_pairing_from_disk(state: &AppState) -> Option<String> {
     Some(url)
 }
 
-// v5.15 P0 自动重连守护线程：
-// 每 8s：ping 已配对 url → 成功则什么都不做；失败（手机换 IP / 断网恢复 / 手机刚开机）→
+// v5.14g 自动重连守护线程（v5.14a 基础上补强）：
+// 每 5s：ping 已配对 url → 成功则清失败计数；失败（手机换 IP / 断网恢复 / 手机刚开机）→
 // mDNS 重新发现 _taskguide._tcp. 中 deviceId 匹配的手机 → 自动重连（换 url + 反 POST /api/pair + full_sync）。
-// 这样"断网→联网自动重连"、"同一网络自动连接"都由它兜底。
+// 连续 ping 失败 6 次（约 30s）写 settings.reconnect_fail=1，前端读取后 toast 提示"配对手机不在网络"
+// 断网→联网自动重连、"同一网络自动连接" 都由它兜底。
 fn auto_reconnect_loop(
     db: Arc<Mutex<rusqlite::Connection>>,
     url: Arc<Mutex<String>>,
@@ -1310,13 +1311,18 @@ fn auto_reconnect_loop(
 ) {
     use mdns_sd::{ServiceDaemon, ServiceEvent};
     std::thread::sleep(std::time::Duration::from_secs(6)); // 等 ws_loop 先跑一次
+    let mut fail_count: i32 = 0;
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(8));
+        std::thread::sleep(std::time::Duration::from_secs(5));   // v5.14g：8→5s 更快响应
         let cur_url = { url.lock().unwrap().clone() };
-        if cur_url.is_empty() { continue; }  // 未配对，无事可做
+        if cur_url.is_empty() {
+            // 未配对：清 fail（避免旧状态误导）
+            fail_count = 0;
+            continue;
+        }
         let did = { device_id.lock().unwrap().clone() };
 
-        // 1) ping 当前 url：通 → 维持现状（ws_loop 自己维护长连接）
+        // 1) ping 当前 url：通 → 清计数
         let base = sync::server_base(&cur_url);
         let alive = reqwest::blocking::Client::new()
             .get(format!("{}/api/ping", base))
@@ -1324,7 +1330,20 @@ fn auto_reconnect_loop(
             .send()
             .map(|r| r.status().is_success())
             .unwrap_or(false);
-        if alive { continue; }
+        if alive {
+            if fail_count != 0 {
+                fail_count = 0;
+                let conn = db.lock().unwrap();
+                let _ = conn.execute("UPDATE settings SET value='0' WHERE key='reconnect_fail'", []);
+            }
+            continue;
+        }
+        fail_count += 1;
+        // 连续 ~30s 连不上 → 前端 toast 提示（每 5 次写一次，避免刷屏）
+        if fail_count % 6 == 0 {
+            let conn = db.lock().unwrap();
+            let _ = conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('reconnect_fail','1')", []);
+        }
 
         // 2) ping 不通 → mDNS 重新发现（同一 network 自动连）
         log::info!("配对目标不可达({}), 尝试 mDNS 重发现 deviceId={}", base, did);
@@ -1362,6 +1381,9 @@ fn auto_reconnect_loop(
         if let Some(nu) = new_url {
             log::info!("mDNS 重新发现手机 {}，自动重连", nu);
             { *url.lock().unwrap() = nu.clone(); }
+            // v5.14g：重连成功 → 清失败计数
+            fail_count = 0;
+            { let conn = db.lock().unwrap(); let _ = conn.execute("UPDATE settings SET value='0' WHERE key='reconnect_fail'", []); }
             // 反 POST 手机 /api/pair（手机端 settings.paired_device 记录，让手机显示"已配对"）
             let url_arc2 = url.clone();
             let did_arc2 = device_id.clone();
@@ -1474,7 +1496,8 @@ pub fn run() {
          ('auto_start','1'),('delay_options','custom'),('total_points','0'),\
          ('nickname','历练者'),('progress_style','bar'),\
          ('count_default','5'),('time_limit_min','5'),\
-         ('daily_refresh','1'),('night_notify','1');"
+         ('daily_refresh','1'),('night_notify','1'),\
+         ('reconnect_fail','0');"
     );
     let conn = Arc::new(Mutex::new(conn));
 

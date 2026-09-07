@@ -18,7 +18,11 @@
     <div class="top-right" id="topRight">
       <div class="level-badge" id="levelBadge" title="点击查看 / 修改个人信息">
         <span class="level-icon" id="levelIcon"></span>
-        <span class="level-text" id="levelText">历练学徒</span>
+        <span class="lv-tag" id="lvTag">Lv4</span>
+        <span class="level-meta">
+          <span class="level-text" id="levelText">历练学徒</span>
+          <span class="level-sub" id="levelSub">139 · 待升级</span>
+        </span>
       </div>
       <button class="ico-btn" id="settingsBtn" title="设置" data-tauri-drag-region-exclude>
         <span class="ico-slot" data-icon="gear" data-icon-size="16" data-icon-sw="1.9"></span>
@@ -49,6 +53,12 @@
     <button class="nav-item" data-nav="today" title="今日待办">
       <span class="ico ico-today" data-icon="sun" data-icon-size="15"></span>
       <span class="nav-tip">今日</span>
+    </button>
+    <!-- v5.14g：boss 要求侧边栏显示追踪任务 -->
+    <button class="nav-item" data-nav="tracking" title="追踪任务">
+      <span class="ico ico-tracking" data-icon="crosshair" data-icon-size="15"></span>
+      <span class="nav-tip">追踪</span>
+      <span class="nav-count" id="trackingCount">0</span>
     </button>
     <button class="nav-item" data-nav="daily" title="每日任务">
       <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
@@ -269,12 +279,11 @@
 
         <div class="profile-hero">
           <div class="ph-avatar-wrap">
-            <div class="ph-avatar" id="profileAvatar"><span class="ico-slot" data-icon="sparkle" data-icon-size="32" data-icon-sw="1.7"></span></div>
-            <button class="ph-avatar-edit" id="profileAvatarEdit" title="换内置头像">换</button>
-            <button class="ph-avatar-upload" id="profileAvatarUpload" title="用自己的图片当头像">图</button>
+            <div class="ph-avatar" id="profileAvatar" title="点换头像 / 长按选内置头像"><span class="ico-slot" data-icon="sparkle" data-icon-size="32" data-icon-sw="1.7"></span></div>
+            <span class="ph-avatar-hint" id="profileAvatarHint">点击更换</span>
             <input type="file" id="profileAvatarFile" accept="image/*" hidden />
           </div>
-          <!-- v5.13k：8 个 lucide 内置头像选择网格（默认折叠，点"换"才展开 — boss 反馈之前 modal 拉得很长） -->
+          <!-- v5.14g：8 个 lucide 内置头像选择网格（默认折叠，点头像才展开） -->
           <div class="ph-avatar-picker" id="avatarPicker" style="display:none">
             <div class="ph-picker-hint">内置头像 · 点选即生效</div>
             <div class="ph-avatar-grid" id="avatarGrid"></div>
@@ -389,6 +398,37 @@
               <button type="button" class="rem-device-btn" data-device="mobile" id="setRangeMobile">仅手机端</button>
               <button type="button" class="rem-device-btn" data-device="desktop" id="setRangeDesktop">仅电脑端</button>
               <button type="button" class="rem-device-btn" data-device="both" id="setRangeBoth">双端提醒</button>
+            </div>
+          </div>
+          <!-- v5.14g：完整默认配置（端→方式→时间，不条件隐藏——作为默认值配置面板完整显示） -->
+          <div class="setting-row remind-sub">
+            <label class="lbl-head-2">高级默认提醒</label>
+          </div>
+          <div class="setting-row">
+            <label>接收端</label>
+            <div class="rem-device-row">
+              <button type="button" class="rem-device-btn" data-device="desktop" id="setDevDesktop">电脑端</button>
+              <button type="button" class="rem-device-btn" data-device="mobile" id="setDevMobile">手机端</button>
+              <button type="button" class="rem-device-btn" data-device="both" id="setDevBoth">双端</button>
+              <button type="button" class="rem-device-btn" data-device="none" id="setDevNone">不提醒</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>方式</label>
+            <div class="rem-strength-row">
+              <label class="chk-pill"><input type="checkbox" id="setAdvNotif" /> <span>通知栏</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setAdvVibrate" /> <span>振动</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setAdvSound" /> <span>铃声</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setAdvPop" /> <span>弹窗</span></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>提前时间</label>
+            <div class="rem-time-row">
+              <button type="button" class="rem-time-btn" data-min="0" id="setLead0">准时</button>
+              <button type="button" class="rem-time-btn" data-min="15" id="setLead15">15分钟前</button>
+              <button type="button" class="rem-time-btn" data-min="60" id="setLead60">1小时前</button>
+              <button type="button" class="rem-time-btn" data-min="1440" id="setLead1440">1天前</button>
             </div>
           </div>
           <div class="setting-row">

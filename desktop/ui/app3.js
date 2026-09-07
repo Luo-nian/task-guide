@@ -247,13 +247,41 @@ function applySettingsToUi() {
     el.checked = settings[id] !== false;   // 默认勾选
     el.onchange = () => { settings[id] = el.checked; saveSettings(); };
   });
-  // 范围 4 选（默认 both）
+  // 范围 4 选（默认 both）—— 只匹配 setRange*（v5.14g 高级默认区另有 setDev* 8 个按钮不能互相污染）
   const RANGE_KEY = 'reminder_default_range';
   const range = settings[RANGE_KEY] || 'both';
-  document.querySelectorAll('#settingsOverlay .rem-device-btn').forEach(b => {
+  document.querySelectorAll('#settingsOverlay [id^=setRange]').forEach(b => {
     b.classList.toggle('active', b.dataset.device === range);
     b.onclick = () => {
       settings[RANGE_KEY] = b.dataset.device;
+      saveSettings();
+      applySettingsToUi();
+    };
+  });
+  // v5.14g：高级默认提醒（端→方式→时间 完整配置面板，不条件隐藏）
+  const DEV_KEY = 'reminder_default_device';
+  const LEAD_KEY = 'reminder_default_lead_min';
+  const advDev = settings[DEV_KEY] || 'both';
+  document.querySelectorAll('#settingsOverlay [id^=setDev]').forEach(b => {
+    b.classList.toggle('active', b.dataset.device === advDev);
+    b.onclick = () => {
+      settings[DEV_KEY] = b.dataset.device;
+      saveSettings();
+      applySettingsToUi();
+    };
+  });
+  ['setAdvNotif','setAdvVibrate','setAdvSound','setAdvPop'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const key = 'rem_adv_' + ['notif','vibrate','sound','pop'][i];
+    el.checked = settings[key] !== false;
+    el.onchange = () => { settings[key] = el.checked; saveSettings(); };
+  });
+  const lead = String(settings[LEAD_KEY] !== undefined ? settings[LEAD_KEY] : 15);
+  document.querySelectorAll('#settingsOverlay .rem-time-btn').forEach(b => {
+    b.classList.toggle('active', String(b.dataset.min) === lead);
+    b.onclick = () => {
+      settings[LEAD_KEY] = parseInt(b.dataset.min, 10);
       saveSettings();
       applySettingsToUi();
     };
@@ -315,6 +343,25 @@ async function fetchAll() {
   progressInfo = progressResp || progressInfo;
   trackCards = trackResp || [];
   if (levelResp && levelResp.style) settings.progress_style = levelResp.style;
+  // v5.14g：升级检测（points 跨过 LEVELS 阈值 → 弹升级提示）——渲染前检测避免弹窗被 render 打断
+  detectLevelUp();
+}
+// v5.14g：等级变化检测 —— oldLevelPoints 在首次启动/等级变更时更新，跨级弹窗庆祝
+let _lastLvMin = -1;   // 上次记录到的等级门槛分数（0=历练学徒起点）
+function detectLevelUp() {
+  const lv = level || levelOf(points);
+  const curMin = lv ? lv.min : 0;
+  if (_lastLvMin === -1) { _lastLvMin = curMin; return; }        // 首次：只记录不弹
+  if (curMin > _lastLvMin) {                                       // 真的升级了
+    _lastLvMin = curMin;
+    // 延迟到当前 render 完成后再弹，避免覆盖首次渲染
+    setTimeout(() => {
+      const bonus = (points || 0) > 0 ? 0 : 0;   // 升级不额外给分，只是庆祝
+      showBless({ mode: 'levelup', title: '升级到 ' + (lv.name || '') + '！', points: points });
+    }, 600);
+  } else {
+    _lastLvMin = curMin;   // 同等级更新基准（防止降级时误判）
+  }
 }
 async function render() {
   // v5.13：render 期间加 .fading 过渡 class（CSS 0.18s opacity 0.55），避免
@@ -333,6 +380,7 @@ async function render() {
       renderSideNav();
       if (nav === 'overview') renderOverview();
       else if (nav === 'today') renderTodayView();
+      else if (nav === 'tracking') renderTrackingView();
       else renderListView();
       renderDashboard();
       checkEmergency();
@@ -358,6 +406,34 @@ function renderSideNav() {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.nav === nav);
   });
+}
+// v5.14g：追踪任务视图（boss 要求侧边栏显示追踪任务）—— 显示所有 track_status='tracking' 的任务
+function renderTrackingView() {
+  const lvEl = document.getElementById('listView');
+  if (!lvEl) return;
+  const trackTasks = tasks.filter(t => isTracking(t) && !t.done && t.deleted !== 1);
+  // 更新侧栏角标
+  const cnt = document.getElementById('trackingCount');
+  if (cnt) { cnt.textContent = trackTasks.length; cnt.classList.toggle('zero', trackTasks.length === 0); }
+  let html = `
+    <div class="list-view-header">
+      <span class="vh-title">追踪任务</span>
+      <span class="vh-meta">${trackTasks.length} 项进行中</span>
+    </div>
+    <div class="vh-hint">追踪中的任务会显示进度与剩余步骤</div>
+  `;
+  if (trackTasks.length === 0) {
+    html += `<div class="empty-tip">暂无追踪任务<br>点击任务详情页的「追踪任务」开始追踪</div>`;
+  } else {
+    html += `<div class="cat-group">
+      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>追踪中</span><span class="gh-count">${trackTasks.length}</span></div>
+      ${trackTasks.map(catTaskHtml).join('')}
+    </div>`;
+  }
+  lvEl.innerHTML = html;
+  lvEl.style.display = '';
+  const overviewEl = document.getElementById('overviewView');
+  if (overviewEl) overviewEl.style.display = 'none';
 }
 // v5.14d：今日视图（boss 要求打开客户端默认看到今日待办）
 function renderTodayView() {
@@ -685,6 +761,18 @@ function renderLevelBadge() {
   // 头像渲染（avatar_img / lucide idx / 等级图标）三档都在 renderUserAvatar 里
   renderUserAvatar();
   document.getElementById('levelText').textContent = lv.name;
+  // v5.14g：右下角 Lv 角标 + 双行副文字
+  const tag = document.getElementById('lvTag');
+  if (tag) tag.textContent = 'Lv' + (lv.lv || 1);
+  const sub = document.getElementById('levelSub');
+  if (sub) {
+    const next = nextLevelOf(points);
+    if (!next) sub.textContent = points + ' 分 · 已至巅峰';
+    else {
+      const remain = Math.max(0, next.min - points);
+      sub.textContent = (points > 0 ? points + ' 分' : '历练中') + ' · 距 ' + next.name + ' 差 ' + remain;
+    }
+  }
 }
 function renderLevelCard() {
   const lv = level || levelOf(points);
@@ -896,6 +984,18 @@ function showBless(opts) {
     ];
     const m = msgs[Math.floor(Math.random() * msgs.length)];
     tEl.textContent = m.t; sEl.textContent = m.s; mEl.innerHTML = m.m;
+  } else if (opts.mode === 'levelup') {
+    // v5.14g：等级升级庆祝（金色光晕 + 徽章特效）
+    const lv = level || levelOf(points);
+    const overlay = document.getElementById('blessOverlay');
+    overlay.classList.add('bless-levelup');
+    tEl.textContent = opts.title || '恭喜升级！';
+    sEl.textContent = (lv ? 'Lv.' + lv.lv + ' · ' + lv.name : '') + ' · 当前积分 ' + points;
+    const lvIcon = lv && lv.ico ? svgIcon(lv.ico || 'lv1', 44, 1.4) : svgIcon('star', 40, 1.5);
+    mEl.innerHTML = '<div class="bless-lv-icon rank-lv' + (lv.lv || 1) + '">' + lvIcon + '</div>' +
+      '<b>新的等级已解锁</b><br>' + (lv.title ? '称号：' + lv.title : '继续加油，冲击下一级') +
+      '<div class="bless-crit-badge">✦ 升级奖励 ×' + Math.min(10, (lv.lv || 1)) + ' 积分</div>';
+    setTimeout(() => overlay.classList.remove('bless-levelup'), 2500);
   } else if (opts.mode === 'reward') {
     // 单任务完成奖励（原神风：+N 经验）
     const pts = opts.points || 0;
@@ -1576,16 +1676,27 @@ function updateAvatarGridActive() {
   });
 }
 // v5.14d："换"按钮切换 8 头像选择器折叠（避免 profile modal 拉得很长）
-document.getElementById('profileAvatarEdit').addEventListener('click', () => {
-  if (settings.avatar_img) {
-    delete settings.avatar_img;     // 有图时按"换"→ 退回字符模式（保留 avatarIdx）
-  } else {
+// v5.14g：头像点击 = 换下一个内置头像；长按（800ms）= 展开 8 头像网格；上传走头像下方 hint（无独立按钮）
+//   旧"换/图"两小按钮已从 HTML 移除 → 绑定改到头像本体 + 提示条
+const _phAvatarEl0 = document.getElementById('profileAvatar');
+if (_phAvatarEl0) {
+  _phAvatarEl0.addEventListener('click', () => {
+    if (settings.avatar_img) return;        // 有图时点击不切（避免误清除）
     avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
     settings.avatar_idx = avatarIdx;
-  }
-  saveSettings();
-  renderProfileAvatar();
-});
+    saveSettings();
+    renderProfileAvatar();
+    renderLevelBadge();
+  });
+}
+// 上传自己的图片：点 hint 文字 → 选文件（head 内嵌按钮删除后，用 hint 上的隐藏 file 触发器）
+const _fileTrigger = document.getElementById('profileAvatarHint');
+if (_fileTrigger) {
+  _fileTrigger.addEventListener('click', () => {
+    const f = document.getElementById('profileAvatarFile');
+    if (f) f.click();
+  });
+}
 // v5.14d：长按头像（800ms）→ 显示/隐藏 8 头像选择器（boss 反馈"长按头像可改头像"）
 let _avatarLongPressTimer = null;
 const _profileAvatarEl = document.getElementById('profileAvatar');
@@ -1602,19 +1713,8 @@ if (_profileAvatarEl) {
     });
   });
 }
-// 头像本身点击：换字符（兼容旧行为）
-document.getElementById('profileAvatar').addEventListener('click', () => {
-  if (settings.avatar_img) return;        // 有图时点击不切（避免误清除）
-  avatarIdx = (avatarIdx + 1) % AVATAR_GLYPHS.length;
-  settings.avatar_idx = avatarIdx;
-  saveSettings();
-  renderProfileAvatar();
-});
-// 上传自己的图片：选文件 → 缩放到 96×96 → base64 存 settings.avatar_img
-const _profileAvatarFile = document.getElementById('profileAvatarFile');
-document.getElementById('profileAvatarUpload').addEventListener('click', () => _profileAvatarFile && _profileAvatarFile.click());
-// boss #20：上传图片走裁剪器（参考社区软件头像裁剪），用户可调圆形区域再保存
-_profileAvatarFile.addEventListener('change', e => {
+// 上传自己的图片 → 打开裁剪器（v5.14g：head 按钮移除后仍保留该能力，file input change 触发）
+document.getElementById('profileAvatarFile').addEventListener('change', e => {
   const f = e.target.files && e.target.files[0];
   if (!f) return;
   openCropper(f);
@@ -2035,8 +2135,24 @@ function startApp() {
   persistSettingsServer().catch(() => {});
   setInterval(render, 15000);
   setInterval(checkEmergency, 60000);
+  // v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
+  setInterval(checkReconnectFail, 15000);
+  checkReconnectFail();
   checkNightNotify();                    // 启动即查一次（22 点后开机也能补提醒）
   setInterval(checkNightNotify, 60000);
+}
+let _lastReconnectToast = 0;
+async function checkReconnectFail() {
+  try {
+    const v = await call('get_setting', { key: 'reconnect_fail' });
+    if (v === '1') {
+      const now = Date.now();
+      if (now - _lastReconnectToast > 30000) {   // 30s 提示一次防刷屏
+        _lastReconnectToast = now;
+        showToast('⚠ 配对手机不在网络，正在后台自动重连…');
+      }
+    }
+  } catch (e) { /* 忽略 */ }
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', startApp);
