@@ -428,35 +428,33 @@ fn get_progress(state: tauri::State<AppState>) -> ProgressInfo {
 }
 
 // 每日进度（今日任务完成度）—— 前端进度条 / 祝福弹窗的数据源
-// 口径：daily 全部 + 今日到期的 time-limited；已完成与未完成都要计入 total，
-// 否则每完成一项 total 就减 1，进度条永远停在 0%（预览服务器的旧实现就有这个 bug）。
+// 口径（v5.13f）：每个 task 算 1 项（次数任务不再 count SUM），daily 全部 + 今日到期 time-limited；
+// 已完成与未完成都要计入 total 否则每完成一项 total 就减 1，进度条永远停在 0%。
+// 次数任务的"完成度"通过 count_done / count_total 单独返回给 widget/detail 展示。
 #[tauri::command]
 fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
     let (day_start, day_end) = today_range();
     let now = Local::now().timestamp_millis();
     let db = state.db.lock().unwrap();
 
-    // 普通任务（count<=1）分开统计，次数任务单独按「次数」计
-    // 未完成：daily 全部 + 今日到期的限时任务
+    // 待办项数（每个 task 算 1 项，不再按 count 累加；boss：52 项过载是次数任务 count 累加导致）
     let pending: i64 = db.query_row(
         "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND track_status!='done' \
-         AND COALESCE(count,1) <= 1 AND \
-         (category='daily' OR (category='time-limited' AND COALESCE(due_at,deadline) IS NOT NULL \
+         AND (category='daily' OR (category='time-limited' AND COALESCE(due_at,deadline) IS NOT NULL \
           AND COALESCE(due_at,deadline) >= ?1 AND COALESCE(due_at,deadline) < ?2))",
         params![day_start, day_end], |r| r.get(0)
     ).unwrap_or(0);
 
-    // 已完成：done_at 落在今天且属于 daily / time-limited
+    // 已完成项数：今日 done 的 daily / time-limited
     let finished: i64 = db.query_row(
         "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND track_status='done' \
-         AND COALESCE(count,1) <= 1 AND \
-         done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2 AND \
+         AND done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2 AND \
          (category='daily' OR category='time-limited')",
         params![day_start, day_end], |r| r.get(0)
     ).unwrap_or(0);
 
-    // 次数任务（如「喝水 8 次」）：按 done_count / count 计入，
-    // 未完成的全部计入，已完成的只算今天完成的（否则历史次数任务会天天累加）
+    // 次数任务（count>1 且 daily 类别）的累计 done_count / count，
+    // 单独返回给 widget 显示"4/8 50%"，不计入主进度条项数
     let count_done: i64 = db.query_row(
         "SELECT COALESCE(SUM(done_count),0) FROM tasks WHERE deleted=0 AND count > 1 \
          AND category='daily' AND \
@@ -470,10 +468,8 @@ fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
         params![day_start, day_end], |r| r.get(0)
     ).unwrap_or(0);
 
-    let total = pending + finished + count_total;
-    let mut done = finished + count_done;
-    let mut over = 0;
-    if done > total { over = done - total; done = total; }
+    let total = pending + finished;
+    let done = finished;
 
     let week: i64 = db.query_row(
         "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND done_at IS NOT NULL AND done_at >= ?1",
@@ -481,7 +477,10 @@ fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
     ).unwrap_or(0);
 
     let style = read_setting(&db, "progress_style", "bar");
-    serde_json::json!({ "done": done, "total": total, "over": over, "week": week, "style": style })
+    serde_json::json!({
+        "done": done, "total": total, "over": 0, "week": week, "style": style,
+        "count_done": count_done, "count_total": count_total
+    })
 }
 
 // 等级信息（等级卡 / 顶栏徽章数据源）
