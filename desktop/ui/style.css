@@ -153,50 +153,76 @@ body::after {
 
 /* 等级徽章 —— 黑金招牌（与手机端等级卡呼应：墨黑底+金边+金色文字，全 UI 唯一黑底元素） */
 .level-badge {
-  display: flex; align-items: center; gap: 7px;
-  background: linear-gradient(135deg, var(--ink-black-soft), var(--ink-black));
+  display: flex; align-items: center; gap: 8px;
+  background:
+    linear-gradient(135deg, rgba(31, 36, 48, 0.92), rgba(15, 18, 28, 0.95));
   border: 1px solid var(--gold);
-  border-radius: 18px;
-  padding: 4px 12px 4px 5px;
-  box-shadow: 0 0 10px var(--glow-gold), inset 0 0 0 1px rgba(230, 199, 122, 0.22);
+  border-radius: 22px;
+  padding: 3px 12px 3px 3px;
+  box-shadow: 0 0 10px var(--glow-gold), inset 0 0 0 1px rgba(230, 199, 122, 0.18);
   cursor: pointer;
-  transition: all .2s;
+  transition: all .25s;
   position: relative;
 }
-.level-badge:hover { box-shadow: 0 0 16px var(--glow-gold), 0 4px 12px rgba(22, 18, 12, 0.35); }
-.level-icon {
+.level-badge:hover { box-shadow: 0 0 16px var(--glow-gold), 0 4px 12px rgba(22, 18, 12, 0.35); transform: translateY(-1px); }
+/* v5.14h 勋章化：外圈 = 经验进度环（conic-gradient，JS 设 --ring-pct） */
+.avatar-ring {
+  position: relative;
+  width: 46px; height: 46px;
+  border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px;        /* v5.14g：28→34 头像再加大（boss 反馈"头像不出现"） */
+  background: conic-gradient(var(--gold-light) var(--ring-pct), rgba(255,255,255,0.14) 0);
+  flex-shrink: 0;
+}
+.avatar-ring::before {
+  content: "";
+  position: absolute; inset: 2px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #2A2418, #151210);
+}
+.level-icon {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;        /* v5.14g：28→34；v5.14h 环内 36 */
   --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
   background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
   color: var(--rank-ico);
-  border: 1px solid rgba(255, 244, 208, 0.35);
   border-radius: 50%;
-  font-size: 11px; font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-size: 12px; font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: all .2s;
-  position: relative;
+  z-index: 2;
 }
-/* v5.14g：头像右下角等级小角标（level-icon 兄弟元素，renderUserAvatar innerHTML 不清它） */
+/* v5.14g：头像右下角等级小角标（v5.14h 改为相对 avatar-ring 定位） */
 .lv-tag {
-  position: absolute; left: 25px; top: 21px;
-  min-width: 20px; height: 16px;
+  position: absolute; right: -5px; bottom: -2px;
+  min-width: 22px; height: 15px;
   padding: 0 4px;
   background: linear-gradient(160deg, #FFD97A, #C9A227);
   color: #1F1407;
-  font-size: 9px; font-weight: 800;
+  font-size: 8.5px; font-weight: 900;
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  border: 1.5px solid var(--ink-black);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  border: 1.5px solid #151210;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
   line-height: 1;
-  letter-spacing: 0;
   z-index: 3;
   pointer-events: none;
 }
 /* v5.14g：等级徽章双行文字 */
 .level-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; gap: 1px; }
 .level-sub { color: rgba(230, 199, 122, 0.55); font-size: 9.5px; font-weight: 400; letter-spacing: 0.3px; }
+
+/* v5.14h：右侧稀有度宝石（菱形，颜色随等级 1-10 档由 JS 设 --gem-color + 辉光） */
+.lv-gem {
+  width: 8px; height: 8px;
+  background: var(--gem-color, #C9A227);
+  transform: rotate(45deg);
+  border-radius: 1.5px;
+  box-shadow: 0 0 6px var(--gem-glow, rgba(201,162,39,0.8));
+  flex-shrink: 0;
+  margin-left: 2px;
+}
 /* v5.13j：10 档等级徽章分档配色（boss 反馈"太土/low" — 全部一个色太单调） */
 .level-icon.rank-lv1, .pc-level-icon.rank-lv1 { --rank-from: #F5DBA0; --rank-to: #C9A65A; }
 .level-icon.rank-lv2, .pc-level-icon.rank-lv2 { --rank-from: #EFCB7F; --rank-to: #B98F2E; }
@@ -341,6 +367,30 @@ body::after {
   letter-spacing: 0.5px;
 }
 .today-view-header .vh-add-btn:hover { box-shadow: 0 4px 14px var(--glow-gold); }
+
+/* v5.14h：dashboard greeting 头像（勋章风：金色描边+光晕，显示自定义头像/等级图标） */
+.dash-greet-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+  color: #1F1407;
+  font-size: 16px; font-weight: 800;
+  box-shadow:
+    0 0 0 2px rgba(255, 248, 225, 0.9),
+    0 0 0 4px var(--gold),
+    0 0 14px var(--glow-gold),
+    inset 0 1px 0 rgba(255,244,208,0.5);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all .2s;
+}
+.dash-greet-avatar:hover { transform: scale(1.06); box-shadow: 0 0 0 2px rgba(255,248,225,0.95), 0 0 0 4px var(--gold), 0 0 20px var(--glow-gold); }
+.dash-greet-avatar svg { width: 22px; height: 22px; }
+.dash-greet-sub { font-size: 11px; color: var(--ink-mute); margin-top: 2px; letter-spacing: 0.3px; }
 
 /* v5.14e：dashboard greeting 旁大头像（32×32） */
 .dash-greet-avatar {

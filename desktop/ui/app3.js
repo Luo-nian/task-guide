@@ -720,6 +720,15 @@ function renderDashboard() {
   if (h < 6) greet = '夜深了'; else if (h < 11) greet = '早上好'; else if (h < 14) greet = '中午好'; else if (h < 18) greet = '下午好'; else greet = '晚上好';
   const nick = settings.nickname || '历练者';
   document.getElementById('dashGreetText').textContent = greet + '，' + nick;
+  // v5.14h：greeting 副行 = 当前等级 + 距下一级（boss 反馈"夜深了 boss 旁也要有头像+信息"）
+  const dgSub = document.getElementById('dashGreetSub');
+  if (dgSub) {
+    const lv2 = level || levelOf(points);
+    const next2 = nextLevelOf(points);
+    dgSub.textContent = next2
+      ? (lv2 ? lv2.name : '') + ' · 距 ' + next2.name + ' 还差 ' + Math.max(0, next2.min - points) + ' 分'
+      : (lv2 ? lv2.name : '') + ' · 已至巅峰';
+  }
 
   // 等级卡
   renderLevelCard();
@@ -775,6 +784,25 @@ function renderLevelBadge() {
       const remain = Math.max(0, next.min - points);
       sub.textContent = (points > 0 ? points + ' 分' : '历练中') + ' · 距 ' + next.name + ' 差 ' + remain;
     }
+  }
+  // v5.14h：勋章进度环（距下级完成度）+ 稀有度宝石（随等级）
+  const ring = document.getElementById('avatarRing');
+  if (ring) {
+    const next = nextLevelOf(points);
+    let pct = 0;
+    if (next) pct = Math.max(0, Math.min(100, ((points - lv.min) / Math.max(1, next.min - lv.min)) * 100));
+    else pct = 100;
+    ring.style.setProperty('--ring-pct', pct + '%');
+  }
+  const gem = document.getElementById('lvGem');
+  if (gem) {
+    const gemPalette = [
+      '#B0A890', '#D8D2C0', '#C9A227', '#8CE0C8', '#5BA3D0',  // lv1-5：灰/银/金/青/蓝
+      '#B49BE0', '#E07BD0', '#FF8A5B', '#FFE68A', '#FFD97A'   // lv6-10：紫/粉/橙/亮金/炽金
+    ];
+    const c = gemPalette[(lv.lv || 1) - 1] || '#C9A227';
+    gem.style.setProperty('--gem-color', c);
+    gem.style.setProperty('--gem-glow', c + 'cc');
   }
 }
 function renderLevelCard() {

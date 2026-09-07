@@ -17,12 +17,15 @@
     </div>
     <div class="top-right" id="topRight">
       <div class="level-badge" id="levelBadge" title="点击查看 / 修改个人信息">
-        <span class="level-icon" id="levelIcon"></span>
-        <span class="lv-tag" id="lvTag">Lv4</span>
+        <span class="avatar-ring" id="avatarRing" style="--ring-pct:0%">
+          <span class="level-icon" id="levelIcon"></span>
+          <span class="lv-tag" id="lvTag">Lv4</span>
+        </span>
         <span class="level-meta">
           <span class="level-text" id="levelText">历练学徒</span>
           <span class="level-sub" id="levelSub">139 · 待升级</span>
         </span>
+        <span class="lv-gem" id="lvGem" title="等级稀有度"></span>
       </div>
       <button class="ico-btn" id="settingsBtn" title="设置" data-tauri-drag-region-exclude>
         <span class="ico-slot" data-icon="gear" data-icon-size="16" data-icon-sw="1.9"></span>
@@ -126,9 +129,10 @@
     <!-- 今日概览仪表盘（默认） -->
     <div class="dashboard-view" id="dashboardView">
       <div class="dash-greeting">
-        <div class="dash-greet-icon" data-icon="sparkle" data-icon-size="16"></div>
+        <div class="dash-greet-avatar" id="dashGreetGfx"></div>
         <div style="flex:1">
           <div class="dash-greet-text" id="dashGreetText">下午好，冒险者</div>
+          <div class="dash-greet-sub" id="dashGreetSub"></div>
         </div>
       </div>
 
