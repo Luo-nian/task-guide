@@ -11,6 +11,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalTextStyle
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +63,48 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(4.dp, 12.dp)
         )
+
+        // ===== v5.15：自定义头像 + 8 内置头像选择（本地 prefs avatar_emoji 持久化） =====
+        val ctx = LocalContext.current
+        val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
+        var avatarEmoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
+        val avatarPalette = listOf("#E8CB7F", "#D8B45A", "#C9A227", "#8CE0C8", "#5BA3D0", "#B49BE0", "#E07BD0", "#FF8A5B")
+        val avatarEmojis = listOf("🦊", "🐯", "🦉", "🐺", "🐼", "🦁", "🐲", "🦅")
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                .background(TGColors.Card)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 大头像（选中 emoji 或人形）
+            Box(
+                Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(if (avatarEmoji.isNotEmpty()) Color(0xFF1A1206) else TGColors.GoldLight)
+                    .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 24.sp)
+                else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 26.dp)
+            }
+            Spacer(Modifier.width(12.dp))
+            // 8 内置头像网格（横向）
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(avatarEmojis) { i, e ->
+                    val bg = avatarPalette[i % avatarPalette.size]
+                    Box(
+                        Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(android.graphics.Color.parseColor(bg)))
+                            .border(if (e == avatarEmoji) 2.dp else 0.dp, TGColors.Ink, androidx.compose.foundation.shape.CircleShape)
+                            .clickable {
+                                avatarEmoji = e
+                                prefs.edit().putString("avatar_emoji", e).apply()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) { Text(e, fontSize = 17.sp) }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
 
         // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====
         val gloss = 0.30f + (level.lv - 1) * 0.06f   // 镜面光泽强度随等级（克制，不挡字）

@@ -1138,6 +1138,17 @@ private fun barWithTitle(title: String, navController: NavController, showBack: 
 /** 人物边框头像（克制：圆形卡色底 + 金边 + 墨色人形），点开进入我的 */
 @Composable
 fun AvatarFrame(onClick: () -> Unit) {
+    // v5.15：自定义 emoji 头像（taskguide_prefs avatar_emoji）—— 注册 prefs 监听，profile 改动后即时刷新
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
+    var emoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "avatar_emoji" || key == null) emoji = sp.getString("avatar_emoji", "") ?: ""
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     PressIcon(onClick = onClick) {
         Box(
             Modifier
@@ -1147,12 +1158,16 @@ fun AvatarFrame(onClick: () -> Unit) {
                 .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            TGIcon(
-                drawable = R.drawable.ic_avatar,
-                contentDescription = "我的",
-                tint = TGColors.Ink,
-                size = 20.dp
-            )
+            if (emoji.isNotEmpty()) {
+                Text(emoji, fontSize = 16.sp)
+            } else {
+                TGIcon(
+                    drawable = R.drawable.ic_avatar,
+                    contentDescription = "我的",
+                    tint = TGColors.Ink,
+                    size = 20.dp
+                )
+            }
         }
     }
 }
