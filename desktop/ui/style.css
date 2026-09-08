@@ -170,22 +170,71 @@ body::after {
 .level-text { color: var(--gold-light); font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
 .level-sub { color: rgba(230, 199, 122, 0.55); font-size: 9.5px; font-weight: 400; letter-spacing: 0.3px; }
 /* v5.13j：10 档等级徽章分档配色（boss 反馈"太土/low" — 全部一个色太单调） */
-.level-icon.rank-lv1, .pc-level-icon.rank-lv1 { --rank-from: #F5DBA0; --rank-to: #C9A65A; }
-.level-icon.rank-lv2, .pc-level-icon.rank-lv2 { --rank-from: #EFCB7F; --rank-to: #B98F2E; }
-.level-icon.rank-lv3, .pc-level-icon.rank-lv3 { --rank-from: #E8CB7F; --rank-to: #8A6A1C; }
-.level-icon.rank-lv4, .pc-level-icon.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; --rank-ico: #1F1407; }
-.level-icon.rank-lv5, .pc-level-icon.rank-lv5 { --rank-from: #B98F2E; --rank-to: #4A3712; --rank-ico: #FFF4D0;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.3), 0 0 8px rgba(216,180,90,0.4), 0 1px 2px rgba(0,0,0,0.25); }
-.level-icon.rank-lv6, .pc-level-icon.rank-lv6 { --rank-from: #6B4E1B; --rank-to: #2C1E0A; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.25), 0 0 10px rgba(216,180,90,0.5), 0 1px 3px rgba(0,0,0,0.4); }
-.level-icon.rank-lv7, .pc-level-icon.rank-lv7 { --rank-from: #3D2A0E; --rank-to: #1A1208; --rank-ico: #E8CB7F;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.15), 0 0 12px rgba(216,180,90,0.55), 0 2px 4px rgba(0,0,0,0.5); border-color: rgba(216,180,90,0.4); }
-.level-icon.rank-lv8, .pc-level-icon.rank-lv8 { --rank-from: #2C1E0A; --rank-to: #0A0518; --rank-ico: #E8CB7F;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.2), 0 0 14px rgba(216,180,90,0.6), 0 2px 5px rgba(0,0,0,0.55); border-color: rgba(216,180,90,0.5); }
-.level-icon.rank-lv9, .pc-level-icon.rank-lv9 { --rank-from: #1A0F2E; --rank-to: #0A0518; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,220,140,0.25), 0 0 18px rgba(216,180,90,0.5), 0 2px 6px rgba(0,0,0,0.6); border-color: rgba(216,180,90,0.55); }
-.level-icon.rank-lv10, .pc-level-icon.rank-lv10 { --rank-from: #0A0518; --rank-to: #000; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,220,140,0.3), 0 0 22px rgba(255,220,140,0.6), 0 3px 8px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
+/* ===== v5.14h.5 等级徽章 v3（混搭：Lv1-4 黑金曜石 / Lv5-8 珐琅蓝金 / Lv9-10 鎏金透光）===== */
+/* 通用：图标 + 徽章环整合（外发光 + 内部双金圈 + 光扫），等级不同底色/氛围 */
+.level-icon.rank-lv1, .pc-level-icon.rank-lv1,
+.level-character.rank-lv1 {
+  --ico: #C6B28C; background: radial-gradient(circle at 34% 26%, #4A3B1D, #241B0B 55%, #0C0A06);
+  border: 1px solid #6B5A30; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #0C0A06, inset 0 0 0 3px #6B5A30, 0 0 6px rgba(107,90,48,.55), inset 0 1px 1px rgba(255,255,255,.10);
+}
+.level-icon.rank-lv2, .pc-level-icon.rank-lv2,
+.level-character.rank-lv2 {
+  --ico: #D6C39A; background: radial-gradient(circle at 34% 26%, #5A4620, #2C2010 55%, #14100A);
+  border: 1px solid #8A733C; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #14100A, inset 0 0 0 3px #8A733C, 0 0 8px rgba(138,115,60,.65), inset 0 1px 1px rgba(255,255,255,.12);
+}
+.level-icon.rank-lv3, .pc-level-icon.rank-lv3,
+.level-character.rank-lv3 {
+  --ico: #E8CB7F; background: radial-gradient(circle at 34% 26%, #6B5220, #35260F 55%, #17120A);
+  border: 1px solid #B98F2E; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #17120A, inset 0 0 0 3px #B98F2E, 0 0 10px rgba(185,143,46,.7), inset 0 1px 1px rgba(255,255,255,.14);
+}
+.level-icon.rank-lv4, .pc-level-icon.rank-lv4,
+.level-character.rank-lv4 {
+  --ico: #F5DBA0; background: radial-gradient(circle at 34% 26%, #8A6A20, #3E2D0E 55%, #1A1408);
+  border: 1px solid #D8B45A; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #1A1408, inset 0 0 0 3px #D8B45A, 0 0 12px rgba(216,180,90,.8), inset 0 1px 1px rgba(255,255,255,.16);
+}
+/* Lv5-8：珐琅蓝金（撞色醒目） */
+.level-icon.rank-lv5, .pc-level-icon.rank-lv5,
+.level-character.rank-lv5 {
+  --ico: #FFF3D0; background: radial-gradient(circle at 34% 26%, #9BD0EE, #3E6B96 48%, #16304A 100%);
+  border: 1px solid #E8CB7F; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #0E1A26, inset 0 0 0 3px #C9A227, 0 0 14px rgba(201,162,39,.75), 0 0 6px rgba(63,131,178,.5), inset 0 1px 1px rgba(255,255,255,.22);
+}
+.level-icon.rank-lv6, .pc-level-icon.rank-lv6,
+.level-character.rank-lv6 {
+  --ico: #F5FFE3; background: radial-gradient(circle at 34% 26%, #7BC0E8, #2F5A8C 48%, #0F2440 100%);
+  border: 1px solid #E8CB7F; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #0C1824, inset 0 0 0 3px #D8B45A, 0 0 16px rgba(216,180,90,.85), 0 0 8px rgba(63,131,178,.6), inset 0 1px 1px rgba(255,255,255,.24);
+}
+.level-icon.rank-lv7, .pc-level-icon.rank-lv7,
+.level-character.rank-lv7 {
+  --ico: #FFF0D8; background: radial-gradient(circle at 34% 26%, #6FA8E8, #2A4A8A 48%, #0E1A38 100%);
+  border: 1px solid #EED488; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #0A1424, inset 0 0 0 3px #EED488, 0 0 18px rgba(238,212,136,.9), 0 0 10px rgba(70,120,200,.7), inset 0 1px 1px rgba(255,255,255,.26);
+}
+.level-icon.rank-lv8, .pc-level-icon.rank-lv8,
+.level-character.rank-lv8 {
+  --ico: #FFF6E2; background: radial-gradient(circle at 34% 26%, #5A96E0, #203A70 48%, #0A1228 100%);
+  border: 1px solid #F0D890; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #060C18, inset 0 0 0 3px #F0D890, 0 0 22px rgba(240,216,144,1), 0 0 14px rgba(90,150,224,.8), inset 0 1px 1px rgba(255,255,255,.3);
+}
+/* Lv9-10：鎏金透光（顶奢亮金） */
+.level-icon.rank-lv9, .pc-level-icon.rank-lv9,
+.level-character.rank-lv9 {
+  --ico: #3A2405; background: radial-gradient(circle at 40% 30%, #FFF8E2, #EED488 42%, #B97A14 100%);
+  border: 1px solid #FFF8E2; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #FFF8E2, inset 0 0 0 4px #8A5A12, 0 0 24px rgba(238,212,136,.95), inset 0 2px 6px rgba(255,255,255,.75), 0 2px 6px rgba(0,0,0,.25);
+}
+.level-icon.rank-lv10, .pc-level-icon.rank-lv10,
+.level-character.rank-lv10 {
+  --ico: #3A2405; background: radial-gradient(circle at 42% 28%, #FFFFFF, #F6DFA0 36%, #E0A32A 72%, #9A6410 100%);
+  border: 1px solid #FFFDF4; color: var(--ico);
+  box-shadow: inset 0 0 0 2px #FFFDF4, inset 0 0 0 4px #A8711A, 0 0 30px rgba(246,223,160,1), 0 0 14px rgba(255,255,255,.8), inset 0 2px 8px rgba(255,255,255,.85), 0 2px 8px rgba(0,0,0,.3);
+}
+.level-icon svg, .level-character svg { filter: drop-shadow(0 1px 1px rgba(0,0,0,.55)); position: relative; z-index: 1; }
 .level-text { color: var(--gold-light); font-size: 11.5px; font-weight: 600; letter-spacing: 0.5px; }
 .level-text small { color: rgba(230, 199, 122, 0.6); font-size: 10px; margin-left: 3px; font-weight: 400; }
 
@@ -891,21 +940,6 @@ body::after {
   box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.4), 0 4px 10px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 244, 208, 0.35);
   flex: 0 0 52px;
-}
-/* v5.13j：level-character 10 档分档 */
-.level-character.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; }
-.level-character.rank-lv5 { --rank-from: #B98F2E; --rank-to: #4A3712; --rank-ico: #FFF4D0;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.3), 0 0 14px rgba(216,180,90,0.5), 0 4px 12px rgba(0,0,0,0.3); }
-.level-character.rank-lv6 { --rank-from: #6B4E1B; --rank-to: #2C1E0A; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.25), 0 0 16px rgba(216,180,90,0.55), 0 4px 14px rgba(0,0,0,0.4); border-color: rgba(216,180,90,0.4); }
-.level-character.rank-lv7 { --rank-from: #3D2A0E; --rank-to: #1A1208; --rank-ico: #E8CB7F;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.18), 0 0 18px rgba(216,180,90,0.6), 0 4px 14px rgba(0,0,0,0.5); border-color: rgba(216,180,90,0.4); }
-.level-character.rank-lv8 { --rank-from: #2C1E0A; --rank-to: #0A0518; --rank-ico: #E8CB7F;
-  box-shadow: inset 0 1px 0 rgba(255,244,208,0.22), 0 0 20px rgba(216,180,90,0.65), 0 5px 14px rgba(0,0,0,0.55); border-color: rgba(216,180,90,0.5); }
-.level-character.rank-lv9 { --rank-from: #1A0F2E; --rank-to: #0A0518; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,220,140,0.25), 0 0 22px rgba(216,180,90,0.55), 0 5px 16px rgba(0,0,0,0.6); border-color: rgba(216,180,90,0.6); }
-.level-character.rank-lv10 { --rank-from: #0A0518; --rank-to: #000; --rank-ico: #FFE68A;
-  box-shadow: inset 0 1px 0 rgba(255,220,140,0.32), 0 0 26px rgba(255,220,140,0.65), 0 5px 18px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
 }
 .level-info { flex: 1; min-width: 0; }
 .level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }  /* 深字，浅底上清晰 */
