@@ -102,8 +102,8 @@ const ICONS = {
   lv3: '<path d="m11 19l-6-6m0 8l-2-2m5-3l-4 4m5.5-2.5L20.414 6.586A2 2 0 0 0 21 5.172V3h-2.172a2 2 0 0 0-1.414.586L6.5 14.5"/>',
   // lv4 群星行者：星光闪耀（进阶星光）
   lv4: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594zM20 2v4m2-2h-4"/><circle cx="4" cy="20" r="2"/>',
-  // lv5 传奇勇者：双剑交叉（传奇战力）
-  lv5: '<path d="m13 19l6-6m-4.5 4.5L3.586 6.586A2 2 0 0 1 3 5.172V3h2.172a2 2 0 0 1 1.414.586L17.5 14.5m-2.672-8.328l2.586-2.586A2 2 0 0 1 18.828 3H21v2.172a2 2 0 0 1-.586 1.414l-2.586 2.586M16 16l4 4m-1 1l2-2M5 14l4 4m-4 3l-2-2m4.5-2.5L4 20"/>',
+  // v5.14h.4：传奇勇者 — 皇冠（语义化：传奇 = 登顶王者；旧版双剑交叉 path 复杂在 24×24 stroke 渲染成断笔）
+  lv5: '<path d="M3 7l4 6 5-8 5 8 4-6-1.4 10.4a1 1 0 0 1-1 .8H5.4a1 1 0 0 1-1-.8L3 7z"/><path d="M3.5 18.5h17"/>',
   // lv6 苍穹守护者：盾（守护）
   lv6: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   // lv7 深渊征服者：烈焰（征服之力）
@@ -975,9 +975,16 @@ window.completeTask = async function(uuid) {
   const title = before ? before.title : '';
   const basePoints = (before && before.reward_points) || 0;
   const r = await call('complete_task', { taskUuid: uuid });
-  closeDetail();
+  // v5.14h.4：次数任务未满（partial=true）→ 不关详情页（boss：用户可能一次点多次完成，要能连续点）
+  const isPartial = r && r.partial === true && r.done_count !== undefined && r.count && r.done_count < r.count;
+  if (!isPartial) closeDetail();
   // 刷新主面板（积分/进度/列表）
   await render();
+  if (isPartial) {
+    // 刷新详情页显示新 done_count / 进度（仍停留在详情页可继续点完成）
+    openDetail(uuid);
+    return;
+  }
   // v5.12 P0：今日已打卡（already_done=true，防刷分）→ 不弹奖励、不写今日奖励
   if (r && r.already_done) {
     showToast('今日已完成 ✓');
@@ -995,10 +1002,6 @@ window.completeTask = async function(uuid) {
       list.push({ title, points: habitPts, at: Date.now() });
       sessionStorage.setItem(key, JSON.stringify(list));
     } catch(e) {}
-  }
-  // partial 路径（次数任务累计中）：不弹窗打断节奏，仅在控制台
-  else if (r && r.partial === true && r.done_count !== undefined) {
-    console.log('[progress]', r.done_count + '/' + r.count);
   }
 };
 function showBless(opts) {
