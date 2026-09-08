@@ -117,6 +117,7 @@ fun MainApp() {
                     Modifier
                         .fillMaxWidth()
                         .height(58.dp)
+                        .graphicsLayer { clip = false }  // 关键：v5.15.5 让凸起圆 + badge 30dp 完全突出 58dp 边界外
                         .background(TGColors.PanelSolid)
                 ) {
                     // 顶部分隔细线（设计感细节）
@@ -127,7 +128,7 @@ fun MainApp() {
                             .background(TGColors.BorderSoft)
                             .align(Alignment.TopCenter)
                     )
-                    // 凸起圆形按钮（用 Box.align 浮在导航栏上方）
+                    // 凸起圆形按钮（v5.15.5：clip(CircleShape) 仅裁 background；badge 在外层 Box）
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -172,24 +173,25 @@ fun MainApp() {
                         } else {
                             TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = Color.White, size = 24.dp)
                         }
-                        // v5.15.5：追踪数 pill 角标（凸起钮顶部，22dp 圆+11sp 数字确保不裁切）
-                        if (!isOnTrack && trackingCount.size > 0) {
-                            Box(
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(22.dp)
-                                    .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(TGColors.Crimson)
-                                    .border(1.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
+                    }
+                    // v5.15.5：追踪数 pill 角标 — 移到凸起圆外层 Box（避开 56dp 凸起圆 clip 裁切）
+                    if (!isOnTrack && trackingCount.size > 0) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(x = 24.dp, y = 0.dp)  // 凸起圆中心 540 → badge 居中靠右 24dp（30dp 圆露出 4dp 在圆右上）
+                                .size(30.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(TGColors.Crimson)
+                                .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black
+                            )
                         }
                     }
                 }
