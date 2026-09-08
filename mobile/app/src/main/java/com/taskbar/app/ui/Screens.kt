@@ -178,9 +178,9 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 }
 
 /** 习惯行：完成=今日打卡（卡片沉底显示"今日已完成"，明天自动重新出现） */
+// v5.15.2：streak 由父级聚合 Map 传入（原函数内每行 remember{vm.observeHabitStreak} 独立 Flow → 卡顿）
 @Composable
-private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean) {
-    val streak by remember(task.uuid) { vm.observeHabitStreak(task.uuid) }.collectAsState()
+private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0) {
     val bg = if (checkedToday) TGColors.Jade.copy(alpha = 0.10f) else TGColors.Card
     Row(
         Modifier
