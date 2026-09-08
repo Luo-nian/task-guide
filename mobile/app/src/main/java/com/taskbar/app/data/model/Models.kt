@@ -212,23 +212,65 @@ object Levels {
         onDeep = androidx.compose.ui.graphics.Color(0xFFFFF7E2),
         onDeepSoft = androidx.compose.ui.graphics.Color(0xFFD9C492)
     )
+    // v5.15.4：Lv6-10（对齐桌面 10 级曲线：苍穹/深渊/星辰/天命/寰宇）
+    private val P6 = LevelPalette(  // Lv6 苍穹守护者：苍青金（天蓝调深咖底）
+        metal = androidx.compose.ui.graphics.Color(0xFF7FB4C8),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFC9E8F2),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF0E1A20),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFE9F3F6),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFF9FBCC6)
+    )
+    private val P7 = LevelPalette(  // Lv7 深渊征服者：暗紫金（深海调）
+        metal = androidx.compose.ui.graphics.Color(0xFF9B8BD0),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFD5CCF2),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF160F24),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFF0ECFA),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFB4A8D6)
+    )
+    private val P8 = LevelPalette(  // Lv8 星辰霸主：星蓝紫（深空调）
+        metal = androidx.compose.ui.graphics.Color(0xFF6E9BD9),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFB8D6F5),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF0A1128),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFE8F0FB),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFF9FB4D9)
+    )
+    private val P9 = LevelPalette(  // Lv9 天命传奇：鎏金赤（炽焰调）
+        metal = androidx.compose.ui.graphics.Color(0xFFE8A45C),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFFFD9A8),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF260F05),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF4E8),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFD9B694)
+    )
+    private val P10 = LevelPalette( // Lv10 寰宇传说：彩金（顶级渐变炫光）
+        metal = androidx.compose.ui.graphics.Color(0xFFF0C97A),
+        metalLight = androidx.compose.ui.graphics.Color(0xFFFFF0C0),
+        bgDeep = androidx.compose.ui.graphics.Color(0xFF1A1000),
+        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF8E8),
+        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFE0C890)
+    )
 
+    // v5.15.4：10 级曲线与桌面 LEVELS 完全对齐（历练学徒 0 / … / 寰宇传说 3200）
     private val LEVELS = listOf(
-        LevelInfo(1, "历练学徒", "敢开始，就已经赢了一半", 0, 20, 0f, 0, P1),
-        LevelInfo(2, "风华游侠", "汗水从不会辜负你", 20, 60, 0f, 0, P2),
-        LevelInfo(3, "破浪骑士", "风浪越大，越显本色", 60, 120, 0f, 0, P3),
-        LevelInfo(4, "群星行者", "你走过的每一步都算数", 120, 200, 0f, 0, P4),
-        LevelInfo(5, "传奇勇者", "你就是自己的传说", 200, 999, 0f, 0, P5)
+        LevelInfo(1, "历练学徒", "敢开始，就已经赢了一半", 0, 50, 0f, 0, P1),
+        LevelInfo(2, "风华游侠", "汗水从不会辜负你", 50, 130, 0f, 0, P2),
+        LevelInfo(3, "破浪骑士", "风浪越大，越显本色", 130, 250, 0f, 0, P3),
+        LevelInfo(4, "群星行者", "你走过的每一步都算数", 250, 420, 0f, 0, P4),
+        LevelInfo(5, "传奇勇者", "你就是自己的传说", 420, 660, 0f, 0, P5),
+        LevelInfo(6, "苍穹守护者", "天穹之下皆为你我守护", 660, 1000, 0f, 0, P6),
+        LevelInfo(7, "深渊征服者", "深渊在凝视，而你在前进", 1000, 1500, 0f, 0, P7),
+        LevelInfo(8, "星辰霸主", "群星都将为你让路", 1500, 2200, 0f, 0, P8),
+        LevelInfo(9, "天命传奇", "传说，由你亲手书写", 2200, 3200, 0f, 0, P9),
+        LevelInfo(10, "寰宇传说", "整个宇宙，都是你的传说", 3200, 999999, 0f, 0, P10)
     )
 
     /** 按积分算当前等级。
-     *  进度条 = 总积分在本级上限中的占比（30 分时 Lv2 上限 60 → 50%），与 UI 的 "30 / 60" 文本一致。 */
+     *  进度 = 本级内完成度（(points-min)/(max-min)），与 UI 的 "X 分 / 距下一级差 Y" 文本一致 */
     fun of(points: Int): LevelInfo {
         var cur = LEVELS[0]
         for (lv in LEVELS) if (points >= lv.min) cur = lv
         val isMax = cur == LEVELS.last()
-        val p = (points.toFloat() / cur.max).coerceIn(0f, 1f)
-        // 最高级没有"下一级"，toNext=0（UI 显示"已是最高等级"）
+        val range = (cur.max - cur.min).coerceAtLeast(1)
+        val p = ((points - cur.min).toFloat() / range).coerceIn(0f, 1f)
         val toNext = if (isMax) 0 else (cur.max - points).coerceAtLeast(0)
         return cur.copy(progress = p, toNext = toNext)
     }

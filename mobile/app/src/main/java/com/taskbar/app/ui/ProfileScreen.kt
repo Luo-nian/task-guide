@@ -163,10 +163,51 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             }
             // 内容层：文字用深咖（金底上比白字更贵气）+ 阴影托底
             Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                // v5.15.4：勋章进度环（对齐桌面 v5.14h conic ring）—— 外圈 Canvas 画进度弧 + 中央等级数字
+                val metal = level.palette.metal
+                val metalLight = level.palette.metalLight
+                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val stroke = 4.dp.toPx()
+                        val inset = stroke / 2
+                        val arcSize = Size(size.width - stroke, size.height - stroke)
+                        // 底环（暗）
+                        drawArc(
+                            color = Color.White.copy(alpha = 0.14f),
+                            startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                            topLeft = Offset(inset, inset), size = arcSize,
+                            style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        )
+                        // 进度弧（palette 金属色，本级完成度）
+                        drawArc(
+                            color = metalLight,
+                            startAngle = -90f,
+                            sweepAngle = 360f * level.progress.coerceIn(0f, 1f),
+                            useCenter = false,
+                            topLeft = Offset(inset, inset), size = arcSize,
+                            style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        )
+                    }
+                    // 中央：等级菱形徽标（旋转 45° 方块，金属高光；文字反向转正）
+                    Box(
+                        Modifier
+                            .size(34.dp)
+                            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(metalLight, metal)))
+                            .graphicsLayer { rotationZ = 45f },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "${level.lv}",
+                            color = androidx.compose.ui.graphics.Color(0xFF1F1407),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.graphicsLayer { rotationZ = -45f }
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(2.dp)).graphicsLayer { rotationZ = 45f })
-                        Spacer(Modifier.width(8.dp))
                         Text(
                             "Lv.${level.lv} · ${level.name}",
                             color = Color.White,
@@ -180,7 +221,7 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     Text(level.title, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Spacer(Modifier.height(9.dp))
                     Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
-                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF2A1D08), Color(0xFF8A6A20)))))
+                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(metal, metalLight))))
                     }
                 }
                 Spacer(Modifier.width(14.dp))
