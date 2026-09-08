@@ -56,6 +56,11 @@
             android:name=".notify.ReminderActionReceiver"
             android:exported="false" />
 
+        <!-- v5.15.3：起床/睡前每日提醒 -->
+        <receiver
+            android:name=".notify.DailyReminderReceiver"
+            android:exported="false" />
+
         <!-- 开机自启：恢复提醒调度 + 启动同步服务 -->
         <receiver
             android:name=".notify.BootReceiver"

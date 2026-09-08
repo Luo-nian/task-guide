@@ -99,7 +99,7 @@ object NotificationHelper {
         }
     }
 
-    private fun getVibratePatternSetting(context: Context): String {
+    fun getVibratePatternSetting(context: Context): String {
         val prefs = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
         return prefs.getString("reminder_vibrate_pattern", DEFAULT_VIBRATE_PATTERN) ?: DEFAULT_VIBRATE_PATTERN
     }
@@ -254,7 +254,7 @@ object NotificationHelper {
      * 真振动：用系统 Vibrator 服务触发（不依赖通知通道）
      * 解析 "0,300,200,300" 格式的振动模式 → 实际振动
      */
-    private fun triggerVibrate(context: Context, pattern: String) {
+    fun triggerVibrate(context: Context, pattern: String) {   // v5.15.3：公开（每日提醒也用它）
         val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
             vibratorManager?.defaultVibrator

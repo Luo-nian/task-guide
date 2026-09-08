@@ -2,6 +2,7 @@ package com.taskbar.app.ui
 
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,6 +33,7 @@ import com.taskbar.app.R
 import com.taskbar.app.TaskBarApp
 import com.taskbar.app.data.model.Levels
 import com.taskbar.app.data.model.ReminderStrength
+import com.taskbar.app.notify.DailyReminderScheduler
 import com.taskbar.app.server.SyncService
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +64,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
 
     // ====== 提醒方式（共享 prefs 直读直写；四通道多选 + 端选择 + 升级） ======
     val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
+    // v5.15.3：起床/睡前时间选择对话框状态
+    var showMorningPicker by remember { mutableStateOf(false) }
+    var showNightPicker by remember { mutableStateOf(false) }
     // 多选通道（通知栏/振动/提示音/铃声） + 端选择（不提醒/仅手机/仅电脑/双端）
     var channels by remember { mutableStateOf(listOf<String>()) }
     var reminderScope by remember { mutableStateOf(ReminderStrength.SCOPE_MOBILE) }
@@ -353,6 +358,70 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
+        // v5.15.3：起床/睡前每日提醒（AlarmManager 每日定时，TaskBarApp prefs 持久化）
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("每日提醒", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Text("按设定时间每天提醒一次，帮你规律作息", color = TGColors.InkMute, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            // 起床
+            val morningOn = prefs.getBoolean("daily_morning_on", false)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("☀ 起床", color = TGColors.GoldDeep, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(
+                    String.format("%02d:%02d", prefs.getInt("daily_morning_h", 7), prefs.getInt("daily_morning_m", 30)),
+                    color = TGColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(6.dp))
+                Switch(
+                    checked = morningOn,
+                    onCheckedChange = { on ->
+                        prefs.edit().putBoolean("daily_morning_on", on).apply()
+                        if (on) {
+                            DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_MORNING,
+                                prefs.getInt("daily_morning_h", 7), prefs.getInt("daily_morning_m", 30), "早上好")
+                        } else {
+                            DailyReminderScheduler.cancel(ctx, DailyReminderScheduler.REQUEST_MORNING)
+                        }
+                        showMorningPicker = on  // 打开时展开时间选择
+                        if (on) { /* 时间默认已在行内显示，点时间文字改 */ }
+                    },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TGColors.Gold)
+                )
+            }
+            if (morningOn) {
+                TextButton(onClick = { showMorningPicker = true }) { Text("修改起床时间", color = TGColors.GoldDeep, fontSize = 12.sp) }
+            }
+            // 睡前
+            Spacer(Modifier.height(4.dp))
+            val nightOn = prefs.getBoolean("daily_night_on", false)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("☾ 睡前", color = TGColors.Azure, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(
+                    String.format("%02d:%02d", prefs.getInt("daily_night_h", 22), prefs.getInt("daily_night_m", 30)),
+                    color = TGColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(6.dp))
+                Switch(
+                    checked = nightOn,
+                    onCheckedChange = { on ->
+                        prefs.edit().putBoolean("daily_night_on", on).apply()
+                        if (on) {
+                            DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_NIGHT,
+                                prefs.getInt("daily_night_h", 22), prefs.getInt("daily_night_m", 30), "夜深了")
+                        } else {
+                            DailyReminderScheduler.cancel(ctx, DailyReminderScheduler.REQUEST_NIGHT)
+                        }
+                    },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TGColors.Gold)
+                )
+            }
+            if (nightOn) {
+                TextButton(onClick = { showNightPicker = true }) { Text("修改睡前时间", color = TGColors.Azure, fontSize = 12.sp) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 后台保活引导（iQOO/小米等 ROM 会冻结后台 → 桌面连不上，引导用户放行）
         TGCard(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -363,9 +432,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     Text("在系统设置里允许本应用后台运行 + 自启动", color = TGColors.InkMute, fontSize = 11.sp)
                 }
                 // v5.15：跳系统电池优化设置页
+                val ctx = LocalContext.current
                 TextButton(onClick = {
                     try {
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                             data = Uri.parse("package:${ctx.packageName}")
                         }
@@ -400,7 +469,60 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
             Text("备份文件保存在应用私有目录，可通过文件管理器查看", color = TGColors.InkMute, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
+
+        // v5.15.3：起床/睡前时间选择对话框
+        if (showMorningPicker) {
+            TimePickDialog(
+                initialHour = prefs.getInt("daily_morning_h", 7),
+                initialMinute = prefs.getInt("daily_morning_m", 30),
+                title = "起床提醒时间",
+                onDismiss = { showMorningPicker = false },
+                onConfirm = { h, m ->
+                    prefs.edit().putInt("daily_morning_h", h).putInt("daily_morning_m", m).apply()
+                    if (prefs.getBoolean("daily_morning_on", false)) {
+                        DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_MORNING, h, m, "早上好")
+                    }
+                    showMorningPicker = false
+                }
+            )
+        }
+        if (showNightPicker) {
+            TimePickDialog(
+                initialHour = prefs.getInt("daily_night_h", 22),
+                initialMinute = prefs.getInt("daily_night_m", 30),
+                title = "睡前提醒时间",
+                onDismiss = { showNightPicker = false },
+                onConfirm = { h, m ->
+                    prefs.edit().putInt("daily_night_h", h).putInt("daily_night_m", m).apply()
+                    if (prefs.getBoolean("daily_night_on", false)) {
+                        DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_NIGHT, h, m, "夜深了")
+                    }
+                    showNightPicker = false
+                }
+            )
+        }
     }
+}
+
+/** v5.15.3：时间选择对话框（Material3 TimePicker） */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickDialog(
+    initialHour: Int, initialMinute: Int, title: String,
+    onDismiss: () -> Unit, onConfirm: (Int, Int) -> Unit
+) {
+    val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = TGColors.Ink, fontWeight = FontWeight.Medium) },
+        text = { TimePicker(state = state) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
+                Text("确定", color = TGColors.GoldDeep, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = TGColors.InkMute) } }
+    )
 }
 
 private suspend fun exportJson(ctx: android.content.Context): String {

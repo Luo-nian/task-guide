@@ -205,5 +205,7 @@ class BootReceiver : BroadcastReceiver() {
         ioScope.launch {
             ReminderScheduler.rescheduleAll(app.repo, context)
         }
+        // v5.15.3：恢复起床/睡前每日提醒
+        DailyReminderScheduler.restoreAll(context)
     }
 }
