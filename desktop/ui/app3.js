@@ -718,16 +718,19 @@ function renderDashboard() {
   const h = new Date().getHours();
   let greet = '夜深了';
   if (h < 6) greet = '夜深了'; else if (h < 11) greet = '早上好'; else if (h < 14) greet = '中午好'; else if (h < 18) greet = '下午好'; else greet = '晚上好';
-  const nick = settings.nickname || '历练者';
+  const nick = settings.nickname || 'boss';
   document.getElementById('dashGreetText').textContent = greet + '，' + nick;
-  // v5.14h：greeting 副行 = 当前等级 + 距下一级（boss 反馈"夜深了 boss 旁也要有头像+信息"）
-  const dgSub = document.getElementById('dashGreetSub');
-  if (dgSub) {
-    const lv2 = level || levelOf(points);
-    const next2 = nextLevelOf(points);
-    dgSub.textContent = next2
-      ? (lv2 ? lv2.name : '') + ' · 距 ' + next2.name + ' 还差 ' + Math.max(0, next2.min - points) + ' 分'
-      : (lv2 ? lv2.name : '') + ' · 已至巅峰';
+  // v5.14h.1：完整身份卡副行 = 等级名 + 当前积分 + 距下一级
+  const lv2 = level || levelOf(points);
+  const next2 = nextLevelOf(points);
+  const greetName = document.getElementById('dashGreetName');
+  const greetPoints = document.getElementById('dashGreetPoints');
+  const greetRemain = document.getElementById('dashGreetRemain');
+  if (greetName) greetName.textContent = lv2 ? lv2.name : '历练学徒';
+  if (greetPoints) greetPoints.textContent = points + ' 分';
+  if (greetRemain) {
+    if (next2) greetRemain.textContent = '距 ' + next2.name + ' 还差 ' + Math.max(0, next2.min - points) + ' 分';
+    else greetRemain.textContent = '已至巅峰';
   }
 
   // 等级卡
@@ -759,51 +762,30 @@ function renderDashboard() {
 
 function renderLevelBadge() {
   const lv = level || levelOf(points);
-  // boss E：顶栏徽章左侧 .level-icon 优先显示用户头像（settings.avatar_img / avatar_idx），
-  // 没有头像则降级显示等级 SVG 图标
-  // v5.13k：走 renderUserAvatar() 统一三处逻辑（顶栏/下午好/profile）
-  const ic = document.getElementById('levelIcon');
-  const rankCls = 'rank-lv' + (lv.lv || 1);
-  if (settings.avatar_img) {
-    // 自定义头像时不分档
-    ic.className = 'level-icon';
-  } else {
-    ic.className = 'level-icon ' + rankCls;
-  }
-  // 头像渲染（avatar_img / lucide idx / 等级图标）三档都在 renderUserAvatar 里
-  renderUserAvatar();
-  document.getElementById('levelText').textContent = lv.name;
-  // v5.14g：右下角 Lv 角标 + 双行副文字
-  const tag = document.getElementById('lvTag');
-  if (tag) tag.textContent = 'Lv' + (lv.lv || 1);
-  const sub = document.getElementById('levelSub');
-  if (sub) {
-    const next = nextLevelOf(points);
-    if (!next) sub.textContent = points + ' 分 · 已至巅峰';
-    else {
-      const remain = Math.max(0, next.min - points);
-      sub.textContent = (points > 0 ? points + ' 分' : '历练中') + ' · 距 ' + next.name + ' 差 ' + remain;
-    }
-  }
-  // v5.14h：勋章进度环（距下级完成度）+ 稀有度宝石（随等级）
-  const ring = document.getElementById('avatarRing');
-  if (ring) {
+  // v5.14h.1：顶栏元素已删除（身份卡整张搬到 dashboard greeting）
+  // v5.14h.1：勋章 v2 搬到 dashboard 旁头像 — 进度环 / Lv 角标 / 稀有度宝石
+  const ringEl = document.getElementById('dashGreetRing');
+  if (ringEl) {
     const next = nextLevelOf(points);
     let pct = 0;
     if (next) pct = Math.max(0, Math.min(100, ((points - lv.min) / Math.max(1, next.min - lv.min)) * 100));
     else pct = 100;
-    ring.style.setProperty('--ring-pct', pct + '%');
+    ringEl.style.setProperty('--ring-pct', pct + '%');
+    const greetTag = document.getElementById('greetLvTag');
+    if (greetTag) greetTag.textContent = 'Lv' + (lv.lv || 1);
+    const gem = document.getElementById('greetGem');
+    if (gem) {
+      const gemPalette = [
+        '#B0A890', '#D8D2C0', '#C9A227', '#8CE0C8', '#5BA3D0',  // lv1-5：灰/银/金/青/蓝
+        '#B49BE0', '#E07BD0', '#FF8A5B', '#FFE68A', '#FFD97A'   // lv6-10：紫/粉/橙/亮金/炽金
+      ];
+      const c = gemPalette[(lv.lv || 1) - 1] || '#C9A227';
+      gem.style.setProperty('--gem-color', c);
+      gem.style.setProperty('--gem-glow', c + 'cc');
+    }
   }
-  const gem = document.getElementById('lvGem');
-  if (gem) {
-    const gemPalette = [
-      '#B0A890', '#D8D2C0', '#C9A227', '#8CE0C8', '#5BA3D0',  // lv1-5：灰/银/金/青/蓝
-      '#B49BE0', '#E07BD0', '#FF8A5B', '#FFE68A', '#FFD97A'   // lv6-10：紫/粉/橙/亮金/炽金
-    ];
-    const c = gemPalette[(lv.lv || 1) - 1] || '#C9A227';
-    gem.style.setProperty('--gem-color', c);
-    gem.style.setProperty('--gem-glow', c + 'cc');
-  }
+  // 头像渲染（profile + dashboard 走 renderUserAvatar）
+  renderUserAvatar();
 }
 function renderLevelCard() {
   const lv = level || levelOf(points);
@@ -1663,28 +1645,12 @@ function renderProfileAvatar() {
   }
 }
 
-// 统一三处（顶栏 .level-icon / 下午好 .level-character / profile .ph-avatar）的头像渲染
+// 统一头像渲染：profile .ph-avatar + dashboard 勋章环（顶栏无头像）
 // 优先级：settings.avatar_img（上传图） > settings.avatar_idx（lucide 内置） > 等级图标
 function renderUserAvatar() {
-  // 1) 顶栏小徽章
-  const top = document.getElementById('levelIcon');
-  if (top) {
-    if (settings.avatar_img) {
-      top.innerHTML = '';
-      // v5.14g fix：top.style.background='transparent' 用简写会清掉刚设的 background-image → 头像永远不显示
-      //   正确做法：只设 background-image + cover（inline 优先级高于 CSS 渐变，会盖住渐变底）
-      top.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
-      top.style.backgroundSize = 'cover';
-      top.style.backgroundPosition = 'center';
-      top.style.backgroundRepeat = 'no-repeat';
-      // 不设 background 简写（会重置 background-image）
-    } else {
-      top.style.backgroundImage = '';
-      top.style.background = '';
-      top.innerHTML = svgIcon(pickAvatarGlyph(), 13, 2);
-    }
-  }
-  // 2) 下午好总览（用同一个 lucide 头像，size 30）
+  // 1) 顶栏（v5.14h.1 已简化为轻量文字卡，无头像元素，跳过）
+
+  // 2) 下午好总览（v5.14h.1 完整勋章 v2：conic 环 + 头像 + Lv 角标 + 稀有度宝石）
   const greet = document.getElementById('dashGreetGfx');
   if (greet) {
     if (settings.avatar_img) {
@@ -1695,12 +1661,13 @@ function renderUserAvatar() {
       greet.style.backgroundRepeat = 'no-repeat';
     } else {
       greet.style.backgroundImage = '';
-      greet.innerHTML = svgIcon(pickAvatarGlyph(), 28, 1.8);
+      greet.innerHTML = svgIcon(pickAvatarGlyph(), 24, 1.7);
     }
+    // v5.14h.1：勋章进度环（距下级完成度）由 renderLevelBadge 写 ring-pct；Lv 角标 + 稀有度宝石也由它处理
   }
-  // 3) profile modal（已用 renderProfileAvatar 走同样逻辑，再调一次确保同步）
+  // 3) profile modal
   renderProfileAvatar();
-  // 4) 同步头像选择网格的 active 高亮
+  // 4) 头像选择网格 active
   updateAvatarGridActive();
 }
 function updateAvatarGridActive() {
@@ -1974,7 +1941,8 @@ document.getElementById('setWidgetMode').addEventListener('click', () => {
 });
 
 // 等级徽章点击 → 个人信息（昵称 / 头像 / 经验条都在那）
-document.getElementById('levelBadge').addEventListener('click', () => {
+// v5.14h.1：dashboard greeting 身份卡点击 → 个人信息（顶栏 levelBadge 已删除）
+document.getElementById('dashGreeting').addEventListener('click', () => {
   openProfileModal();
 });
 // 等级卡的「?」按钮已删除：经验条合并到个人信息 modal 里，避免多余入口
