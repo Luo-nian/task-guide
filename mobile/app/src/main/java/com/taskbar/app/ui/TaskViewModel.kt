@@ -187,6 +187,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     val todayCheckedHabits: StateFlow<Set<String>> = repo.observeTodayCheckedHabitUuids()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
+    /** v5.15.2：全习惯 streak 聚合 map（HabitScreen/TaskListScreen 一次订阅，替代每行独立 Flow） */
+    val allHabitStreaks: StateFlow<Map<String, Int>> = repo.observeAllHabitStreaks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     suspend fun habitStreak(taskUuid: String) = repo.habitStreak(taskUuid)
 
     /** 所有习惯最长连续天数（"我的"页"坚持"统计） */

@@ -356,6 +356,28 @@ class TaskRepository(private val db: AppDatabase) {
         return true
     }
 
+    /** v5.15.2：聚合版 —— 一次订阅所有 habit_logs → 每习惯 streak（HabitScreen 每行不再各自 Flow） */
+    fun observeAllHabitStreaks(): Flow<Map<String, Int>> {
+        return habitDao.observeAllHabitLogs().map { logs ->
+            val byTask = logs.groupBy { it.taskUuid }
+            byTask.mapValues { (_, taskLogs) ->
+                val dates = taskLogs.map { it.checkDate }.sortedDescending()
+                if (dates.isEmpty()) 0
+                else {
+                    val today = java.time.LocalDate.now()
+                    var streak = 0
+                    var cursor = today
+                    for (dateStr in dates) {
+                        val d = try { java.time.LocalDate.parse(dateStr) } catch (_: Exception) { continue }
+                        if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
+                        else if (d.isBefore(cursor)) break
+                    }
+                    streak
+                }
+            }
+        }
+    }
+
     /** 同步查询某天是否已打卡（用于 UI 进入时初始化状态） */
     suspend fun isHabitCheckedToday(taskUuid: String, date: String): Boolean =
         habitDao.isChecked(taskUuid, date)

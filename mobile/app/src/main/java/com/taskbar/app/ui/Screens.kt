@@ -115,6 +115,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 val stepsByUuid by vm.stepsByUuid.collectAsState()
                 // 今日已打卡的习惯 uuid 集合（订阅 habit_logs Flow，点完卡后 UI 立刻更新）
                 val checkedHabits by vm.todayCheckedHabits.collectAsState()
+                // v5.15.2：聚合 streak（HabitRow 不再每行独立 Flow → 切换卡顿优化）
+                val streaksMap by vm.allHabitStreaks.collectAsState()
                 // 全部完成：无追踪、无待办、习惯非空且全部已打卡
                 val allDone = tracking.isEmpty() && todo.isEmpty() && habits.isNotEmpty() && checkedHabits.size == habits.size
 
@@ -166,7 +168,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                             if (habitsUnchecked.isNotEmpty()) {
                                 item(key = "hdr-habit") { SectionHeader("每日任务 (${habitsUnchecked.size})", TGColors.Jade) }
                                 items(habitsUnchecked, key = { "h-${it.uuid}" }) { task ->
-                                    HabitRow(task, vm, checkedToday = false)
+                                    HabitRow(task, vm, checkedToday = false, streak = streaksMap[task.uuid] ?: 0)
                                 }
                             }
                         }
@@ -846,6 +848,9 @@ fun HabitScreen(vm: TaskViewModel) {
     val habits by vm.habits.collectAsState()
     val ctx = LocalContext.current
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    // v5.15.2：切换卡顿优化 —— 整页只订阅 2 个聚合 Flow（原每行独立 observeHabitStreak Flow + DB 查询）
+    val streaks by vm.allHabitStreaks.collectAsState()
+    val checkedSet by vm.todayCheckedHabits.collectAsState()
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("每日任务", color = TGColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp, 12.dp))
@@ -854,12 +859,9 @@ fun HabitScreen(vm: TaskViewModel) {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(habits, key = { it.uuid }) { habit ->
-                    val streak by vm.observeHabitStreak(habit.uuid).collectAsState()
+                    val streak = streaks[habit.uuid] ?: 0
+                    val checkedToday = habit.uuid in checkedSet
                     val scope = rememberCoroutineScope()
-                    var checkedToday by remember(habit.uuid) { mutableStateOf(false) }
-                    LaunchedEffect(habit.uuid) {
-                        checkedToday = vm.repoIsCheckedToday(habit.uuid, today)
-                    }
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -882,8 +884,8 @@ fun HabitScreen(vm: TaskViewModel) {
                             onClick = {
                                 scope.launch {
                                     val ok = vm.checkHabitAndReturn(habit.uuid, today)
+                                    // v5.15.2：checkedToday 派生自聚合 Flow，db 写入后自动刷新，无需手动置位
                                     if (ok) {
-                                        checkedToday = true
                                         ToastHelper.show(ctx, "已打卡 ✓")
                                     } else {
                                         ToastHelper.show(ctx, "今天已打过卡了")
