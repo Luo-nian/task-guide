@@ -408,26 +408,23 @@
               <button type="button" class="rem-device-btn" data-device="both" id="setRangeBoth">双端提醒</button>
             </div>
           </div>
-          <!-- v5.14g：完整默认配置（端→方式→时间，不条件隐藏——作为默认值配置面板完整显示） -->
-          <div class="setting-row remind-sub">
-            <label class="lbl-head-2">高级默认提醒</label>
-          </div>
+          <!-- v5.14h.3：删除重复"接收端"行（与上方 408 提醒范围重复）；方式拆成手机端/电脑端两行 -->
           <div class="setting-row">
-            <label>接收端</label>
-            <div class="rem-device-row">
-              <button type="button" class="rem-device-btn" data-device="desktop" id="setDevDesktop">电脑端</button>
-              <button type="button" class="rem-device-btn" data-device="mobile" id="setDevMobile">手机端</button>
-              <button type="button" class="rem-device-btn" data-device="both" id="setDevBoth">双端</button>
-              <button type="button" class="rem-device-btn" data-device="none" id="setDevNone">不提醒</button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <label>方式</label>
+            <label>手机端默认提醒方式</label>
             <div class="rem-strength-row">
               <label class="chk-pill"><input type="checkbox" id="setAdvNotif" /> <span>通知栏</span></label>
               <label class="chk-pill"><input type="checkbox" id="setAdvVibrate" /> <span>振动</span></label>
               <label class="chk-pill"><input type="checkbox" id="setAdvSound" /> <span>铃声</span></label>
               <label class="chk-pill"><input type="checkbox" id="setAdvPop" /> <span>弹窗</span></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>电脑端默认提醒方式</label>
+            <div class="rem-strength-row">
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvNotif" /> <span>通知栏</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvVibrate" /> <span>振动</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvSound" /> <span>铃声</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvPop" /> <span>弹窗</span></label>
             </div>
           </div>
           <div class="setting-row">
@@ -437,6 +434,9 @@
               <button type="button" class="rem-time-btn" data-min="15" id="setLead15">15分钟前</button>
               <button type="button" class="rem-time-btn" data-min="60" id="setLead60">1小时前</button>
               <button type="button" class="rem-time-btn" data-min="1440" id="setLead1440">1天前</button>
+              <!-- v5.14h.3：自定义提前时间（预设外分钟数） -->
+              <input type="number" id="setLeadCustom" min="0" max="43200" placeholder="自定义" style="width:72px" />
+              <span class="hint">分钟前</span>
             </div>
           </div>
           <div class="setting-row">

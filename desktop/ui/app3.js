@@ -286,9 +286,25 @@ function applySettingsToUi() {
     b.onclick = () => {
       settings[LEAD_KEY] = parseInt(b.dataset.min, 10);
       saveSettings();
+      // 选中预设时清空自定义输入
+      const cust = document.getElementById('setLeadCustom');
+      if (cust) cust.value = '';
       applySettingsToUi();
     };
   });
+  // v5.14h.3：自定义提前时间（不在预设中时显示原值）
+  const setLeadCustom = document.getElementById('setLeadCustom');
+  if (setLeadCustom) {
+    const presetValues = ['0', '15', '60', '1440'];
+    if (lead && !presetValues.includes(lead)) setLeadCustom.value = lead;
+    setLeadCustom.onchange = () => {
+      const v = parseInt(setLeadCustom.value, 10);
+      if (isNaN(v) || v < 0) { setLeadCustom.value = ''; return; }
+      settings[LEAD_KEY] = Math.min(43200, v);  // 上限 30 天
+      saveSettings();
+      applySettingsToUi();
+    };
+  }
   // 持久化到后端 settings
   if (!settings._remSynced) { settings._remSynced = true; }
   if (unpair) {
@@ -900,10 +916,9 @@ window.openDetail = async function(uuid) {
           <span class="g-text">${esc(s.title)}</span>
           ${s.attr_value ? `<span class="g-attr">${esc(s.attr_label||'')}: ${esc(s.attr_value)}</span>` : ''}
         </div>`).join('')}
-      <!-- boss A：添加步骤单一入口，JSON 不再独立并排按钮，收进展开面板（手动/JSON 二合一） -->
-      <div class="goal-tools">
+      ${totalSteps === 0 ? "" : `
         <div class="goal-add" id="goalAddBtn" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
-      </div>
+      </div>`}
     </div>
 
     ${t.desc ? `<div class="detail-desc">${esc(t.desc)}</div>` : ''}
@@ -1440,6 +1455,8 @@ document.getElementById('addSubmit').addEventListener('click', async () => {
 document.getElementById('settingsBtn').addEventListener('click', () => {
   applySettingsToUi();
   document.getElementById('settingsOverlay').style.display = '';
+  bindSetting('setEtaShort', 'eta_short_pct', v => Math.max(1, Math.min(100, parseInt(v) || 30)));
+  bindSetting('setEtaLong', 'eta_long_h', v => Math.max(1, Math.min(240, parseInt(v) || 36)));
 });
 document.querySelectorAll('[data-close-overlay="settingsOverlay"]').forEach(b => b.addEventListener('click', () => {
   document.getElementById('settingsOverlay').style.display = 'none';
@@ -1456,8 +1473,6 @@ function bindSetting(id, key, parser) {
 }
 bindSetting('setTrackingMax', 'tracking_max', v => Math.max(1, Math.min(20, parseInt(v) || 3)));
 bindSetting('setEmergencyOn', 'emergency_on');
-bindSetting('setEtaShort', 'eta_short_pct', v => Math.max(1, Math.min(100, parseInt(v) || 30)));
-bindSetting('setEtaLong', 'eta_long_h', v => Math.max(1, Math.min(240, parseInt(v) || 36)));
 bindSetting('setTimeLimit', 'time_limit_min', v => Math.max(1, Math.min(1440, parseInt(v) || 5)));
 bindSetting('setCountDefault', 'count_default', v => Math.max(1, Math.min(999, parseInt(v) || 1)));
 // 「每日任务自动刷新」开关已撤（每日任务本就该每天刷新，UI 不再暴露，旧 key 保留兼容）

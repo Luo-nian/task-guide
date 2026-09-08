@@ -151,7 +151,24 @@ body::after {
 }
 .top-right { display: flex; align-items: center; gap: 6px; }
 
-/* v5.14h.1：顶栏 .level-badge 整张删除（身份卡搬到 dashboard greeting） */
+/* 等级徽章 —— 黑金招牌（与手机端等级卡呼应：墨黑底+金边+金色文字，全 UI 唯一黑底元素） */
+/* v5.14h.1：顶栏等级简化为轻量文字卡（无环无徽，勋章搬到 dashboard） */
+.level-badge {
+  display: flex; align-items: center; gap: 4px;
+  background: linear-gradient(135deg, var(--ink-black-soft), var(--ink-black));
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  padding: 5px 12px;
+  box-shadow: 0 0 8px var(--glow-gold), inset 0 0 0 1px rgba(230, 199, 122, 0.18);
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+}
+.level-badge:hover { box-shadow: 0 0 14px var(--glow-gold), 0 3px 10px rgba(22, 18, 12, 0.3); transform: translateY(-1px); }
+/* v5.14g：等级徽章双行文字 */
+.level-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; gap: 1px; }
+.level-text { color: var(--gold-light); font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
+.level-sub { color: rgba(230, 199, 122, 0.55); font-size: 9.5px; font-weight: 400; letter-spacing: 0.3px; }
 /* v5.13j：10 档等级徽章分档配色（boss 反馈"太土/low" — 全部一个色太单调） */
 .level-icon.rank-lv1, .pc-level-icon.rank-lv1 { --rank-from: #F5DBA0; --rank-to: #C9A65A; }
 .level-icon.rank-lv2, .pc-level-icon.rank-lv2 { --rank-from: #EFCB7F; --rank-to: #B98F2E; }
@@ -1248,14 +1265,17 @@ body::after {
   width: 44px; height: 44px;
   border-radius: 50%;
   background: linear-gradient(160deg, var(--gold-light), var(--gold-deep));
-  color: #fff; border: 1px solid var(--border-mid);
+  color: #fff;
+  border: none;            /* v5.14h.2：去 1px border（圆按钮 44×44 顶部 1px 边框在浅金底上显"暗条黑边"） */
+  outline: none;
   font-size: 22px; font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(110, 80, 30, 0.25), 0 0 14px var(--glow-gold);
+  box-shadow: 0 4px 12px rgba(180, 140, 60, 0.35), 0 0 14px var(--glow-gold);
   transition: all .2s;
   z-index: 8;
+  overflow: hidden;        /* 防止 svg/字符超出圆形 */
 }
-.fab:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 20px rgba(110, 80, 30, 0.35), 0 0 20px var(--glow-gold); }
+.fab:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 18px rgba(180, 140, 60, 0.45), 0 0 20px var(--glow-gold); }
 
 /* ============================================================
    抽屉 / 模态（设置、新建、祝福、紧急）
