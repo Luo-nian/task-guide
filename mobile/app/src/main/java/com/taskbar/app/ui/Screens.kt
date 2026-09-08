@@ -1226,19 +1226,23 @@ fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
                         size = 24.dp
                     )
                 }
-                // 角标：贴按钮右上（Badge 自带圆角+内边距，数字完整不截断）
+                // v5.15.5：追踪数 pill 角标（自绘 Box+Text，绕开 Material3 Badge 在 webview 渲染时偶发数字缺失 bug）
                 if (trackingCount > 0) {
-                    Badge(
-                        containerColor = TGColors.Crimson,
-                        contentColor = Color.White,
-                        modifier = Modifier
+                    Box(
+                        Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = 8.dp, y = (-6).dp)
+                            .offset(x = 10.dp, y = (-4).dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(TGColors.Crimson)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .border(1.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (trackingCount > 99) "99+" else trackingCount.toString(),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
                         )
                     }
                 }

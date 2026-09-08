@@ -172,21 +172,21 @@ fun MainApp() {
                         } else {
                             TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = Color.White, size = 24.dp)
                         }
-                        // 追踪数小点（凸起钮右上角，选中态隐藏避免视觉拥挤）
+                        // v5.15.5：追踪数 pill 角标（凸起钮顶部，22dp 圆+11sp 数字确保不裁切）
                         if (!isOnTrack && trackingCount.size > 0) {
                             Box(
                                 Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(16.dp)
+                                    .size(22.dp)
                                     .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(TGColors.Orange)
-                                    .border(1.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
+                                    .background(TGColors.Crimson)
+                                    .border(1.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = if (trackingCount.size > 9) "9+" else trackingCount.size.toString(),
                                     color = Color.White,
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Black
                                 )
                             }
