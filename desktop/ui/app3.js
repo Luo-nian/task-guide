@@ -562,22 +562,25 @@ function renderListView() {
   document.getElementById('overviewView').style.display = 'none';
   document.getElementById('listView').style.display = '';
   const box = document.getElementById('listViewBody');
+  if (!box) return;  // v5.15.7：listView 可能被 renderTodayView/renderOverview 等 innerHTML 覆盖后元素结构变了
   let arr = [];
   const titleMap = { daily:'每日任务', goal:'目标任务', 'time-limited':'限时任务', once:'次数任务' };
-  document.getElementById('listViewTitle').textContent = titleMap[nav] || '任务';
+  const titleEl = document.getElementById('listViewTitle');
+  if (titleEl) titleEl.textContent = titleMap[nav] || '任务';
+  const hintEl = document.getElementById('listViewHint');
 
   if (nav === 'daily') {
     arr = tasks.filter(t => t.category === 'daily');
-    document.getElementById('listViewHint').textContent = '每日 0 点自动刷新';
+    if (hintEl) hintEl.textContent = '每日 0 点自动刷新';
   } else if (nav === 'goal') {
     arr = tasks.filter(t => t.category === 'goal');
-    document.getElementById('listViewHint').textContent = '为目标坚持推进';
+    if (hintEl) hintEl.textContent = '为目标坚持推进';
   } else if (nav === 'time-limited') {
     arr = tasks.filter(t => t.category === 'time-limited');
-    document.getElementById('listViewHint').textContent = '到期前记得完成';
+    if (hintEl) hintEl.textContent = '到期前记得完成';
   } else if (nav === 'once') {
     arr = tasks.filter(t => t.category === 'once');
-    document.getElementById('listViewHint').textContent = '次数任务可重复完成';
+    if (hintEl) hintEl.textContent = '次数任务可重复完成';
   }
 
   if (arr.length === 0) {
