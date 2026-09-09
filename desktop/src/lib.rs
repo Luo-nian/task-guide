@@ -368,7 +368,9 @@ fn get_track_cards(state: tauri::State<AppState>) -> Vec<TrackCard> {
     drop(stmt);
     tasks.into_iter().map(|t| {
         let cur: Option<Step> = db.prepare(
-            "SELECT * FROM steps WHERE task_uuid=?1 AND status='doing' AND deleted=0 ORDER BY sort_order LIMIT 1"
+            // v5.14h.13：step 状态只有 done/todo，原查 'doing' 永远查不到 → widget 永远"全部已完成"
+            // 改为：取第一个未完成（todo）的 step 作为当前步
+            "SELECT * FROM steps WHERE task_uuid=?1 AND status='todo' AND deleted=0 ORDER BY sort_order LIMIT 1"
         ).unwrap().query_map(params![t.uuid], row_to_step).ok()
             .and_then(|mut rows| rows.next().and_then(|r| r.ok()));
         let total: i64 = db.query_row(
@@ -388,6 +390,22 @@ fn get_today_tasks(state: tauri::State<AppState>) -> Vec<Task> {
     // 使"当日完成置 done → 次日自动挪回今日列表"成立（无定时器，读时惰性重置）
     let (day_start, _) = today_range();
     let now = Local::now().timestamp_millis();
+    // v5.14h.13：daily 任务跨天重置时，其下步骤同步回滚为 todo
+    //   （此前只重置 task，昨日 done 的 steps 今天仍 done → widget/详情显示"全部已完成"）
+    let stale: Vec<String> = {
+        let mut s = db.prepare(
+            "SELECT uuid FROM tasks WHERE category='daily' AND track_status='done' AND deleted=0 \
+             AND (done_at IS NULL OR done_at < ?1)"
+        ).unwrap();
+        let it = s.query_map(params![day_start], |r| r.get::<_, String>(0)).unwrap();
+        it.filter_map(|x| x.ok()).collect()
+    };
+    if !stale.is_empty() {
+        let mut upd = db.prepare(
+            "UPDATE steps SET status='todo', updated_at=?1 WHERE task_uuid=?2 AND status='done' AND deleted=0"
+        ).unwrap();
+        for u in &stale { let _ = upd.execute(params![now, u]); }
+    }
     db.execute(
         "UPDATE tasks SET track_status='pending', done=0, done_count=0, done_at=NULL, updated_at=?1 \
          WHERE category='daily' AND track_status='done' AND deleted=0 \

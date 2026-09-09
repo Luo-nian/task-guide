@@ -220,6 +220,9 @@ function loadSettings() {
 function saveSettings() {
   localStorage.setItem('taskbar.settings', JSON.stringify(settings));
   applySettingsToUi();
+  // v5.14h.13：头像等关键字段异步持久化到后端 settings 表（localStorage 在 WebView2 userData 里，
+  //   清 EBWebView 缓存会连带清空 → 之前每次清缓存 boss 头像就丢）
+  persistSettingsServer();
 }
 function applySettingsToUi() {
   // 数字设置 → 同步默认态 cur 文字
@@ -334,7 +337,9 @@ async function persistSettingsServer() {
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
       night_notify: settings.night_notify ? '1' : '0',
-      nickname: settings.nickname || '历练者'
+      nickname: settings.nickname || '历练者',
+      avatar_idx: settings.avatar_idx != null ? settings.avatar_idx : 0,
+      avatar_img: settings.avatar_img || ''   // v5.14h.13：头像 base64 同步到后端 settings 表（防清 WebView2 缓存丢头像）
     };
     for (const [k, v] of Object.entries(map)) {
       await call('set_setting', { key: k, value: String(v) });
@@ -351,6 +356,8 @@ async function hydrateUserProfile() {
     if (nn) settings.nickname = nn;
     const ai = await call('get_setting', { key: 'avatar_idx' });
     if (ai != null && !isNaN(parseInt(ai))) settings.avatar_idx = parseInt(ai);
+    const aimg = await call('get_setting', { key: 'avatar_img' });   // v5.14h.13：头像图从后端恢复
+    if (aimg) settings.avatar_img = aimg;
   } catch (e) {}
 }
 
@@ -1156,12 +1163,12 @@ window.showInlineAddStep = function(taskUuid) {
     if (e.key === 'Enter') { e.preventDefault(); submitInlineStep(taskUuid); }
     else if (e.key === 'Escape') { cancelInlineStep(); }
   });
-  // boss：JSON 入口改用 addEventListener（之前内联 onclick 串行 cancel+open 在某些时机异常
-  // 导致"点了跟取消一样"）。先 openJsonImport 再 cancelInlineStep，关闭 inline 面板不挡弹窗
+  // boss：JSON 入口改用 addEventListener。v5.14h.13：点 JSON 小字只开弹窗、不收起行
+  //   （之前 openJsonImport + cancelInlineStep 同步执行，若弹窗未及渲染视觉上=点了没反应/像收起）
   const entry = row.querySelector('.gap-json-entry');
-  if (entry) entry.addEventListener('click', () => {
+  if (entry) entry.addEventListener('click', (ev) => {
+    ev.stopPropagation();
     try { openJsonImport(taskUuid); } catch (e) { console.error('openJsonImport failed:', e); }
-    cancelInlineStep();
   });
   document.getElementById('inlineStepSubmit').onclick = () => submitInlineStep(taskUuid);
   document.getElementById('inlineStepCancel').onclick = cancelInlineStep;

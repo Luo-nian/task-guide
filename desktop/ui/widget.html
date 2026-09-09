@@ -81,10 +81,13 @@
     const total = isCountTask ? t.count : Math.max(c.total_steps || 0, 1);
     const done = isCountTask ? (t.done_count || 0) : (c.total_steps > 0 ? c.done_steps : (t.done_count || 0));
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    const stepTxt = isCountTask
-      ? '已完成 ' + done + '/' + total
-      : (c.current_step ? ('步骤 ' + (done + 1) + '/' + total + ' · ' + c.current_step.title) : '全部已完成');
-    const canAdvance = !!(c.current_step || isCountTask);
+    // v5.14h.13：区分「未拆步骤 / 推进中 / 全完成」——避免无步骤任务误显"全部已完成"
+    let stepTxt, canAdvance = false;
+    if (isCountTask) { stepTxt = '已完成 ' + done + '/' + total; canAdvance = done < total; }
+    else if (c.total_steps === 0) { stepTxt = '（尚未拆解步骤）'; canAdvance = false; }
+    else if (done >= c.total_steps) { stepTxt = '全部已完成'; canAdvance = false; }
+    else if (c.current_step) { stepTxt = '步骤 ' + (done + 1) + '/' + c.total_steps + ' · ' + c.current_step.title; canAdvance = true; }
+    else { stepTxt = '已推进 ' + done + '/' + c.total_steps; canAdvance = false; }
     return `
       <div class="row" data-idx="${idx}" data-step-uuid="${c.current_step?.uuid || ''}" data-task-uuid="${t.uuid || ''}" data-is-count="${isCountTask ? 1 : 0}">
         <span class="ico">${svg('diamond')}</span>
@@ -98,9 +101,18 @@
   }
 
   let cards = [];
+  // v5.14h.13：按追踪任务数动态伸缩整个窗（行数不变不调 set_size，避免拖动/轮询跳动）
+  let lastRows = -1;
+  function autoFitHeight(n) {
+    if (n === lastRows) return;
+    lastRows = n;
+    const h = n === 0 ? 96 : Math.min(360, 12 + n * 44 + 8);  // 每行 44px + 上下 padding
+    invoke('set_window_size', { w: 360, h }).catch(function(){});
+  }
   async function refresh() {
     try {
       cards = await invoke('get_track_cards');
+      autoFitHeight(cards ? cards.length : 0);
     if (!cards || cards.length === 0) {
         cardEl.innerHTML = '<div class="empty" id="empty" title="点击打开客户端">暂无追踪任务<br>点击打开客户端</div>';
         bindCardEvents();
