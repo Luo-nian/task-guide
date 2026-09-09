@@ -1602,8 +1602,11 @@ function openProfileModal() {
       const i = parseInt(cell.dataset.idx, 10);
       avatarIdx = i;
       settings.avatar_idx = i;
-      delete settings.avatar_img;        // 选 lucide 内置时清掉上传图
+      const g = AVATAR_GLYPHS[i];
+      if (g.kind === 'svg') delete settings.avatar_img;        // 选 lucide 时清掉上传图；选 emoji 不清
       saveSettings();
+      // v5.14h.15：选 emoji 头像时推送手机同步（手机端 prefs avatar_emoji 监听即时刷新）
+      if (g.kind === 'emoji') call('push_avatar_emoji', { emoji: g.ico }).catch(()=>{});
       renderUserAvatar();
       updateAvatarGridActive();
     });

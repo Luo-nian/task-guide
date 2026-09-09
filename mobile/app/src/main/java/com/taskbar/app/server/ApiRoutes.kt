@@ -87,6 +87,19 @@ fun Application.configureServer() {
             call.respondText { """{"status":"ok","accepted":${req.changes.size}}""" }
         }
 
+        // v5.15.6：电脑端推送设置变更（头像 emoji 同步）—— 用 JsonElement 接 body 避免新增 Request 类
+        post("/api/settings/upsert") {
+            val body = call.receiveText()
+            val elem = appJson.parseToJsonElement(body)
+            val map = if (elem is kotlinx.serialization.json.JsonObject) elem else kotlinx.serialization.json.JsonObject(emptyMap())
+            val key = map["key"]?.toString()?.trim('"') ?: ""
+            val value = map["value"]?.toString()?.trim('"') ?: ""
+            if (key.isNotEmpty()) {
+                TaskBarApp.instance.repo.setSetting(key, value)
+            }
+            call.respondText { """{"status":"ok","key":"$key"}""" }
+        }
+
         // WebSocket 实时推送
         webSocket("/ws") {
             val app = TaskBarApp.instance

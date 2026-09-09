@@ -1229,6 +1229,26 @@ fn get_ws_peer(state: tauri::State<AppState>) -> String {
         String::new()
     }
 }
+
+// v5.14h.15：推送头像 emoji 到手机（桌面切换 emoji 头像时自动同步到手机 prefs）
+#[tauri::command]
+fn push_avatar_emoji(state: tauri::State<AppState>, emoji: String) {
+    let url_arc = state.server_url.clone();
+    std::thread::spawn(move || {
+        let base = {
+            let g = url_arc.lock().unwrap();
+            sync::server_base(&g)
+        };
+        if base.is_empty() { return; }
+        let url = format!("{}/api/settings/upsert", base);
+        let _ = reqwest::blocking::Client::new()
+            .post(&url)
+            .timeout(std::time::Duration::from_secs(4))
+            .json(&serde_json::json!({"key":"avatar_emoji","value":emoji}))
+            .send();
+    });
+}
+
 #[tauri::command]
 fn save_pairing(state: tauri::State<AppState>, url: String, device_id: String) {
     // v5.15 P0：持久化配对时把手机 deviceId 也存上（旧实现忽略了 device_id 参数）
@@ -1591,7 +1611,7 @@ pub fn run() {
             show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide, win_start_dragging,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
-            is_ws_connected, get_ws_peer,
+            is_ws_connected, get_ws_peer, push_avatar_emoji,
             discover_devices, seed_default_tasks
         ])
         .on_window_event(|window, event| {
