@@ -614,9 +614,15 @@ function isTodayTask(t) {
 }
 function renderListView() {
   document.getElementById('overviewView').style.display = 'none';
-  document.getElementById('listView').style.display = '';
-  const box = document.getElementById('listViewBody');
-  if (!box) return;  // v5.15.7：listView 可能被 renderTodayView/renderOverview 等 innerHTML 覆盖后元素结构变了
+  const listEl = document.getElementById('listView');
+  listEl.style.display = '';
+  // v5.14h.16：自重建 listView 结构（防 renderTodayView/renderTrackingView innerHTML 覆盖后结构变化——
+  //   boss 反馈"点任务分类全跳追踪页"就是这个 bug，nav 切 daily/goal/once 时 listViewBody 找不到 → early return → 残留上次 view 文字）
+  let box = document.getElementById('listViewBody');
+  if (!box) {
+    listEl.innerHTML = '<div class="view-head"><span class="vh-title" id="listViewTitle">任务</span><span class="vh-hint" id="listViewHint"></span><span class="vh-spacer"></span></div><div class="lv-body" id="listViewBody"></div>';
+    box = document.getElementById('listViewBody');
+  }
   let arr = [];
   const titleMap = { daily:'每日任务', goal:'目标任务', 'time-limited':'限时任务', once:'次数任务' };
   const titleEl = document.getElementById('listViewTitle');

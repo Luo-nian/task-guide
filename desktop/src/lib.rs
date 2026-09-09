@@ -1057,13 +1057,34 @@ fn stop_tracking(state: tauri::State<AppState>, task_uuid: String) {
 #[tauri::command]
 fn restore_task(state: tauri::State<AppState>, task_uuid: String) -> Result<(), String> {
     let now = chrono::Local::now().timestamp_millis();
+    // v5.14h.16：恢复任务时退积分（否则用户恢复后再完成 = 重复给分 = 刷分）
+    // 读原 task.reward_points（上次完成时发放的积分），从 total_points 扣除
+    let orig_rp: i64 = {
+        let db = state.db.lock().unwrap();
+        db.query_row(
+            "SELECT COALESCE(reward_points,0) FROM tasks WHERE uuid=?1 AND deleted=0",
+            params![&task_uuid], |r| r.get(0)
+        ).unwrap_or(0)
+    };
     {
         let db = state.db.lock().unwrap();
         db.execute(
-            "UPDATE tasks SET track_status='pending', done=0, done_at=NULL, done_count=0, updated_at=?1 \
+            "UPDATE tasks SET track_status='pending', done=0, done_at=NULL, done_count=0, reward_points=0, updated_at=?1 \
              WHERE uuid=?2 AND deleted=0",
             params![now, &task_uuid]
         ).map_err(|e| e.to_string())?;
+    } // 锁释放
+    if orig_rp > 0 {
+        // 退积分：total_points -= orig_rp（下界 0）
+        {
+            let db = state.db.lock().unwrap();
+            db.execute(
+                "UPDATE settings SET value=printf('%d', MAX(0, CAST(value AS INTEGER) - ?1)) WHERE key='total_points'",
+                params![orig_rp]
+            ).ok();
+        } // 锁释放
+        // 同步积分变化给手机（手机端 total_points 来自这里）
+        sync::push_change(&state.db, &state.server_url, "settings", "total_points");
     }
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
     Ok(())

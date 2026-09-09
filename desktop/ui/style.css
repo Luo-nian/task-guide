@@ -1275,6 +1275,7 @@ body::after {
   transition: all .2s;
   z-index: 8;
   overflow: hidden;        /* 防止 svg/字符超出圆形 */
+  display: inline-flex;     /* v5.14h.16：boss 反馈"新建任务不弹出"——之前 inline style 误设 display:none 致 fabAdd 不可见 */
 }
 .fab:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 18px rgba(180, 140, 60, 0.45), 0 0 20px var(--glow-gold); }
 
