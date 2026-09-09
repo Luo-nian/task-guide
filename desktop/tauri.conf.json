@@ -29,7 +29,7 @@
         "title": "任务挂件",
         "url": "widget.html",
         "width": 360,
-        "height": 92,
+        "height": 360,
         "x": 40,
         "y": 120,
         "transparent": true,

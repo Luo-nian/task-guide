@@ -8,40 +8,46 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { background: transparent; overflow: hidden; user-select: none;
     font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
-  .w { position: relative; width: 360px; height: 92px; padding: 10px 14px;
-    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  .w { position: relative; width: 360px; max-height: 360px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 6px;
     background: rgba(255, 253, 248, 0.86);
     backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3);
     border: 1px solid rgba(201, 162, 39, 0.38);
     border-radius: 16px;
     box-shadow: 0 8px 28px rgba(90, 72, 40, 0.16);
-    cursor: pointer; }
-  .row1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .ico { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 7px;
+    overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin; scrollbar-color: #C9A227 transparent; }
+  .w::-webkit-scrollbar { width: 4px; }
+  .w::-webkit-scrollbar-thumb { background: #C9A227; border-radius: 2px; }
+  /* 空态 */
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 92px; gap: 4px; cursor: pointer; color: #8A7E5A; font-size: 12px; }
+  /* 单任务行 */
+  .row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px;
+    border-radius: 10px; cursor: pointer; transition: background 0.12s; }
+  .row:hover { background: rgba(201, 162, 39, 0.08); }
+  .ico { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 8px;
     background: linear-gradient(135deg, #E8CB7F, #8A6A1C);
     display: flex; align-items: center; justify-content: center; color: #fff; }
-  .ico svg { display-width: 12px; height: 12px; }
-  .title { font-size: 14px; font-weight: 500; color: #2C2C2A; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis; }
-  .row2 { display: flex; align-items: center; gap: 8px; padding-left: 30px; min-width: 0; }
-  .step { flex: 1; font-size: 12px; color: #5F5E5A; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis; }
-  .pbar { flex: 0 0 86px; height: 6px; border-radius: 3px;
-    background: rgba(90, 72, 40, 0.12); border: 1px solid rgba(138, 106, 28, 0.16);
-    overflow: hidden; }
+  .ico svg { width: 14px; height: 14px; }
+  .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .title { font-size: 13px; font-weight: 500; color: #2C2C2A; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .step { font-size: 11px; color: #5F5E5A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.3; }
+  .pbar { flex: 0 0 80px; height: 5px; border-radius: 3px;
+    background: rgba(90, 72, 40, 0.12); border: 1px solid rgba(138, 106, 28, 0.16); overflow: hidden; }
   .pfill { height: 100%; width: 0%;
     background: linear-gradient(90deg, #7A5516, #B98F2E 55%, #D8B45A 100%);
-    border-radius: 3px; transition: width .5s; }
-  /* v5.13k：推进键（圆形 chevron-right，点击 = advance_step 推进一步，最后一步触发 complete） */
-  .advance {
-    flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+    border-radius: 3px; transition: width .4s; }
+  /* v5.13k：推进键（圆形 chevron-right，点击 = advance_step） */
+  .advance { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
     background: linear-gradient(135deg, #D8B45A, #B98F2E);
     color: #FFF4D0;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(138, 106, 28, 0.35), inset 0 0 0 1px rgba(255, 244, 208, 0.25);
-    transition: transform 0.12s, box-shadow 0.12s;
-  }
+    transition: transform 0.12s, box-shadow 0.12s; }
   .advance:hover { transform: scale(1.08); box-shadow: 0 3px 10px rgba(201, 162, 39, 0.5); }
   .advance:active { transform: scale(0.94); }
   .advance svg { display: block; }
@@ -50,136 +56,135 @@
 </head>
 <body>
 <div class="w" id="card" data-tauri-drag-region="true">
-  <div class="row1">
-    <span class="ico" id="ico"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg></span>
-    <span class="title" id="title">暂无追踪任务</span>
-    <!-- v5.14f：多追踪任务切换按钮（3 任务变轮播） -->
-    <span class="w-switch" id="wPrev" title="上一个任务" data-tauri-drag-region-exclude>‹</span>
-    <span class="w-switch" id="wNext" title="下一个任务" data-tauri-drag-region-exclude>›</span>
-  </div>
-  <div class="row2">
-    <span class="step" id="step">点击打开客户端</span>
-    <span class="pbar"><span class="pfill" id="pfill"></span></span>
-    <div class="advance disabled" id="advance" title="推进到下一步"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
-  </div>
-</div>
+  <div class="empty" id="empty" title="点击打开客户端">暂无追踪任务<br>点击打开客户端</div>
 <script>
 (function(){
-  const el = {
-    title: document.getElementById('title'),
-    step: document.getElementById('step'),
-    pfill: document.getElementById('pfill'),
-    advance: document.getElementById('advance')
-  };
+  const cardEl = document.getElementById('card');
+  const emptyEl = document.getElementById('empty');
   const invoke = (cmd, args) => window.__TAURI__ && window.__TAURI__.core
     ? window.__TAURI__.core.invoke(cmd, args || {})
     : Promise.reject(new Error('no-tauri'));
 
   let lastKey = '';
-  let currentStepUuid = null;  // v5.13k：挂件可推进的 step uuid
-  let currentTaskUuid = null;
-  let advancing = false;
+  const ICONS = {
+    diamond: '<circle cx="12" cy="12" r="9"/><path d="M12 3l4 4-4 4-4-4z" fill="currentColor" stroke="none"/>'
+  };
+  function svg(name) {
+    const body = ICONS[name] || ICONS.diamond;
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+  }
+
+  // 单任务行构造
+  function rowHtml(c, idx) {
+    const t = c.task || {};
+    const isCountTask = !!(t.count && t.count > 1);
+    const total = isCountTask ? t.count : Math.max(c.total_steps || 0, 1);
+    const done = isCountTask ? (t.done_count || 0) : (c.total_steps > 0 ? c.done_steps : (t.done_count || 0));
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const stepTxt = isCountTask
+      ? '已完成 ' + done + '/' + total
+      : (c.current_step ? ('步骤 ' + (done + 1) + '/' + total + ' · ' + c.current_step.title) : '全部已完成');
+    const canAdvance = !!(c.current_step || isCountTask);
+    return `
+      <div class="row" data-idx="${idx}" data-step-uuid="${c.current_step?.uuid || ''}" data-task-uuid="${t.uuid || ''}" data-is-count="${isCountTask ? 1 : 0}">
+        <span class="ico">${svg('diamond')}</span>
+        <div class="info">
+          <div class="title">${(t.title || '任务').replace(/</g, '&lt;')}</div>
+          <div class="step">${stepTxt.replace(/</g, '&lt;')}</div>
+        </div>
+        <div class="pbar"><span class="pfill" style="width:${pct}%"></span></div>
+        <div class="advance ${canAdvance ? '' : 'disabled'}" title="${canAdvance ? '推进到下一步' : '已完成'}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>`;
+  }
+
+  let cards = [];
   async function refresh() {
     try {
-      const cards = await invoke('get_track_cards');
-      if (!cards || cards.length === 0) {
-        el.title.textContent = '暂无追踪任务';
-        el.step.textContent = '点击打开客户端';
-        el.pfill.style.width = '0%';
-        currentStepUuid = null; currentTaskUuid = null;
-        el.advance.classList.add('disabled');
-        // 隐藏切换按钮
-        const prev = document.getElementById('wPrev'); const next = document.getElementById('wNext');
-        if (prev) prev.style.display = 'none'; if (next) next.style.display = 'none';
+      cards = await invoke('get_track_cards');
+    if (!cards || cards.length === 0) {
+        cardEl.innerHTML = '<div class="empty" id="empty" title="点击打开客户端">暂无追踪任务<br>点击打开客户端</div>';
+        bindCardEvents();
+        lastKey = '';
         return;
       }
-      // v5.14f：boss 反馈"3 个追踪任务只显示 1 个"——支持多任务切换
-      //   保留 widget 92px 高度，加 "< 1/3 >" 切换按钮 + 索引
-      if (typeof curCardIdx !== 'number' || curCardIdx >= cards.length) curCardIdx = 0;
-      const c = cards[curCardIdx];
-      const t = c.task || {};
-      const isCountTask = !!(t.count && t.count > 1);
-      const total = isCountTask ? t.count : Math.max(c.total_steps || 0, 1);
-      const done = isCountTask ? (t.done_count || 0) : (c.total_steps > 0 ? c.done_steps : (t.done_count || 0));
-      if (isCountTask) {
-        el.step.textContent = '已完成 ' + done + '/' + total;
-        // 次数任务：仍允许点击推进（advances 完所有 count 后整个任务 done）
-        // 通过 toggleStep 路径推 count（与 step 走相同 advance_step 框架）
-        currentStepUuid = null;
-        currentTaskUuid = t.uuid;
-        el.advance.classList.remove('disabled');
-        el.advance.title = '推进 1 次（已 ' + done + '/' + total + '）';
-      } else if (c.current_step) {
-        el.step.textContent = '步骤 ' + (done + 1) + '/' + total + ' · ' + c.current_step.title;
-        currentStepUuid = c.current_step.uuid;
-        currentTaskUuid = t.uuid;
-        el.advance.classList.remove('disabled');
-        el.advance.title = '推进到下一步（' + (done + 1) + '/' + total + '）';
-      } else {
-        el.step.textContent = '全部已完成';
-        currentStepUuid = null; currentTaskUuid = null;
-        el.advance.classList.add('disabled');
-      }
-      const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((done / total) * 100))) : 0;
-      const key = t.title + '|' + done + '/' + total;
-      if (key !== lastKey) { el.pfill.style.width = pct + '%'; lastKey = key; }
-      el.title.textContent = t.title || '任务';
+      const sig = cards.map(c => (c.task?.uuid || '') + ':' + (c.task?.done_count || 0) + '/' + (c.task?.count || c.total_steps || 0)).join('|');
+      if (sig === lastKey) return;
+      lastKey = sig;
+      cardEl.innerHTML = cards.map((c, i) => rowHtml(c, i)).join('');
+      bindCardEvents();
     } catch (e) {
-      el.title.textContent = '客户端未启动';
-      el.step.textContent = '点击唤起';
-      el.pfill.style.width = '0%';
-      el.advance.classList.add('disabled');
+      cardEl.innerHTML = '<div class="empty" id="empty">客户端未启动</div>';
+      bindCardEvents();
     }
   }
 
-  // 推进键：步骤化任务调 advance_step，最后一步后端自动 complete + 积分
-  // 次数任务：调 complete_task（直接完成+积分，对单次推进体验更直接）
-  el.advance.addEventListener('click', async function(ev) {
-    ev.stopPropagation();
-    if (advancing) return;
-    if (!currentTaskUuid) return;
-    advancing = true;
-    try {
-      if (currentStepUuid) {
-        await invoke('advance_step', { stepUuid: currentStepUuid, taskUuid: currentTaskUuid, status: 'done' });
-      } else {
-        // 次数任务：toggleStep-like 路径
-        await invoke('complete_task', { taskUuid: currentTaskUuid });
+  function bindCardEvents() {
+    // 单击行 → 唤起主窗（区分拖动）
+    cardEl.querySelectorAll('.row').forEach(row => {
+      let downX = 0, downY = 0, downT = 0;
+      row.addEventListener('mousedown', function(ev) {
+        if (ev.target.closest('.advance')) return;
+        downX = ev.screenX; downY = ev.screenY; downT = Date.now();
+        const startX = ev.screenX, startY = ev.screenY;
+        const timer = setTimeout(function() {
+          const onMove = function(mv) {
+            if (Math.abs(mv.screenX - startX) > 3 || Math.abs(mv.screenY - startY) > 3) {
+              clearTimeout(timer);
+              cardEl.removeEventListener('mousemove', onMove);
+              invoke('win_start_dragging', { label: 'widget' }).catch(function(){});
+            }
+          };
+          cardEl.addEventListener('mousemove', onMove);
+        }, 100);
+        const cleanup = function() { clearTimeout(timer); };
+        row.addEventListener('mouseup', cleanup, { once: true });
+        row.addEventListener('mouseleave', cleanup, { once: true });
+      });
+      row.addEventListener('mouseup', function(ev) {
+        if (ev.target.closest('.advance')) return;
+        if (Math.abs(ev.screenX - downX) < 5 && Math.abs(ev.screenY - downY) < 5) {
+          invoke('show_main_window').catch(function(){});
+        }
+      });
+      // 单击推进键 → advance_step / complete_task
+      const adv = row.querySelector('.advance');
+      if (adv) {
+        adv.addEventListener('click', async function(ev) {
+          ev.stopPropagation();
+          if (adv.classList.contains('disabled')) return;
+          const taskUuid = row.dataset.taskUuid;
+          const stepUuid = row.dataset.stepUuid;
+          const isCount = row.dataset.isCount === '1';
+          try {
+            if (stepUuid) {
+              await invoke('advance_step', { stepUuid, taskUuid, status: 'done' });
+            } else if (isCount) {
+              await invoke('complete_task', { taskUuid });
+            }
+          } catch (e) { console.error('推进失败', e); }
+          await refresh();
+        });
       }
-    } catch (e) {
-      console.error('推进失败', e);
+    });
+    // 空态点击唤起主窗
+    const emptyEl = document.getElementById('empty');
+    if (emptyEl) {
+      let dX = 0, dY = 0;
+      emptyEl.addEventListener('mousedown', function(ev) { dX = ev.screenX; dY = ev.screenY; });
+      emptyEl.addEventListener('mouseup', function(ev) {
+        if (Math.abs(ev.screenX - dX) < 5 && Math.abs(ev.screenY - dY) < 5) invoke('show_main_window').catch(function(){});
+      });
     }
-    advancing = false;
-    // 立即本地刷新（不等 5s 轮询）
-    await refresh();
+  }
+
+  // 卡片整体 mousedown 兜底拖动（空态 + 全局）
+  let cardDownX = 0, cardDownY = 0;
+  cardEl.addEventListener('mousedown', function(ev) {
+    cardDownX = ev.screenX; cardDownY = ev.screenY;
+    // 空态时由 emptyEl 处理唤起；非空态由 .row 处理
   });
 
-  let downX = 0, downY = 0, downT = 0;
-  let curCardIdx = 0;    // v5.14f：当前追踪任务索引（多任务轮播）
-  document.getElementById('card').addEventListener('mousedown', function(ev) {
-    if (ev.target.closest('.advance')) return;  // 推进键不触发唤起
-    downX = ev.screenX; downY = ev.screenY; downT = Date.now();
-    // v5.14e：拖动 JS 兜底（WebView2 data-tauri-drag-region 偶发失效——100ms 后若 mousemove > 3px 调 win_start_dragging）
-    const startX = ev.screenX, startY = ev.screenY;
-    const timer = setTimeout(function() {
-      const onMove = function(mv) {
-        if (Math.abs(mv.screenX - startX) > 3 || Math.abs(mv.screenY - startY) > 3) {
-          clearTimeout(timer);
-          document.removeEventListener('mousemove', onMove);
-          invoke('win_start_dragging', { label: 'widget' }).catch(function(){});
-        }
-      };
-      document.addEventListener('mousemove', onMove);
-    }, 100);
-    const cleanup = function() { clearTimeout(timer); };
-    document.getElementById('card').addEventListener('mouseup', cleanup, { once: true });
-    document.getElementById('card').addEventListener('mouseleave', cleanup, { once: true });
-  });
-  document.getElementById('card').addEventListener('mouseup', function(ev) {
-    if (ev.target.closest('.advance')) return;
-    const dx = Math.abs(ev.screenX - downX), dy = Math.abs(ev.screenY - downY);
-    if (dx < 5 && dy < 5) invoke('show_main_window').catch(function(){});
-  });
+  // 右键隐藏
   document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
     invoke('hide_widget').catch(function(){});
@@ -189,5 +194,6 @@
   setInterval(refresh, 5000);
 })();
 </script>
+</div>
 </body>
 </html>
