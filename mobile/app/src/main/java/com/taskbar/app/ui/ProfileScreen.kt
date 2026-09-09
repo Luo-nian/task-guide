@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -163,10 +164,24 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             }
             // 内容层：文字用深咖（金底上比白字更贵气）+ 阴影托底
             Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                // v5.15.4：勋章进度环（对齐桌面 v5.14h conic ring）—— 外圈 Canvas 画进度弧 + 中央等级数字
+                // v5.15.6：等级徽章 —— 外圈进度环 + 中央圆形金徽章内绘等级图形（替代 v5.15.4 旋转方块数字）
+                //   PathParser 在 release APK 解析 path 异常返空 — 改用 emoji 直接绘（轻量可靠）
                 val metal = level.palette.metal
                 val metalLight = level.palette.metalLight
-                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                val levelEmoji = when (level.lv) {
+                    1 -> "\uD83C\uDF31"  // 🌱 萌芽
+                    2 -> "\uD83E\uDD6B"  // 🦫 风华游侠
+                    3 -> "\u26F5"        // ⛵ 破浪骑士
+                    4 -> "\uD83C\uDF19"  // 🌙 群星行者
+                    5 -> "\uD83C\uDFC6"  // 🏆 传奇勇者
+                    6 -> "\uD83D\uDEE1"  // 🛡 苍穹守护者
+                    7 -> "\u2693"        // ⚓ 深渊征服者
+                    8 -> "\u2600\uFE0F"  // ☀️ 星辰霸主
+                    9 -> "\uD83D\uDC41"  // 👁 天命传奇
+                    10 -> "\uD83C\uDF0C" // 🌌 寰宇传说
+                    else -> "${level.lv}"
+                }
+                Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.fillMaxSize()) {
                         val stroke = 4.dp.toPx()
                         val inset = stroke / 2
@@ -178,7 +193,7 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                             topLeft = Offset(inset, inset), size = arcSize,
                             style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         )
-                        // 进度弧（palette 金属色，本级完成度）
+                        // 进度弧（palette 金属色）
                         drawArc(
                             color = metalLight,
                             startAngle = -90f,
@@ -187,23 +202,22 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                             topLeft = Offset(inset, inset), size = arcSize,
                             style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         )
-                    }
-                    // 中央：等级菱形徽标（旋转 45° 方块，金属高光；文字反向转正）
-                    Box(
-                        Modifier
-                            .size(34.dp)
-                            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(metalLight, metal)))
-                            .graphicsLayer { rotationZ = 45f },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "${level.lv}",
-                            color = androidx.compose.ui.graphics.Color(0xFF1F1407),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.graphicsLayer { rotationZ = -45f }
+                        // 中央金徽章（radial 高光 + 白描边）
+                        val r = this.size.minDimension / 2f - 5.dp.toPx()
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(metalLight.copy(alpha = 0.95f), metal),
+                                center = this.center, radius = r
+                            ),
+                            radius = r, center = this.center
                         )
+                        drawCircle(Color.White.copy(alpha = 0.75f), radius = r - 1.2.dp.toPx(), center = this.center,
+                            style = Stroke(width = 1.2.dp.toPx()))
+                        drawCircle(Color(0xFF3A2C0C).copy(alpha = 0.45f), radius = r - 2.8.dp.toPx(), center = this.center,
+                            style = Stroke(width = 1.dp.toPx()))
                     }
+                    // 中央 emoji（在金属渐变圆上对比清晰）
+                    Text(levelEmoji, fontSize = 30.sp)
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {

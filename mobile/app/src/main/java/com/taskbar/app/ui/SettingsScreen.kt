@@ -228,7 +228,14 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Spacer(Modifier.height(8.dp))
                 Text("铃声（自定义）", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(4.dp))
-                val displayName = if (ringUri.isBlank()) "系统默认铃声" else ringUri.substringAfterLast('/')
+                // v5.15.6：铃声显示名用 RingtoneManager.getRingtone(Uri).getTitle() 拿系统真名
+            //   旧版 ringUri.substringAfterLast('/') 在 content://media/... Uri 取到数字 ID 显示乱码
+            val displayName = remember(ringUri) {
+                if (ringUri.isBlank()) "系统默认铃声"
+                else runCatching { RingtoneManager.getRingtone(ctx, android.net.Uri.parse(ringUri))?.getTitle(ctx) ?: null }
+                    .getOrNull()?.takeIf { it.isNotBlank() }
+                    ?: ringUri.substringAfterLast('/').takeIf { it.isNotBlank() } ?: ringUri
+            }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(displayName, color = TGColors.Ink, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = {
