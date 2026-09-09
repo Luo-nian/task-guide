@@ -156,7 +156,6 @@
 
   let downX = 0, downY = 0, downT = 0;
   let curCardIdx = 0;    // v5.14f：当前追踪任务索引（多任务轮播）
-  let lastKey = '';
   document.getElementById('card').addEventListener('mousedown', function(ev) {
     if (ev.target.closest('.advance')) return;  // 推进键不触发唤起
     downX = ev.screenX; downY = ev.screenY; downT = Date.now();

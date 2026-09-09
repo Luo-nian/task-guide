@@ -339,11 +339,12 @@ body::after {
   width: 52px; height: 52px;
   border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: linear-gradient(160deg, #2A2418, #151210);
+  background: radial-gradient(circle at 35% 30%, #FFFDF4, #F4E9D0 70%, #D9C9A4);  /* v5.14h.10：浅米白底（PNG 头像透明区显示亮色，不再黑底） */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   cursor: pointer;
+  box-shadow: 0 0 0 1.5px #E8CB7F, 0 2px 8px rgba(0,0,0,.12);  /* 金边+轻阴影 */
 }
 .dash-greet-avatar svg { width: 26px; height: 26px; position: relative; z-index: 2; color: #1F1407; }
 /* 文字区（两行：第 1 行称呼，第 2 行等级+积分+距下级） */
