@@ -3,6 +3,10 @@ use crate::{Task, Step};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+// v5.14h.13：ws 连接实时状态（解决 boss 反馈"明明一个网络但显示未配对"——
+//   之前 settings.pairing 只是缓存，与 ws_loop 实际连接脱钩）
+pub static WS_CONNECTED: AtomicBool = AtomicBool::new(false);
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -132,9 +136,11 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
             continue;
         }
         let ws_url = base.replace("http://", "ws://") + "/ws";
+        WS_CONNECTED.store(false, Ordering::Relaxed);
         match tungstenite::connect(&ws_url) {
             Ok((mut socket, _)) => {
                 log::info!("WS 已连接: {}", ws_url);
+                WS_CONNECTED.store(true, Ordering::Relaxed);
                 use tungstenite::Message;
                 loop {
                     match socket.read() {
@@ -148,8 +154,9 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                         Err(_) => break,
                     }
                 }
+                WS_CONNECTED.store(false, Ordering::Relaxed);
             }
-            Err(_) => {}
+            Err(_) => { WS_CONNECTED.store(false, Ordering::Relaxed); }
         }
         std::thread::sleep(Duration::from_secs(5));
     }

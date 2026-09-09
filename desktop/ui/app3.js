@@ -244,6 +244,21 @@ function applySettingsToUi() {
   // 配对区条件显示：已配对时隐藏扫描设备 + 手动配对两行（防误解可同时连多个手机）
   const paired = !!settings.pairing;
   document.querySelectorAll('.ss-pair-hidden-on-pair').forEach(el => el.classList.toggle('ss-pair-hidden', paired));
+  // v5.14h.13：实时 ws 连接状态轮询 — 解锁 settings.pairing 缓存与 ws_loop 实际连接脱钩
+  //   显示 "已配对 + 实时连接中" / "已配对缓存但未连接" / "未配对" 三态
+  if (!window._pairConnTimer) {
+    window._pairConnTimer = setInterval(async () => {
+      const ps = document.getElementById('setPairingStatus');
+      if (!ps) return;
+      try {
+        const connected = await call('is_ws_connected');
+        const peer = await call('get_ws_peer');
+        if (connected) ps.textContent = '已配对 · 实时连接中：' + (peer || settings.pairing?.url || '');
+        else if (settings.pairing) ps.textContent = '已配对（缓存）· 当前未连接 — 点击下方"扫描设备"重连';
+        else ps.textContent = '未配对';
+      } catch(e) { /* 启动期 ignore */ }
+    }, 3000);
+  }
   // 解除配对按钮：未配对时禁用 + 灰
   const unpair = document.getElementById('setUnpair');
 
@@ -1539,18 +1554,28 @@ document.querySelectorAll('[data-save-edit]').forEach(btn => {
 // v5.13k：把'字符占位'升级为'lucide 内置头像'（8 个真实矢量图形，冒险者主题）。
 //   上传的自定义图（settings.avatar_img base64）仍优先于内置头像。
 //   选头像 → settings.avatar_idx；上传图 → settings.avatar_img。
+// v5.14h.14：融合手机端 emoji 动物库（8 lucide + 8 emoji = 16 个随机池）
 const AVATAR_GLYPHS = [
-  { name: '火焰', ico: 'flame'    },
-  { name: '星光', ico: 'star'     },
-  { name: '王冠', ico: 'crown'    },
-  { name: '闪光', ico: 'sparkles' },
-  { name: '轨道', ico: 'orbit'    },
-  { name: '盾牌', ico: 'shield'   },
-  { name: '剑',   ico: 'sword'    },
-  { name: '罗盘', ico: 'compass'  }
+  { name: '火焰', kind: 'svg',  ico: 'flame'    },
+  { name: '星光', kind: 'svg',  ico: 'star'     },
+  { name: '王冠', kind: 'svg',  ico: 'crown'    },
+  { name: '闪光', kind: 'svg',  ico: 'sparkles' },
+  { name: '轨道', kind: 'svg',  ico: 'orbit'    },
+  { name: '盾牌', kind: 'svg',  ico: 'shield'   },
+  { name: '剑',   kind: 'svg',  ico: 'sword'    },
+  { name: '罗盘', kind: 'svg',  ico: 'compass'  },
+  // 手机端 8 动物 emoji（v5.15.6 头像选择器已用）+ emoji 速记字符直接渲染
+  { name: '狐狸', kind: 'emoji', ico: '\uD83E\uDD8A' },  // 🦊
+  { name: '老虎', kind: 'emoji', ico: '\uD83D\uDC2F' },  // 🐯
+  { name: '猫头鹰', kind: 'emoji', ico: '\uD83E\uDD89' },  // 🦉
+  { name: '狼',   kind: 'emoji', ico: '\uD83D\uDC3A' },  // 🐺
+  { name: '熊猫', kind: 'emoji', ico: '\uD83D\uDC3C' },  // 🐼
+  { name: '狮子', kind: 'emoji', ico: '\uD83E\uDD81' },  // 🦁
+  { name: '龙',   kind: 'emoji', ico: '\uD83D\uDC09' },  // 🐲
+  { name: '老鹰', kind: 'emoji', ico: '\uD83E\uDD85' }   // 🦅
 ];
 let avatarIdx = 0;
-function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.length].ico; }
+function pickAvatarGlyph() { return AVATAR_GLYPHS[avatarIdx % AVATAR_GLYPHS.length]; }
 
 function openProfileModal() {
   const lv = level || levelOf(points);
@@ -1564,12 +1589,13 @@ function openProfileModal() {
   const _pt2 = document.getElementById('profileLevelTitle');
   if (_pt2) { _pt2.textContent = lv.title || ''; _pt2.style.display = lv.title ? '' : 'none'; }
   document.getElementById('profilePointsNum').textContent = points;
-  // v5.13k：渲染 8 个 lucide 内置头像选择网格（仅首次打开时构建）
+  // v5.14h.14：头像选择网格渲染（lucide 用 svgIcon，emoji 用 Text）
   const avatarGrid = document.getElementById('avatarGrid');
   if (avatarGrid && !avatarGrid.dataset.rendered) {
-    avatarGrid.innerHTML = AVATAR_GLYPHS.map((a, i) =>
-      `<div class="ph-av" data-idx="${i}" title="${a.name}">${svgIcon(a.ico, 18, 1.8)}</div>`
-    ).join('');
+    avatarGrid.innerHTML = AVATAR_GLYPHS.map((a, i) => {
+      const icon = a.kind === 'emoji' ? `<span style="font-size:16px;line-height:1">${a.ico}</span>` : svgIcon(a.ico, 18, 1.8);
+      return `<div class="ph-av" data-idx="${i}" title="${a.name}">${icon}</div>`;
+    }).join('');
     avatarGrid.addEventListener('click', e => {
       const cell = e.target.closest('.ph-av');
       if (!cell) return;
@@ -1683,9 +1709,14 @@ function renderProfileAvatar() {
     av.style.backgroundPosition = 'center';
     av.style.backgroundRepeat = 'no-repeat';
   } else {
-    // v5.13k：lucide 图标替代字符（更精致、识别度更高）
-    av.style.backgroundImage = '';
-    av.innerHTML = svgIcon(pickAvatarGlyph(), 32, 1.7);
+    // v5.14h.14：头像 kind 路由（svgIcon for lucide / Text emoji for 动物 emoji）
+    const g = pickAvatarGlyph();
+    if (g.kind === 'emoji') {
+      av.style.backgroundImage = '';
+      av.innerHTML = '<span style="font-size:24px;line-height:1">' + g.ico + '</span>';
+    } else {
+      av.innerHTML = svgIcon(g.ico, 32, 1.7);
+    }
   }
 }
 
@@ -1705,7 +1736,9 @@ function renderUserAvatar() {
       greet.style.backgroundRepeat = 'no-repeat';
     } else {
       greet.style.backgroundImage = '';
-      greet.innerHTML = svgIcon(pickAvatarGlyph(), 24, 1.7);
+      const g = pickAvatarGlyph();
+      if (g.kind === 'emoji') greet.innerHTML = '<span style="font-size:18px;line-height:1">' + g.ico + '</span>';
+      else greet.innerHTML = svgIcon(g.ico, 24, 1.7);
     }
     // v5.14h.1：勋章进度环（距下级完成度）由 renderLevelBadge 写 ring-pct；Lv 角标 + 稀有度宝石也由它处理
   }

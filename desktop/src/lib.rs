@@ -1214,6 +1214,21 @@ fn get_setting(state: tauri::State<AppState>, key: String) -> Option<String> {
     db.query_row("SELECT value FROM settings WHERE key=?1", params![&key], |r| r.get::<_, String>(0)).ok()
 }
 
+// v5.14h.13：实时 ws 连接状态查询（修 boss 反馈"明明一个网络但显示未配对"——
+//   settings.pairing 只是缓存，与 ws_loop 实际连接脱钩）
+#[tauri::command]
+fn is_ws_connected() -> bool {
+    sync::WS_CONNECTED.load(std::sync::atomic::Ordering::Relaxed)
+}
+// v5.14h.13：实时 ws 远端地址（连接中时 = 配置的 server_url；未连接 = 空）
+#[tauri::command]
+fn get_ws_peer(state: tauri::State<AppState>) -> String {
+    if sync::WS_CONNECTED.load(std::sync::atomic::Ordering::Relaxed) {
+        state.server_url.lock().unwrap().clone()
+    } else {
+        String::new()
+    }
+}
 #[tauri::command]
 fn save_pairing(state: tauri::State<AppState>, url: String, device_id: String) {
     // v5.15 P0：持久化配对时把手机 deviceId 也存上（旧实现忽略了 device_id 参数）
@@ -1576,6 +1591,7 @@ pub fn run() {
             show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide, win_start_dragging,
             connect_server, disconnect_server, get_server_url,
             set_setting, get_setting, save_pairing, load_pairing,
+            is_ws_connected, get_ws_peer,
             discover_devices, seed_default_tasks
         ])
         .on_window_event(|window, event| {
