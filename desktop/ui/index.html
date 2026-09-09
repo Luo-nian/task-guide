@@ -120,6 +120,12 @@
     <div class="dashboard-view" id="dashboardView">
       <!-- v5.14h.1：dashboard greeting = 完整身份卡（圆环头像 + Lv + 等级名 + 积分 + 距下级 + 宝石，从顶栏搬来） -->
       <div class="dash-greeting" id="dashGreeting" style="cursor:pointer">
+        <!-- v5.14h.17：头像还原（boss：个人信息页头像不能删；挂件 widget 才不用头像） -->
+        <div class="dash-greet-ring" id="dashGreetRing" style="--ring-pct:0%">
+          <div class="dash-greet-avatar" id="dashGreetGfx">
+            <span class="greet-lv-tag" id="greetLvTag">Lv4</span>
+          </div>
+        </div>
         <div class="dash-greet-info">
           <div class="dash-greet-row1">
             <span class="dash-greet-text" id="dashGreetText">下午好，boss</span>

@@ -244,12 +244,11 @@ function applySettingsToUi() {
   // 配对区条件显示：已配对时隐藏扫描设备 + 手动配对两行（防误解可同时连多个手机）
   const paired = !!settings.pairing;
   document.querySelectorAll('.ss-pair-hidden-on-pair').forEach(el => el.classList.toggle('ss-pair-hidden', paired));
-  // v5.14h.13：实时 ws 连接状态轮询 — 解锁 settings.pairing 缓存与 ws_loop 实际连接脱钩
-  //   显示 "已配对 + 实时连接中" / "已配对缓存但未连接" / "未配对" 三态
+  // v5.14h.17：设置页轮询（每次都查 setPairingStatus，没找到就跳过 — 找到即更新）
   if (!window._pairConnTimer) {
     window._pairConnTimer = setInterval(async () => {
       const ps = document.getElementById('setPairingStatus');
-      if (!ps) return;
+      if (!ps) return;  // 设置页未打开就不更新（设置区不在 DOM）
       try {
         const connected = await call('is_ws_connected');
         const peer = await call('get_ws_peer');
