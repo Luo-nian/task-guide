@@ -2296,7 +2296,7 @@ input::placeholder { color: var(--ink-faint); }
 }
 /* 图标线条用深棕（亮底上清晰），加细 1.2 */
 .level-icon, .pc-level-icon, .level-character { color: var(--rco, #3E2A08); }
-.level-icon svg path, .pc-level-icon svg path, .level-character svg path { stroke-width: 1.2; }
+.level-icon svg path, .pc-level-icon svg path, .level-character svg path { stroke-width: 2.2; }
 
 /* v5.14h.6 fix：.dash-greet-avatar::before 暗底遮住 avatar_img backgroundImage → 头像不显示
    v5.14h.1 引入 ::before 暗底覆盖中心（用于无图时衬底），但有 avatar_img 时也盖住图。
