@@ -384,6 +384,14 @@ function detectLevelUp() {
     _lastLvMin = curMin;   // 同等级更新基准（防止降级时误判）
   }
 }
+// v5.14h.9：侧边栏追踪角标实时显示（之前只在 renderTrackingView 里更新 → 其他 tab 一直显示初始 0）
+function updateTrackingBadge() {
+  const cnt = document.getElementById('trackingCount');
+  if (!cnt) return;
+  const n = (typeof tasks !== 'undefined' ? tasks : []).filter(t => isTracking(t) && !t.done && t.deleted !== 1).length;
+  cnt.textContent = n;
+  cnt.classList.toggle('zero', n === 0);
+}
 async function render() {
   // v5.13：render 期间加 .fading 过渡 class（CSS 0.18s opacity 0.55），避免
   // 整页重绘时出现的"瞬间空白+重绘"闪烁（boss 反馈取消追踪/添加任务闪烁）
@@ -399,6 +407,7 @@ async function render() {
       if (tpEl) tpEl.textContent = points;
       renderLevelBadge();
       renderSideNav();
+      updateTrackingBadge();   // v5.14h.9：每次 render 都更新追踪角标（不依赖 nav='tracking'）
       if (nav === 'overview') renderOverview();
       else if (nav === 'today') renderTodayView();
       else if (nav === 'tracking') renderTrackingView();
@@ -433,9 +442,7 @@ function renderTrackingView() {
   const lvEl = document.getElementById('listView');
   if (!lvEl) return;
   const trackTasks = tasks.filter(t => isTracking(t) && !t.done && t.deleted !== 1);
-  // 更新侧栏角标
-  const cnt = document.getElementById('trackingCount');
-  if (cnt) { cnt.textContent = trackTasks.length; cnt.classList.toggle('zero', trackTasks.length === 0); }
+  // v5.14h.9：角标统一由 render() 里 updateTrackingBadge() 更新（此处不再写）
   let html = `
     <div class="list-view-header">
       <span class="vh-title">追踪任务</span>
