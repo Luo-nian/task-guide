@@ -310,9 +310,16 @@ function applySettingsToUi() {
   // 持久化到后端 settings
   if (!settings._remSynced) { settings._remSynced = true; }
   if (unpair) {
-    unpair.disabled = !settings.pairing;
-    unpair.classList.toggle('disabled', !settings.pairing);
-    unpair.title = settings.pairing ? ('解除与 ' + settings.pairing.url + ' 的配对') : '尚未配对，无法解除';
+    // v5.14h.12：未配对时隐藏 unpair 按钮（之前显示 + disabled 红框让 boss 觉得逻辑反）
+    //   配对流程用 .ss-pair-hidden-on-pair 类的"扫描设备 / 手动配对"区显示
+    if (settings.pairing) {
+      unpair.style.display = '';
+      unpair.disabled = false;
+      unpair.classList.remove('disabled');
+      unpair.title = '解除与 ' + settings.pairing.url + ' 的配对';
+    } else {
+      unpair.style.display = 'none';
+    }
   }
 }
 async function persistSettingsServer() {
