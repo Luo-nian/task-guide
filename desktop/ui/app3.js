@@ -2221,17 +2221,19 @@ document.title = '…loading…';
 // 等 DOM/资源全部 ready 再 render（避免 init 时拿不到某些元素）
 function startApp() {
   initIcons();      // 先把所有 data-icon 占位注入成内联 SVG
-  // 启动时把昵称 / 头像索引从后端拉到本地，再调一次 render 让 dashboard 显示
-  hydrateUserProfile().then(() => render()).catch(() => render());
+  // 启动时把昵称 / 头像（含自定义图）从后端拉到本地，再调一次 render 让 dashboard 显示。
+  // v5.15.10 P0：**必须先 hydrate 再 persistSettingsServer** ——
+  //   两者原来并行执行，persistSettingsServer 会把 localStorage 里的旧头像/昵称写回后端并打新时间戳，
+  //   于是"手机端刚上传并同步过来的新头像"会被桌面端一份陈旧缓存盖掉（LWW 被破坏）。
+  hydrateUserProfile()
+    .then(() => { render(); persistSettingsServer().catch(() => {}); })
+    .catch(() => render());
   // 首次启动 seed 5 条示例任务（后端去重：seed_v4 标记 + 已有任务时跳过）
   call('seed_default_tasks', {}).then(r => {
     if (r && r.seeded) render();
   }).catch(() => {});
   setTimeout(render, 250);
   setTimeout(render, 1000);
-  // 设置平时只在改动时推后端，启动补推一次，
-  // 避免「改过设置但那次请求失败」导致后端一直用默认值
-  persistSettingsServer().catch(() => {});
   setInterval(render, 15000);
   // v5.15.7：手机端改了数据 → Rust ws_loop 落库后 emit "sync-applied" → 立刻刷新
   //   （否则要等上面 15s 轮询；同时把手机端选的 emoji 头像映射成桌面 avatar_idx 实现头像互见）
@@ -2260,22 +2262,25 @@ function onRemoteSyncApplied() {
       const aemo = await call('get_setting', { key: 'avatar_emoji' });
       const nn = await call('get_setting', { key: 'nickname' });
       let avChanged = false;
+      const tsImg = parseInt(await call('get_setting', { key: 'sync_ts_avatar_img' }) || '0', 10) || 0;
+      const tsEmo = parseInt(await call('get_setting', { key: 'sync_ts_avatar_emoji' }) || '0', 10) || 0;
       const imgNow = aimg || '';
-      if (imgNow !== (settings.avatar_img || '')) {
-        if (imgNow) settings.avatar_img = imgNow; else delete settings.avatar_img;
-        avChanged = true;
-      }
-      if (aemo) {
-        // 手机端 emoji → 桌面同款 emoji 槽位（AVATAR_GLYPHS 8..15 与手机 8 个动物顺序一致）
+      // v5.15.10：头像按"最新一次意图"生效 —— emoji 时间戳更新才用 emoji（并清掉旧图），
+      //   否则以自定义图为准。旧实现只要 settings 里存在 emoji 就删图，
+      //   手机端刚推过来的自定义头像会被一条陈旧 emoji 直接抹掉。
+      if (aemo && tsEmo > tsImg) {
         const gi = AVATAR_GLYPHS.findIndex(g => g.kind === 'emoji' && g.ico === aemo);
-        if (gi >= 0 && settings.avatar_idx !== gi) {
-          settings.avatar_idx = gi; avatarIdx = gi;
-          delete settings.avatar_img;
+        if (gi >= 0 && settings.avatar_idx !== gi) { settings.avatar_idx = gi; avatarIdx = gi; avChanged = true; }
+        if (settings.avatar_img) { delete settings.avatar_img; avChanged = true; }
+      } else {
+        if (imgNow !== (settings.avatar_img || '')) {
+          if (imgNow) settings.avatar_img = imgNow; else delete settings.avatar_img;
           avChanged = true;
         }
-      } else if (aidx != null && !isNaN(parseInt(aidx)) && parseInt(aidx) !== settings.avatar_idx) {
-        settings.avatar_idx = parseInt(aidx); avatarIdx = settings.avatar_idx;
-        avChanged = true;
+        if (aidx != null && !isNaN(parseInt(aidx)) && parseInt(aidx) !== settings.avatar_idx) {
+          settings.avatar_idx = parseInt(aidx); avatarIdx = settings.avatar_idx;
+          avChanged = true;
+        }
       }
       if (nn) settings.nickname = nn;
       if (avChanged) {

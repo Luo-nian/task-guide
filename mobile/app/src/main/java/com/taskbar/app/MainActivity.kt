@@ -30,6 +30,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.*
@@ -212,25 +213,28 @@ fun MainApp() {
                 popEnterTransition = { androidx.compose.animation.EnterTransition.None },
                 popExitTransition = { androidx.compose.animation.ExitTransition.None }
         ) {
-            composable("home") { TaskListScreen(vm, navController) }
-            composable("track") { TrackScreen(vm) }
-            composable("habit") { HabitScreen(vm) }
-            composable("profile") { ProfileScreen(vm, navController) }
-            composable("settings") { SettingsScreen(vm, navController) }
-            composable("all") { AllTasksScreen(vm, navController) }
-            composable("history") { HistoryScreen(vm, navController) }
+            // v5.15.10：每个页面自带**不透明**背景（与原根背景同一个 brush）。
+            // 起因：NavHost 切页时新旧两个 destination 会同时绘制一两帧，而各页面 Scaffold 都是
+            //   containerColor = Transparent → 上一页（任务列表等）透出来 = boss 说的"切换有卡顿/页面残留"。
+            composable("home") { ScreenSurface { TaskListScreen(vm, navController) } }
+            composable("track") { ScreenSurface { TrackScreen(vm) } }
+            composable("habit") { ScreenSurface { HabitScreen(vm) } }
+            composable("profile") { ScreenSurface { ProfileScreen(vm, navController) } }
+            composable("settings") { ScreenSurface { SettingsScreen(vm, navController) } }
+            composable("all") { ScreenSurface { AllTasksScreen(vm, navController) } }
+            composable("history") { ScreenSurface { HistoryScreen(vm, navController) } }
             composable(
                 "detail/{uuid}",
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })
             ) { entry ->
-                TaskDetailScreen(vm, navController, entry.arguments?.getString("uuid") ?: "")
+                ScreenSurface { TaskDetailScreen(vm, navController, entry.arguments?.getString("uuid") ?: "") }
             }
-            composable("add") { AddEditTaskScreen(vm, navController, null) }
+            composable("add") { ScreenSurface { AddEditTaskScreen(vm, navController, null) } }
             composable(
                 "edit/{uuid}",
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })
             ) { entry ->
-                AddEditTaskScreen(vm, navController, entry.arguments?.getString("uuid"))
+                ScreenSurface { AddEditTaskScreen(vm, navController, entry.arguments?.getString("uuid")) }
             }
         }
     }
@@ -247,4 +251,20 @@ fun MainApp() {
             onDismiss = { vm.consumeCompletion() }
         )
     }
+}
+
+/**
+ * v5.15.10：页面外壳 —— 给每个 NavHost destination 铺一层**不透明**背景（与原根背景同一个 brush）。
+ *
+ * 背景：各页面 Scaffold 都是 containerColor = Transparent（沿用根背景的暖米色渐变），
+ * 但 NavHost 切页时新旧两个 destination 会同时绘制 1~2 帧 —— 透明背景会让上一页（任务列表等）
+ * 透出来，观感就是"切换有一点点卡顿 + 页面残留"。铺一层同款不透明底即可彻底遮住。
+ */
+@Composable
+fun ScreenSurface(content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(com.taskbar.app.ui.TGBackgroundBrush)
+    ) { content() }
 }

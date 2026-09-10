@@ -150,7 +150,7 @@ private val TGColorScheme = lightColorScheme(
 )
 
 /** 顶部暖光渐变（对应桌面端 body::before） */
-private val TGBackgroundBrush = Brush.verticalGradient(
+val TGBackgroundBrush = Brush.verticalGradient(
     listOf(
         Color(0xFFFAF0D8),
         Color(0xFFF5EFE0),

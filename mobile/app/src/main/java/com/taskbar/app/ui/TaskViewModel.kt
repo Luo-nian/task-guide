@@ -215,8 +215,24 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===== 分类 =====
     suspend fun getCustomCategories(): List<String> = repo.getCustomCategories()
-    fun addCustomCategory(name: String) = viewModelScope.launch { repo.addCustomCategory(name) }
-    fun removeCustomCategory(name: String) = viewModelScope.launch { repo.removeCustomCategory(name) }
+    fun addCustomCategory(name: String) = viewModelScope.launch {
+        repo.addCustomCategory(name); refreshCustomCategories()
+    }
+    fun removeCustomCategory(name: String) = viewModelScope.launch {
+        repo.removeCustomCategory(name); refreshCustomCategories()
+    }
+
+    /**
+     * v5.15.10：自定义分类改为 ViewModel 持有 + 启动预读。
+     * 旧写法是「新建任务页 LaunchedEffect 里 DB 查询 → 回写 state」，
+     * 进页面后必然触发一次**全屏二次重组**（实测首帧 90th 550~600ms 卡顿的元凶之一）。
+     */
+    private val _customCategories = MutableStateFlow<List<String>>(emptyList())
+    val customCategories: StateFlow<List<String>> = _customCategories.asStateFlow()
+    private fun refreshCustomCategories() = viewModelScope.launch {
+        _customCategories.value = runCatching { repo.getCustomCategories() }.getOrDefault(emptyList())
+    }
+    init { refreshCustomCategories() }
 
     private fun refreshWidget() {
         TrackWidgetProvider.refreshAll(ctx)

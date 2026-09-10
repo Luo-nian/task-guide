@@ -433,9 +433,17 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     var dueAt by remember { mutableStateOf<Long?>(null) }
     // 习惯周期：null=不重复；"daily"=每天；"every2d"=隔1天；"weekly:1,3,5"=周一三五
     var habitRule by remember { mutableStateOf<String?>(null) }
+    // 提醒方式/端：新建时直接在 remember 里算好默认值。
+    // v5.15.10：旧写法是在 LaunchedEffect 里读 prefs 再回写 state → 首帧后必然触发一次
+    //   全屏重组（实测进入本页 90th 550~600ms 的卡顿来源）。现在首帧就把默认值算出来。
+    val reminderDefaults = remember {
+        val g = ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("reminder_strength", "notify") ?: "notify"
+        ReminderStrength.parseConfig(g)
+    }
     // 提醒方式：四通道多选 + 端选择（存储为 serializeConfig 格式）
-    var reminderChannels by remember { mutableStateOf(listOf<String>()) }
-    var reminderScope by remember { mutableStateOf(ReminderStrength.SCOPE_MOBILE) }
+    var reminderChannels by remember { mutableStateOf(reminderDefaults.first) }
+    var reminderScope by remember { mutableStateOf(reminderDefaults.second) }
     // 里程碑目标次数
     var milestoneTarget by remember { mutableStateOf("1") }
     // 新建/编辑时临时添加的步骤（title, attrLabel, attrValue）——保存后批量入库
@@ -445,6 +453,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
 
     var editing by remember { mutableStateOf<Task?>(null) }
     LaunchedEffect(editUuid) {
+        // 只有"编辑已有任务"才需要读一次 DB 回填（新建走上面的 remember 默认值）
         if (editUuid != null) {
             val t = vm.observeTaskFlow(editUuid).first() ?: return@LaunchedEffect
             editing = t
@@ -455,23 +464,14 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
             reminderChannels = ch
             reminderScope = sc
             milestoneTarget = t.target.toString()
-        } else {
-            // 新建：初始选中全局默认（不再"跟随默认设置"，直接显示全局档）
-            val global = ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE)
-                .getString("reminder_strength", "notify") ?: "notify"
-            val (ch, sc) = ReminderStrength.parseConfig(global)
-            reminderChannels = ch
-            reminderScope = sc
         }
     }
 
     val presetCategories = listOf("学习", "生活", "锻炼")
-    var customCategories by remember { mutableStateOf(listOf<String>()) }
+    // v5.15.10：分类从 ViewModel 预读值初始化（不再在 LaunchedEffect 里查询+回写 → 少一次全屏重组）
+    val vmCategories by vm.customCategories.collectAsState()
+    var customCategories by remember(vmCategories) { mutableStateOf(vmCategories) }
     var showAddCategory by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        // 读用户自定义分类（持久化在 settings）
-        customCategories = vm.getCustomCategories()
-    }
     // 展示用分类全集：预设 + 自定义 + 当前选中（防止历史自定义分类不显示）
     val allCategories = remember(customCategories, category) {
         (presetCategories + customCategories +
@@ -616,39 +616,13 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                     HabitCycleEditor(rule = habitRule, onChange = { habitRule = it })
                 }
 
-                // 提醒时间（非速记/非习惯）
+                // 提醒（v5.15.10：字段顺序与电脑端「新建任务」弹窗完全一致 ——
+                //   端（不提醒/仅手机/仅电脑/双端）→ 方式（四通道多选）→ 时间；
+                //   选「不提醒」时方式与时间整块收起，与电脑端同一套逻辑）
                 if (type != TaskType.NOTE && type != TaskType.HABIT) {
-                    Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
-                    DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
-
-                    Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
-                    Text("可多选组合（默认已按你的全局设置选中），点通道可切换", color = TGColors.InkMute, fontSize = 11.sp)
+                    Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
-                    // 四通道多选
-                    listOf(
-                        ReminderStrength.NOTIFY to "通知栏",
-                        ReminderStrength.VIBRATE to "振动",
-                        ReminderStrength.BEEP to "提示音",
-                        ReminderStrength.RING to "铃声"
-                    ).forEach { (v, l) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
-                            }
-                        ) {
-                            Checkbox(
-                                checked = v in reminderChannels,
-                                onCheckedChange = {
-                                    reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
-                                },
-                                colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
-                            )
-                            Text(l, color = TGColors.Ink, fontSize = 13.sp)
-                        }
-                    }
-                    // 端选择（单选）——每行两个，分两行防挤压
-                    Spacer(Modifier.height(4.dp))
+                    // 1) 端（单选）——每行两个，防挤压
                     val scopeOpts = listOf(
                         ReminderStrength.SCOPE_NONE to "不提醒",
                         ReminderStrength.SCOPE_MOBILE to "仅手机",
@@ -663,9 +637,42 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         }
                         Spacer(Modifier.height(4.dp))
                     }
-                    if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
+                    if (reminderScope != ReminderStrength.SCOPE_NONE) {
+                        // 2) 方式（四通道多选）
+                        Spacer(Modifier.height(6.dp))
+                        Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Text("可多选组合（默认已按你的全局设置选中），点通道可切换", color = TGColors.InkMute, fontSize = 11.sp)
                         Spacer(Modifier.height(4.dp))
-                        Text("需双端连接后同步提醒", color = TGColors.Azure, fontSize = 11.sp)
+                        listOf(
+                            ReminderStrength.NOTIFY to "通知栏",
+                            ReminderStrength.VIBRATE to "振动",
+                            ReminderStrength.BEEP to "提示音",
+                            ReminderStrength.RING to "铃声"
+                        ).forEach { (v, l) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
+                                }
+                            ) {
+                                Checkbox(
+                                    checked = v in reminderChannels,
+                                    onCheckedChange = {
+                                        reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
+                                    },
+                                    colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
+                                )
+                                Text(l, color = TGColors.Ink, fontSize = 13.sp)
+                            }
+                        }
+                        if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("需双端连接后同步提醒", color = TGColors.Azure, fontSize = 11.sp)
+                        }
+                        // 3) 时间
+                        Spacer(Modifier.height(8.dp))
+                        Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
+                        DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
                     }
                 }
 

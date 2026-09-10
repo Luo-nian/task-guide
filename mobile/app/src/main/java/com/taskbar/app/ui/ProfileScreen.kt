@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.taskbar.app.R
 import com.taskbar.app.data.model.Levels
+import kotlinx.coroutines.launch
 
 /** 下一级等级名（"我的"页等级卡用） */
 private fun nextLevelName(currentLv: Int): String = when (currentLv) {
@@ -72,6 +73,30 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         var avatarEmoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
         val syncedAvatar by vm.avatarImg.collectAsState()
         val syncedBmp = rememberAvatarBitmap(syncedAvatar)
+        // v5.15.10：手机端也能自定义头像 —— 相册选图 → 只取中间圆形区域 → 256px PNG → 推电脑端
+        val scope = rememberCoroutineScope()
+        var uploading by remember { mutableStateOf(false) }
+        val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        ) { uri ->
+            if (uri != null) {
+                uploading = true
+                scope.launch {
+                    val dataUrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        AvatarUtil.uriToCircularDataUrl(ctx, uri)
+                    }
+                    if (dataUrl != null) {
+                        // 走设置同步通道 → 电脑端「个人信息」也换成同一张（圆形）
+                        vm.setSyncedSetting("avatar_img", dataUrl)
+                        prefs.edit().putString("avatar_emoji", "").apply()
+                        avatarEmoji = ""
+                    } else {
+                        android.widget.Toast.makeText(ctx, "这张图读不了，换一张试试", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    uploading = false
+                }
+            }
+        }
         val avatarPalette = listOf("#E8CB7F", "#D8B45A", "#C9A227", "#8CE0C8", "#5BA3D0", "#B49BE0", "#E07BD0", "#FF8A5B")
         val avatarEmojis = listOf("🦊", "🐯", "🦉", "🐺", "🐼", "🦁", "🐲", "🦅")
         Row(
@@ -80,11 +105,12 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 大头像（电脑端自定义图 > 选中 emoji > 人形）
+            // 大头像（自定义图 > 选中 emoji > 人形），点它 = 从相册选图
             Box(
                 Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape)
                     .background(if (avatarEmoji.isNotEmpty() || syncedBmp != null) Color(0xFF1A1206) else TGColors.GoldLight)
-                    .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
+                    .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape)
+                    .clickable { pickImage.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
                 if (syncedBmp != null) {
@@ -97,8 +123,26 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 } else if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 24.sp)
                 else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 26.dp)
             }
-            Spacer(Modifier.width(12.dp))
-            // 8 内置头像网格（横向）—— 选中即换头像：同时清掉电脑端同步来的自定义图
+            Spacer(Modifier.width(10.dp))
+            // 相册上传入口（自动裁中间圆形区域 + 同步电脑端）
+            Column {
+                Box(
+                    Modifier.clip(RoundedCornerShape(999.dp))
+                        .background(TGColors.Gold.copy(alpha = 0.18f))
+                        .border(1.dp, TGColors.Gold, RoundedCornerShape(999.dp))
+                        .clickable(enabled = !uploading) { pickImage.launch("image/*") }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        if (uploading) "处理中…" else "上传头像",
+                        color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(3.dp))
+                Text("自动裁中间圆形 · 同步电脑", color = TGColors.InkMute, fontSize = 9.5.sp)
+            }
+            Spacer(Modifier.width(10.dp))
+            // 8 内置头像网格（横向）—— 选中即换头像：同时清掉自定义图
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(avatarEmojis) { i, e ->
                     val bg = avatarPalette[i % avatarPalette.size]

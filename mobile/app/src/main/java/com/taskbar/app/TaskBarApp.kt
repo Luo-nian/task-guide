@@ -45,6 +45,15 @@ class TaskBarApp : Application() {
             runCatching { initDefaultSettings() }
             runCatching { ReminderScheduler.rescheduleAll(repo, this@TaskBarApp) }
         }
+        // v5.15.10：后台预热等级图标（PathParser 解析 10 档 ~30 段），
+        //   否则首次进「我的」页会在首帧解析 → 实测 90th 300ms 的卡顿来源之一
+        appScope.launch {
+            runCatching { com.taskbar.app.ui.LevelGlyphs.prewarm() }
+        }
+        // 预热自定义分类（新建任务页直接读，避免进页面后再回写状态触发二次全屏重组）
+        appScope.launch {
+            runCatching { repo.getCustomCategories() }
+        }
 
         // 注意：SyncService 不在此启动！原因：
         // - 启动期任何前台服务异常都可能让 application 被系统杀（Android 14 起尤其严格）

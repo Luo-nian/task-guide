@@ -68,4 +68,11 @@ object LevelGlyphs {
             try { PathParser().parsePathString(seg).toPath() } catch (e: Exception) { Path() }
         }
     }
+
+    /**
+     * v5.15.10：预热。object 首次访问会在调用线程上解析 10 档共 ~30 段 path，
+     * 若正好发生在「我的」页首帧 → 首帧被拉长（实测进入该页 90th=300ms 的一部分）。
+     * 在 Application 启动时丢到后台线程先解析一遍，之后取 PATHS 就是零成本。
+     */
+    fun prewarm() { PATHS.size }
 }
