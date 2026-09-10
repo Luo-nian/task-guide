@@ -312,17 +312,30 @@ function applySettingsToUi() {
     };
   });
   // v5.14h.3：自定义提前时间（不在预设中时显示原值）
+  // v5.15.7：支持 分钟/小时/天 三种单位（原来只能填分钟，boss 反馈"不能只以分钟为单位"）
   const setLeadCustom = document.getElementById('setLeadCustom');
+  const setLeadUnit = document.getElementById('setLeadUnit');
   if (setLeadCustom) {
     const presetValues = ['0', '15', '60', '1440'];
-    if (lead && !presetValues.includes(lead)) setLeadCustom.value = lead;
-    setLeadCustom.onchange = () => {
+    const n = parseInt(lead, 10);
+    if (!isNaN(n) && n > 0 && !presetValues.includes(lead)) {
+      // 显示时换算成最"整"的单位：4320 → 3 天；180 → 3 小时；45 → 45 分钟
+      let u = 1;
+      if (n % 1440 === 0) u = 1440;
+      else if (n % 60 === 0) u = 60;
+      setLeadCustom.value = n / u;
+      if (setLeadUnit) setLeadUnit.value = String(u);
+    }
+    const commitLead = () => {
       const v = parseInt(setLeadCustom.value, 10);
+      const u = setLeadUnit ? (parseInt(setLeadUnit.value, 10) || 1) : 1;
       if (isNaN(v) || v < 0) { setLeadCustom.value = ''; return; }
-      settings[LEAD_KEY] = Math.min(43200, v);  // 上限 30 天
+      settings[LEAD_KEY] = Math.min(43200, v * u);   // 内部统一存分钟，上限 30 天
       saveSettings();
       applySettingsToUi();
     };
+    setLeadCustom.onchange = commitLead;
+    if (setLeadUnit) setLeadUnit.onchange = commitLead;
   }
   // 持久化到后端 settings
   if (!settings._remSynced) { settings._remSynced = true; }
@@ -2220,6 +2233,11 @@ function startApp() {
   // 避免「改过设置但那次请求失败」导致后端一直用默认值
   persistSettingsServer().catch(() => {});
   setInterval(render, 15000);
+  // v5.15.7：手机端改了数据 → Rust ws_loop 落库后 emit "sync-applied" → 立刻刷新
+  //   （否则要等上面 15s 轮询；同时把手机端选的 emoji 头像映射成桌面 avatar_idx 实现头像互见）
+  if (isTauriEnv && window.__TAURI__.event && window.__TAURI__.event.listen) {
+    window.__TAURI__.event.listen('sync-applied', onRemoteSyncApplied).catch(() => {});
+  }
   setInterval(checkEmergency, 60000);
   // v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
   setInterval(checkReconnectFail, 15000);
@@ -2228,6 +2246,49 @@ function startApp() {
   setInterval(checkNightNotify, 60000);
 }
 let _lastReconnectToast = 0;
+
+// v5.15.7：手机端变更落库后（完成任务/打卡/积分/头像）立即刷新界面
+let _syncAppliedTimer = null;
+function onRemoteSyncApplied() {
+  if (_syncAppliedTimer) return;              // 800ms 内的多次变更合并成一次
+  _syncAppliedTimer = setTimeout(async () => {
+    _syncAppliedTimer = null;
+    // 1) 头像互见：手机端选了 emoji / 改了昵称 → 桌面同步过来
+    try {
+      const aimg = await call('get_setting', { key: 'avatar_img' });
+      const aidx = await call('get_setting', { key: 'avatar_idx' });
+      const aemo = await call('get_setting', { key: 'avatar_emoji' });
+      const nn = await call('get_setting', { key: 'nickname' });
+      let avChanged = false;
+      const imgNow = aimg || '';
+      if (imgNow !== (settings.avatar_img || '')) {
+        if (imgNow) settings.avatar_img = imgNow; else delete settings.avatar_img;
+        avChanged = true;
+      }
+      if (aemo) {
+        // 手机端 emoji → 桌面同款 emoji 槽位（AVATAR_GLYPHS 8..15 与手机 8 个动物顺序一致）
+        const gi = AVATAR_GLYPHS.findIndex(g => g.kind === 'emoji' && g.ico === aemo);
+        if (gi >= 0 && settings.avatar_idx !== gi) {
+          settings.avatar_idx = gi; avatarIdx = gi;
+          delete settings.avatar_img;
+          avChanged = true;
+        }
+      } else if (aidx != null && !isNaN(parseInt(aidx)) && parseInt(aidx) !== settings.avatar_idx) {
+        settings.avatar_idx = parseInt(aidx); avatarIdx = settings.avatar_idx;
+        avChanged = true;
+      }
+      if (nn) settings.nickname = nn;
+      if (avChanged) {
+        if (typeof renderUserAvatar === 'function') renderUserAvatar();
+        if (typeof renderProfileAvatar === 'function') renderProfileAvatar();
+      }
+    } catch (e) { /* 忽略 */ }
+    // 2) 任务/积分/追踪变化 → 重渲染（render 内部会重新 fetchAll）
+    render();
+  }, 800);
+}
+
+// v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
 async function checkReconnectFail() {
   try {
     const v = await call('get_setting', { key: 'reconnect_fail' });

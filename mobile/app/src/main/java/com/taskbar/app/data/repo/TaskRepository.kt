@@ -9,6 +9,8 @@ import com.taskbar.app.data.model.Priority
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.StepStatus
 import com.taskbar.app.data.model.SyncMeta
+import com.taskbar.app.data.model.SettingChange
+import com.taskbar.app.data.model.SettingKV
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackCardItem
@@ -36,6 +38,12 @@ class TaskRepository(private val db: AppDatabase) {
 
     private fun now() = System.currentTimeMillis()
     private fun newUuid() = UUID.randomUUID().toString()
+
+    /** 同步用 Json：encodeDefaults=true 才能把默认值字段也序列化给桌面端 */
+    private val syncJson = kotlinx.serialization.json.Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+    }
 
     // ==================== 观察 ====================
     fun observeMainList(): Flow<List<Task>> = taskDao.observeMainList()
@@ -101,7 +109,7 @@ class TaskRepository(private val db: AppDatabase) {
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
-        emit(ChangeOp("upsert", "task", task.uuid))
+        emitWithData(ChangeOp("upsert", "task", task.uuid))
         return task
     }
 
@@ -112,7 +120,7 @@ class TaskRepository(private val db: AppDatabase) {
             updatedAt = now()
         )
         taskDao.upsert(recalculated)
-        emit(ChangeOp("upsert", "task", recalculated.uuid))
+        emitWithData(ChangeOp("upsert", "task", recalculated.uuid))
     }
 
     suspend fun deleteTask(uuid: String) {
@@ -120,7 +128,7 @@ class TaskRepository(private val db: AppDatabase) {
         taskDao.softDelete(uuid, t)
         // 关联步骤软删除
         stepDao.getByTask(uuid).forEach { stepDao.softDelete(it.uuid, t) }
-        emit(ChangeOp("delete", "task", uuid))
+        emitWithData(ChangeOp("delete", "task", uuid))
     }
 
     // ==================== 追踪状态机 ====================
@@ -139,15 +147,15 @@ class TaskRepository(private val db: AppDatabase) {
         // 第一个 todo 步骤转 doing
         stepDao.getFirstUndone(uuid)?.let { first ->
             stepDao.updateStatus(first.uuid, StepStatus.DOING, null, t)
-            emit(ChangeOp("upsert", "step", first.uuid))
+            emitWithData(ChangeOp("upsert", "step", first.uuid))
         }
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
         return true
     }
 
     suspend fun stopTracking(uuid: String) {
         taskDao.updateTrackStatus(uuid, TrackStatus.PENDING, now())
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     /** 直接完成任务（无步骤或一键完成），累加积分。
@@ -161,7 +169,7 @@ class TaskRepository(private val db: AppDatabase) {
             val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(t))
             if (habitDao.isChecked(uuid, date)) return
             habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
-            emit(ChangeOp("upsert", "habit", uuid))
+            emitWithData(ChangeOp("upsert", "habit", uuid))
         } else if (task.type == TaskType.MILESTONE) {
             // 里程碑：进度 +1；达到目标次数才归档（大任务，可多次推进）
             // 防止重复完成刷分：已归档则不再加分
@@ -172,21 +180,20 @@ class TaskRepository(private val db: AppDatabase) {
             } else {
                 taskDao.upsert(task.copy(progress = newProgress, updatedAt = t))
             }
-            emit(ChangeOp("upsert", "task", uuid))
+            emitWithData(ChangeOp("upsert", "task", uuid))
         } else {
             // 普通任务：归档 + 加积分
             if (task.trackStatus == TrackStatus.DONE) return
             taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
         }
-        // 积分奖励
-        val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
-        settingsDao.set(com.taskbar.app.data.model.Setting("total_points", (current + task.rewardPoints).toString()))
+        // 积分奖励（v5.15.7：写值 + 打时间戳 + 推电脑端，双端"最新为主"一致）
+        bumpPoints(task.rewardPoints)
         // 步骤全 done（习惯/普通都一样）
         stepDao.getByTask(uuid).filter { it.status != StepStatus.DONE }.forEach {
             stepDao.updateStatus(it.uuid, StepStatus.DONE, t, t)
-            emit(ChangeOp("upsert", "step", it.uuid))
+            emitWithData(ChangeOp("upsert", "step", it.uuid))
         }
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     /** 从归档恢复（取消完成）—— 同步扣回完成任务时奖励的积分 */
@@ -194,11 +201,9 @@ class TaskRepository(private val db: AppDatabase) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
         taskDao.upsert(task.copy(trackStatus = TrackStatus.PENDING, done = 0, doneAt = null, updatedAt = t))
-        // 扣回积分（防刷分：完成→恢复→完成 来回刷）
-        val current = settingsDao.get("total_points")?.toIntOrNull() ?: 0
-        val restored = (current - task.rewardPoints).coerceAtLeast(0)
-        settingsDao.set(com.taskbar.app.data.model.Setting("total_points", restored.toString()))
-        emit(ChangeOp("upsert", "task", uuid))
+        // 扣回积分（防刷分：完成→恢复→完成 来回刷）+ 推电脑端
+        bumpPoints(-task.rewardPoints)
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新） */
@@ -227,13 +232,13 @@ class TaskRepository(private val db: AppDatabase) {
         val step = stepDao.getByUuid(stepUuid) ?: return
         val t = now()
         stepDao.updateStatus(step.uuid, StepStatus.DONE, t, t)
-        emit(ChangeOp("upsert", "step", step.uuid))
+        emitWithData(ChangeOp("upsert", "step", step.uuid))
 
         // 找下一个未完成步骤
         val next = stepDao.getFirstUndone(step.taskUuid)
         if (next != null) {
             stepDao.updateStatus(next.uuid, StepStatus.DOING, null, t)
-            emit(ChangeOp("upsert", "step", next.uuid))
+            emitWithData(ChangeOp("upsert", "step", next.uuid))
         } else {
             // 所有步骤都完成了 → 自动完成任务（completeTask 内部会归档 + 加积分 + 步骤补 done）
             completeTask(step.taskUuid)
@@ -259,10 +264,10 @@ class TaskRepository(private val db: AppDatabase) {
         val step = stepDao.getByUuid(stepUuid) ?: return
         val t = now()
         stepDao.updateStatus(step.uuid, StepStatus.TODO, null, t)
-        emit(ChangeOp("upsert", "step", step.uuid))
+        emitWithData(ChangeOp("upsert", "step", step.uuid))
         stepDao.getFirstUndone(step.taskUuid)?.let { next ->
             stepDao.updateStatus(next.uuid, StepStatus.DOING, null, t)
-            emit(ChangeOp("upsert", "step", next.uuid))
+            emitWithData(ChangeOp("upsert", "step", next.uuid))
         }
     }
 
@@ -290,19 +295,19 @@ class TaskRepository(private val db: AppDatabase) {
             createdAt = t, updatedAt = t
         )
         stepDao.upsert(step)
-        emit(ChangeOp("upsert", "step", step.uuid))
+        emitWithData(ChangeOp("upsert", "step", step.uuid))
         return step
     }
 
     suspend fun updateStep(step: Step) {
         val updated = step.copy(updatedAt = now())
         stepDao.upsert(updated)
-        emit(ChangeOp("upsert", "step", updated.uuid))
+        emitWithData(ChangeOp("upsert", "step", updated.uuid))
     }
 
     suspend fun deleteStep(uuid: String) {
         stepDao.softDelete(uuid, now())
-        emit(ChangeOp("delete", "step", uuid))
+        emitWithData(ChangeOp("delete", "step", uuid))
     }
 
     /** 步骤进度：已完成 / 总数 */
@@ -319,7 +324,7 @@ class TaskRepository(private val db: AppDatabase) {
         val t = now()
         val newDue = task.dueAt + delayMillis
         taskDao.upsert(task.copy(dueAt = newDue, delayedCount = task.delayedCount + 1, updatedAt = t))
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     // ==================== 仓库置顶/置底（把任务在今天/未来之间移动） ====================
@@ -330,7 +335,7 @@ class TaskRepository(private val db: AppDatabase) {
         if (task.trackStatus == TrackStatus.DONE) return
         val t = now()
         taskDao.upsert(task.copy(dueAt = t, updatedAt = t))
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     /** 置底：把通过置顶挪到主页的任务移回仓库——due_at 改为明天 9 点（非今天） */
@@ -344,7 +349,7 @@ class TaskRepository(private val db: AppDatabase) {
         c.set(java.util.Calendar.SECOND, 0)
         c.set(java.util.Calendar.MILLISECOND, 0)
         taskDao.upsert(task.copy(dueAt = c.timeInMillis, updatedAt = now()))
-        emit(ChangeOp("upsert", "task", uuid))
+        emitWithData(ChangeOp("upsert", "task", uuid))
     }
 
     // ==================== 习惯打卡 ====================
@@ -352,7 +357,7 @@ class TaskRepository(private val db: AppDatabase) {
         if (habitDao.isChecked(taskUuid, date)) return false
         val log = HabitLog(taskUuid = taskUuid, checkDate = date, createdAt = now())
         habitDao.insert(log)
-        emit(ChangeOp("upsert", "habit", log.taskUuid))
+        emitWithData(ChangeOp("upsert", "habit", log.taskUuid))
         return true
     }
 
@@ -453,6 +458,41 @@ class TaskRepository(private val db: AppDatabase) {
         com.taskbar.app.data.model.Setting(key, value)
     )
 
+    // ==================== 设置跨端同步（v5.15.7） ====================
+
+    /** 某设置项的同步时间戳（"最新为主"依据） */
+    suspend fun settingTs(key: String): Long =
+        settingsDao.get("sync_ts_$key")?.toLongOrNull() ?: 0L
+
+    /**
+     * 本地修改设置：写值 + 打时间戳 + 推给电脑端。
+     * 值没变则直接返回（避免无意义的推送和"假更新"时间戳盖掉远端的真实修改）。
+     */
+    suspend fun setSettingSynced(key: String, value: String, push: Boolean = true) {
+        if (settingsDao.get(key) == value) return
+        val ts = now()
+        settingsDao.set(com.taskbar.app.data.model.Setting(key, value))
+        settingsDao.set(com.taskbar.app.data.model.Setting("sync_ts_$key", ts.toString()))
+        if (push) {
+            ChangeBus.tryEmit(ChangeOp("upsert", "setting", key,
+                syncJson.encodeToString(SettingChange.serializer(), SettingChange(key, value, ts))
+            ))
+        }
+    }
+
+    /** 收到电脑端的设置变更：远端时间戳不旧于本地才覆盖（last-write-wins） */
+    suspend fun applySettingFromSync(key: String, value: String, ts: Long) {
+        if (ts < settingTs(key)) return
+        settingsDao.set(com.taskbar.app.data.model.Setting(key, value))
+        settingsDao.set(com.taskbar.app.data.model.Setting("sync_ts_$key", ts.toString()))
+    }
+
+    /** 积分变化（完成任务/恢复任务）：写值 + 打时间戳 + 推电脑端 */
+    private suspend fun bumpPoints(delta: Int, absolute: Int? = null) {
+        val next = absolute ?: ((getTotalPoints() + delta).coerceAtLeast(0))
+        setSettingSynced("total_points", next.toString())
+    }
+
     // ==================== 同步元信息 ====================
     suspend fun getLastSync(device: String): Long =
         syncDao.get(device)?.lastSync ?: 0L
@@ -472,7 +512,13 @@ class TaskRepository(private val db: AppDatabase) {
         val tasks = taskDao.getAllNonDeleted()
         val steps = stepDao.getAllNonDeleted()
         val habits = habitDao.getAll()
-        return FullSyncPayload(tasks, steps, habits, System.currentTimeMillis())
+        // v5.15.7：设置也全量带上（积分/等级、头像…），sync_ts_* 内部行不外发
+        val all = settingsDao.getAll()
+        val tsMap = all.filter { it.key.startsWith("sync_ts_") }
+            .associate { it.key.removePrefix("sync_ts_") to (it.value.toLongOrNull() ?: 0L) }
+        val settings = all.filterNot { it.key.startsWith("sync_ts_") }
+            .map { SettingKV(it.key, it.value, tsMap[it.key] ?: 0L) }
+        return FullSyncPayload(tasks, steps, habits, settings, System.currentTimeMillis())
     }
 
     /** 构建增量变更列表（since 之后的所有变更，含软删除 delete） */
@@ -499,27 +545,46 @@ class TaskRepository(private val db: AppDatabase) {
         // 冲突处理：本地更新则跳过
         val local = taskDao.getByUuid(task.uuid)
         if (local != null && local.updatedAt > task.updatedAt) return
-        taskDao.upsert(task)
+        // v5.15.7 P0：Room 的 @Upsert 按自增主键 id 定位行（不是 uuid 唯一索引）。
+        //   远端 JSON 里没有本地 id（=0），直接 upsert 会 INSERT 撞 uuid 唯一索引 → IGNORE，
+        //   再按 id=0 UPDATE 又找不到行 → 静默什么都不做（手机端永远收不到电脑端的状态）。
+        //   这里显式沿用本地行的 id。
+        taskDao.upsert(if (local != null) task.copy(id = local.id) else task.copy(id = 0))
     }
 
     suspend fun upsertStepFromSync(step: Step) {
         val local = stepDao.getByUuid(step.uuid)
         if (local != null && local.updatedAt > step.updatedAt) return
-        stepDao.upsert(step)
+        // 同上：保留本地 id，否则远端步骤变更永远落不了库
+        stepDao.upsert(if (local != null) step.copy(id = local.id) else step.copy(id = 0))
     }
 
     suspend fun applyChange(change: ChangeOp) {
         when (change.op) {
             "upsert" -> when (change.entity) {
                 "task" -> change.data?.let {
-                    val t = kotlinx.serialization.json.Json.decodeFromString<Task>(it)
+                    // 用宽松 Json（ignoreUnknownKeys）：桌面端将来加字段也不会让整批同步 500
+                    val t = syncJson.decodeFromString<Task>(it)
                     upsertTaskFromSync(t)
                 }
                 "step" -> change.data?.let {
-                    val s = kotlinx.serialization.json.Json.decodeFromString<Step>(it)
+                    val s = syncJson.decodeFromString<Step>(it)
                     upsertStepFromSync(s)
                 }
-                "habit" -> { /* habit_logs 通过 created_at 增量同步，这里忽略 */ }
+                "habit" -> change.data?.let {
+                    // v5.15.7：电脑端打卡 → 写 habit_logs（幂等，已存在则忽略）
+                    runCatching {
+                        val h = syncJson.decodeFromString<HabitLog>(it)
+                        habitDao.insert(h.copy(id = 0))
+                    }
+                }
+                // v5.15.7：电脑端的设置变更（积分/等级、头像、昵称…）→ 最新为主
+                "setting" -> change.data?.let {
+                    runCatching {
+                        val sc = syncJson.decodeFromString<SettingChange>(it)
+                        applySettingFromSync(sc.key, sc.value, sc.updatedAt)
+                    }
+                }
             }
             "delete" -> when (change.entity) {
                 "task" -> taskDao.softDelete(change.uuid, now())
@@ -528,7 +593,35 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
-    private fun emit(op: ChangeOp) {
-        ChangeBus.tryEmit(op)
+    /**
+     * v5.15.7 P0：推送变更时必须带上实体完整数据。
+     * 之前只发 {op,entity,uuid} 不带 data，桌面端 apply_change 里 `if let Some(d) = &op.data`
+     * 直接跳过 → 手机上完成任务/开始追踪，电脑端永远不动（boss 反馈的"双端数据差很多"根因之一）。
+     */
+    private suspend fun emitWithData(op: ChangeOp) {
+        ChangeBus.tryEmit(withData(op))
+    }
+
+    private suspend fun withData(op: ChangeOp): ChangeOp {
+        if (op.op == "delete" || op.data != null) return op
+        return when (op.entity) {
+            "task" -> taskDao.getByUuid(op.uuid)?.let {
+                op.copy(data = syncJson.encodeToString(Task.serializer(), it))
+            } ?: op
+            "step" -> stepDao.getByUuid(op.uuid)?.let {
+                op.copy(data = syncJson.encodeToString(Step.serializer(), it))
+            } ?: op
+            "habit" -> habitDao.getByTask(op.uuid).maxByOrNull { it.createdAt }?.let {
+                op.copy(data = syncJson.encodeToString(HabitLog.serializer(), it))
+            } ?: op
+            "setting" -> {
+                val v = settingsDao.get(op.uuid) ?: return op
+                val ts = settingsDao.get("sync_ts_${op.uuid}")?.toLongOrNull() ?: now()
+                op.copy(data = syncJson.encodeToString(
+                    SettingChange.serializer(), SettingChange(op.uuid, v, ts)
+                ))
+            }
+            else -> op
+        }
     }
 }

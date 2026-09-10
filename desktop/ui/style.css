@@ -797,6 +797,19 @@ body::after {
   color: #fff;
   box-shadow: 0 2px 8px var(--glow-gold);
 }
+/* v5.15.7：自定义提前时间单位选择器（分钟/小时/天）—— 不用弹性拉伸，紧贴数字输入框 */
+#settingsOverlay .rem-unit-sel {
+  flex: 0 0 auto; max-width: none;
+  padding: 4px 8px;
+  font-size: 11.5px; font-weight: 600;
+  background: rgba(255, 254, 251, 0.98);
+  border: 1.5px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+#settingsOverlay .rem-time-row input#setLeadCustom { flex: 0 0 auto; max-width: none; }
+
 .chk-pill {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 10px;

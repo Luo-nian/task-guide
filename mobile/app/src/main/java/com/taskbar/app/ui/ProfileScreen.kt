@@ -66,9 +66,12 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         )
 
         // ===== v5.15：自定义头像 + 8 内置头像选择（本地 prefs avatar_emoji 持久化） =====
+        // v5.15.7：电脑端裁剪上传的自定义头像（settings.avatar_img，跨端同步）优先级最高
         val ctx = LocalContext.current
         val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
         var avatarEmoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
+        val syncedAvatar by vm.avatarImg.collectAsState()
+        val syncedBmp = rememberAvatarBitmap(syncedAvatar)
         val avatarPalette = listOf("#E8CB7F", "#D8B45A", "#C9A227", "#8CE0C8", "#5BA3D0", "#B49BE0", "#E07BD0", "#FF8A5B")
         val avatarEmojis = listOf("🦊", "🐯", "🦉", "🐺", "🐼", "🦁", "🐲", "🦅")
         Row(
@@ -77,28 +80,38 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 大头像（选中 emoji 或人形）
+            // 大头像（电脑端自定义图 > 选中 emoji > 人形）
             Box(
                 Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(if (avatarEmoji.isNotEmpty()) Color(0xFF1A1206) else TGColors.GoldLight)
+                    .background(if (avatarEmoji.isNotEmpty() || syncedBmp != null) Color(0xFF1A1206) else TGColors.GoldLight)
                     .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 24.sp)
+                if (syncedBmp != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = syncedBmp,
+                        contentDescription = "头像",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 24.sp)
                 else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 26.dp)
             }
             Spacer(Modifier.width(12.dp))
-            // 8 内置头像网格（横向）
+            // 8 内置头像网格（横向）—— 选中即换头像：同时清掉电脑端同步来的自定义图
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(avatarEmojis) { i, e ->
                     val bg = avatarPalette[i % avatarPalette.size]
                     Box(
                         Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
                             .background(Color(android.graphics.Color.parseColor(bg)))
-                            .border(if (e == avatarEmoji) 2.dp else 0.dp, TGColors.Ink, androidx.compose.foundation.shape.CircleShape)
+                            .border(if (e == avatarEmoji && syncedBmp == null) 2.dp else 0.dp, TGColors.Ink, androidx.compose.foundation.shape.CircleShape)
                             .clickable {
                                 avatarEmoji = e
                                 prefs.edit().putString("avatar_emoji", e).apply()
+                                // v5.15.7：推给电脑端（桌面显示同款 emoji）+ 清掉自定义图，双端头像一致
+                                vm.setSyncedSetting("avatar_emoji", e)
+                                vm.setSyncedSetting("avatar_img", "")
                             },
                         contentAlignment = Alignment.Center
                     ) { Text(e, fontSize = 17.sp) }

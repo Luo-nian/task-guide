@@ -45,6 +45,18 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         .map { it?.toIntOrNull() ?: 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /** v5.15.7：桌面端自定义头像（base64 data URL）—— 跨端同步过来后手机直接显示 */
+    val avatarImg: StateFlow<String?> = repo.observeSetting("avatar_img")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * v5.15.7：本地改设置并推给电脑端（如手机换 emoji 头像 → 桌面同步显示同款 emoji）。
+     * 值未变化时不推（repo 内部已判重）。
+     */
+    fun setSyncedSetting(key: String, value: String) = viewModelScope.launch {
+        repo.setSettingSynced(key, value)
+    }
+
     // ===== 完成庆祝事件（游戏化正反馈：弹层显示积分/升级） =====
     data class CompletionEvent(
         val title: String,

@@ -437,7 +437,12 @@
               <button type="button" class="rem-time-btn" data-min="1440" id="setLead1440">1天前</button>
               <!-- v5.14h.3：自定义提前时间（预设外分钟数） -->
               <input type="number" id="setLeadCustom" min="0" max="43200" placeholder="自定义" style="width:72px" />
-              <span class="hint">分钟前</span>
+              <!-- v5.15.7：单位可选 分钟/小时/天（原来只能填分钟，boss 反馈"不能只以分钟为单位"） -->
+              <select id="setLeadUnit" class="rem-unit-sel" title="自定义提前时间的单位">
+                <option value="1">分钟前</option>
+                <option value="60">小时前</option>
+                <option value="1440">天前</option>
+              </select>
             </div>
           </div>
           <div class="setting-row">
@@ -682,6 +687,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v52"></script>
+<script src="app3.js?v=v53"></script>
 </body>
 </html>

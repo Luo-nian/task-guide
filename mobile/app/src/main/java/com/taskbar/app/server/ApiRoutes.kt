@@ -83,11 +83,17 @@ fun Application.configureServer() {
         post("/api/sync/changes") {
             val req = call.receive<ChangesRequest>()
             val app = TaskBarApp.instance
-            req.changes.forEach { app.repo.applyChange(it) }
-            call.respondText { """{"status":"ok","accepted":${req.changes.size}}""" }
+            // v5.15.7：逐条 runCatching —— 单条数据异常不该让整批变更（含积分/头像）一起失败
+            var accepted = 0
+            req.changes.forEach {
+                runCatching { app.repo.applyChange(it) }.onSuccess { accepted++ }
+                    .onFailure { e -> android.util.Log.e("sync", "applyChange 失败: ${it.entity}/${it.op}", e) }
+            }
+            call.respondText { """{"status":"ok","accepted":$accepted}""" }
         }
 
         // v5.15.6：电脑端推送设置变更（头像 emoji 同步）—— 用 JsonElement 接 body 避免新增 Request 类
+        // v5.15.7：改为"最新为主"落库 + 不回推（避免与桌面端形成同步回环）
         post("/api/settings/upsert") {
             val body = call.receiveText()
             val elem = appJson.parseToJsonElement(body)
@@ -95,7 +101,8 @@ fun Application.configureServer() {
             val key = map["key"]?.toString()?.trim('"') ?: ""
             val value = map["value"]?.toString()?.trim('"') ?: ""
             if (key.isNotEmpty()) {
-                TaskBarApp.instance.repo.setSetting(key, value)
+                val ts = map["updated_at"]?.toString()?.trim('"')?.toLongOrNull() ?: System.currentTimeMillis()
+                TaskBarApp.instance.repo.applySettingFromSync(key, value, ts)
             }
             call.respondText { """{"status":"ok","key":"$key"}""" }
         }

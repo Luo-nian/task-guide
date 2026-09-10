@@ -36,7 +36,12 @@ pub struct Task {
     pub done: i64,
     pub done_at: Option<i64>,
     pub delayed_count: i64,
+    // v5.15.7 P0 修复：手机端 Task 没有 count/doneCount（用 progress/target 表示里程碑进度），
+    //   缺 `#[serde(default)]` 会让整包反序列化失败 → full_sync 与 ws 推送全部静默失效
+    //   （"双端数据差很多"的真正根因）。这里默认值 + alias 兜住手机端字段。
+    #[serde(default = "default_count", alias = "target")]
     pub count: i64,           // 次数任务总数（count<=1 表示非次数任务）
+    #[serde(default, alias = "progress")]
     pub done_count: i64,      // 次数任务已完成次数
     pub reward_points: i64,
     #[serde(default)]
@@ -225,6 +230,9 @@ fn read_setting(db: &Connection, key: &str, default: &str) -> String {
         .unwrap_or_else(|_| default.to_string())
 }
 
+/// Task.count 反序列化默认值：1 = 非次数任务（与落库时的 COALESCE(count,1) 口径一致）
+fn default_count() -> i64 { 1 }
+
 // 开关值兼容：前端可能写 "1" / "true" / "on"，统一按真值判断
 fn is_on(v: &str) -> bool {
     matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "on" | "yes")
@@ -281,27 +289,29 @@ fn dismiss_night_notify(state: tauri::State<AppState>) {
 
 // =============== 行解析 ===============
 pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
+    // v5.15.7 加固：任一列读失败就让整行读不出来 → push_change 会误判为"已删除"并把手机端任务删掉。
+    //   所以除 uuid 外全部容错（数值列用 Option 兜 NULL，字符串列用默认值）。
     Ok(Task {
         uuid: r.get("uuid")?,
-        task_type: r.get("type")?,
-        title: r.get("title")?,
-        desc: r.get("desc")?,
-        category: r.get("category")?,
-        priority: r.get("priority")?,
-        due_at: r.get("due_at")?,
-        repeat_rule: r.get("repeat_rule")?,
-        deadline: r.get("deadline")?,
-        track_status: r.get("track_status")?,
-        done: r.get("done")?,
-        done_at: r.get("done_at")?,
-        delayed_count: r.get("delayed_count")?,
-        count: r.get("count")?,
-        done_count: r.get("done_count")?,
-        reward_points: r.get("reward_points")?,
+        task_type: r.get("type").unwrap_or_else(|_| "once".to_string()),
+        title: r.get("title").unwrap_or_default(),
+        desc: r.get("desc").unwrap_or_default(),
+        category: r.get("category").unwrap_or_default(),
+        priority: r.get("priority").unwrap_or_else(|_| "medium".to_string()),
+        due_at: r.get("due_at").unwrap_or(None),
+        repeat_rule: r.get("repeat_rule").unwrap_or(None),
+        deadline: r.get("deadline").unwrap_or(None),
+        track_status: r.get("track_status").unwrap_or_else(|_| "pending".to_string()),
+        done: r.get::<_, Option<i64>>("done").unwrap_or(None).unwrap_or(0),
+        done_at: r.get("done_at").unwrap_or(None),
+        delayed_count: r.get::<_, Option<i64>>("delayed_count").unwrap_or(None).unwrap_or(0),
+        count: r.get::<_, Option<i64>>("count").unwrap_or(None).unwrap_or(1),
+        done_count: r.get::<_, Option<i64>>("done_count").unwrap_or(None).unwrap_or(0),
+        reward_points: r.get::<_, Option<i64>>("reward_points").unwrap_or(None).unwrap_or(10),
         reminder_strength: r.get("reminder_strength").ok(),
-        created_at: r.get("created_at")?,
-        updated_at: r.get("updated_at")?,
-        deleted: r.get("deleted")?,
+        created_at: r.get::<_, Option<i64>>("created_at").unwrap_or(None).unwrap_or(0),
+        updated_at: r.get::<_, Option<i64>>("updated_at").unwrap_or(None).unwrap_or(0),
+        deleted: r.get::<_, Option<i64>>("deleted").unwrap_or(None).unwrap_or(0),
     })
 }
 
@@ -607,6 +617,7 @@ fn advance_step(
 ) {
     let now = chrono::Local::now().timestamp_millis();
     let want_done = status.as_deref().map(|s| s != "todo").unwrap_or(true);
+    let mut points_awarded = false;   // v5.15.7：本步骤推进是否结算了积分（用于推 setting 同步）
     let _task_uuid = {
         let db = state.db.lock().unwrap();
         // 前端会传 taskUuid，用它可以少一次查询；不传时回落到按 step 反查
@@ -650,11 +661,13 @@ fn advance_step(
                      ON CONFLICT(key) DO UPDATE SET value=printf('%d', CAST(value AS INTEGER) + ?2)",
                     params![(rp + 0).to_string(), rp]
                 ).ok();
+                points_awarded = true;
             }
         }
         t_uuid
     };
     sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
+    if points_awarded { push_setting_sync(&state.db, &state.server_url, "total_points"); }
 }
 
 #[tauri::command]
@@ -707,6 +720,7 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
         }
         // 所有锁都已释放：安全 push_change
         sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+        if already == 0 { push_setting_sync(&state.db, &state.server_url, "total_points"); }
         return serde_json::json!({ "status": "ok", "partial": false, "habit": true, "already_done": already > 0 });
     }
     // 次数任务（count>1）：先累加 done_count，满额才算真正完成并结算积分
@@ -754,6 +768,7 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
         ).ok();
     }
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    push_setting_sync(&state.db, &state.server_url, "total_points");
     serde_json::json!({
         "status": "ok",
         "partial": false,
@@ -1084,7 +1099,7 @@ fn restore_task(state: tauri::State<AppState>, task_uuid: String) -> Result<(), 
             ).ok();
         } // 锁释放
         // 同步积分变化给手机（手机端 total_points 来自这里）
-        sync::push_change(&state.db, &state.server_url, "settings", "total_points");
+        push_setting_sync(&state.db, &state.server_url, "total_points");
     }
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
     Ok(())
@@ -1092,12 +1107,46 @@ fn restore_task(state: tauri::State<AppState>, task_uuid: String) -> Result<(), 
 
 #[tauri::command]
 fn set_setting(state: tauri::State<AppState>, key: String, value: String) {
-    let db = state.db.lock().unwrap();
-    db.execute(
-        "INSERT INTO settings(key,value) VALUES(?1,?2) \
-         ON CONFLICT(key) DO UPDATE SET value=?2",
-        params![&key, &value]
-    ).ok();
+    // v5.15.7：只有值真的变了才写库 + 打时间戳 + 推手机
+    //   （前端 persistSettingsServer 每次保存都会把 12 个 key 全量发一遍，
+    //     若无条件推送，切任意开关都会把 base64 头像重复 POST 给手机）
+    let changed = {
+        let db = state.db.lock().unwrap();
+        let old: Option<String> = db.query_row(
+            "SELECT value FROM settings WHERE key=?1", params![&key], |r| r.get::<_, String>(0)
+        ).ok();
+        if old.as_deref() == Some(value.as_str()) {
+            false
+        } else {
+            db.execute(
+                "INSERT INTO settings(key,value) VALUES(?1,?2) \
+                 ON CONFLICT(key) DO UPDATE SET value=?2",
+                params![&key, &value]
+            ).ok();
+            true
+        }
+    }; // 锁释放
+    if changed { push_setting_sync(&state.db, &state.server_url, &key); }
+}
+
+// v5.15.7：需要双端一致的设置项（积分/等级、头像、昵称、分类…）
+const SYNC_SETTING_KEYS: [&str; 8] = [
+    "total_points", "avatar_img", "avatar_idx", "avatar_emoji",
+    "nickname", "tracking_max", "track_limit", "category_list",
+];
+
+/// 给本地某项 setting 打时间戳（"最新为主"）并推送给手机。
+/// 必须在无 db 锁状态下调用（内部会 push_change → 再 lock）。
+fn push_setting_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, key: &str) {
+    if !SYNC_SETTING_KEYS.contains(&key) { return; }
+    {
+        let conn = db.lock().unwrap();
+        let v = conn.query_row(
+            "SELECT value FROM settings WHERE key=?1", params![key], |r| r.get::<_, String>(0)
+        ).unwrap_or_default();
+        sync::write_setting_stamped(&conn, key, &v, chrono::Local::now().timestamp_millis());
+    } // 锁释放
+    sync::push_change(db, url, "setting", key);
 }
 
 // v4.10 示例任务 seed：首次启动时检测 task 表为空则注入 5 条
@@ -1252,8 +1301,16 @@ fn get_ws_peer(state: tauri::State<AppState>) -> String {
 }
 
 // v5.14h.15：推送头像 emoji 到手机（桌面切换 emoji 头像时自动同步到手机 prefs）
+// v5.15.7：同时在本地 settings 记一份（带时间戳）—— 手机端全量同步时能拿到，
+//   且手机端选 emoji 时桌面也能通过 settings.avatar_emoji 还原成同款头像
 #[tauri::command]
 fn push_avatar_emoji(state: tauri::State<AppState>, emoji: String) {
+    {
+        let conn = state.db.lock().unwrap();
+        sync::write_setting_stamped(&conn, "avatar_emoji", &emoji, chrono::Local::now().timestamp_millis());
+    } // 锁释放
+    // 已配对时把 emoji 作为 setting 变更推给手机（/api/sync/changes，带 updated_at）
+    sync::push_change(&state.db, &state.server_url, "setting", "avatar_emoji");
     let url_arc = state.server_url.clone();
     std::thread::spawn(move || {
         let base = {
@@ -1621,6 +1678,12 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent, None
         ))
         .plugin(tauri_plugin_notification::init())
+        .setup(|app| {
+            // v5.15.7：保存 AppHandle —— ws_loop 收到手机端变更后 emit "sync-applied"，
+            // 前端立刻重渲染（不再等 setInterval(render, 15000) 轮询）
+            let _ = sync::APP_HANDLE.set(app.handle().clone());
+            Ok(())
+        })
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,

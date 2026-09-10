@@ -1151,6 +1151,11 @@ fun AvatarFrame(onClick: () -> Unit) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+    // v5.15.7：电脑端自定义头像（settings.avatar_img）跨端同步后顶栏也显示
+    val repo = remember { com.taskbar.app.TaskBarApp.instance.repo }
+    val syncedAvatar by remember(repo) { repo.observeSetting("avatar_img") }
+        .collectAsState(initial = null)
+    val syncedBmp = rememberAvatarBitmap(syncedAvatar)
     PressIcon(onClick = onClick) {
         Box(
             Modifier
@@ -1160,7 +1165,14 @@ fun AvatarFrame(onClick: () -> Unit) {
                 .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (emoji.isNotEmpty()) {
+            if (syncedBmp != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = syncedBmp,
+                    contentDescription = "我的",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (emoji.isNotEmpty()) {
                 Text(emoji, fontSize = 16.sp)
             } else {
                 TGIcon(

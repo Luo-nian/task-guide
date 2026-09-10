@@ -425,11 +425,29 @@ data class Setting(
 @Serializable
 data class ChangeOp(val op: String, val entity: String, val uuid: String, val data: String? = null)
 
+/** v5.15.7：设置类变更载荷（积分/等级、头像、昵称…），updatedAt 用于"最新为主" */
+@Serializable
+data class SettingChange(
+    val key: String,
+    val value: String,
+    @kotlinx.serialization.SerialName("updated_at") val updatedAt: Long = 0
+)
+
+/** v5.15.7：全量同步里的设置项（桌面端 SettingKV 对齐） */
+@Serializable
+data class SettingKV(
+    val key: String,
+    val value: String,
+    @kotlinx.serialization.SerialName("updated_at") val updatedAt: Long = 0
+)
+
 @Serializable
 data class FullSyncPayload(
     val tasks: List<Task>,
     val steps: List<Step>,
     val habit_logs: List<HabitLog>,
+    /** v5.15.7：设置全量（积分/头像等），老客户端不解析该字段也不报错 */
+    val settings: List<SettingKV> = emptyList(),
     val server_time: Long
 )
 
