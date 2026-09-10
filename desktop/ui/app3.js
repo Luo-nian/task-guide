@@ -981,13 +981,10 @@ function renderDashboard() {
   document.getElementById('statTrackingTrend').textContent = tracking > 0 ? '进行时' : '未追踪';
   document.getElementById('statWeek').innerHTML = (progressInfo.week || 0) + '<span class="unit">项</span>';
   document.getElementById('statWeekTrend').textContent = '稳步前行';
-  // v5.14b：stat-badge 数字徽章（boss 反馈"右上角那个UI太小"）
-  const badgeR = document.getElementById('statBadgeRemain');
-  const badgeT = document.getElementById('statBadgeTrack');
-  const badgeW = document.getElementById('statBadgeWeek');
-  if (badgeR) badgeR.textContent = remain;
-  if (badgeT) badgeT.textContent = tracking;
-  if (badgeW) badgeW.textContent = (progressInfo.week || 0);
+  // v5.15.15：右上角改为语义图标（见 index.html 的 .stat-ico）——
+  //   原来这里是数字徽章，跟卡片中间的大数字重复（11 项 / 11），boss 反馈"不应该是现在这样"
+  const statIcons = document.querySelectorAll('.stat-card .stat-ico');
+  if (statIcons.length && typeof initIcons === 'function') initIcons(document.getElementById('statRow') || document.body);
 
   // boss 反馈：22:00 提醒提示很没必要 → tipCard 已删整块（HTML+JS），不再渲染
 }

@@ -743,19 +743,21 @@ body::after {
 /* v5.14b：右上角金色装饰圆改为数字徽章 —— boss 反馈"太小 太迁就追踪tab键圆形形状"
    原版：32px 金色发光圆（装饰无意义）
    新版：在 stat-card 右上角加一个 28×28 数字徽章，显示该卡对应的实际数字 */
-.stat-card::after {
-  content: ""; position: absolute; right: 8px; top: 8px;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
-  opacity: 0.18;
+/* v5.15.15：右上角改为「图标 + 浅色圆底」（原来是无意义的实心装饰圆） */
+.stat-card::after { content: none; }
+.stat-ico {
+  position: absolute; right: 9px; top: 9px;
+  width: 27px; height: 27px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold-deep);
+  background: rgba(201, 162, 39, 0.13);
+  border: 1px solid rgba(201, 162, 39, 0.3);
   pointer-events: none;
 }
-.stat-card.tracking::after {
-  /* 追踪中卡片：徽章更显眼，金色发光 */
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
-  opacity: 0.4;
-  box-shadow: 0 0 8px var(--glow-gold);
+.stat-card.tracking .stat-ico {
+  color: #3D7FA8;
+  background: rgba(91, 147, 196, 0.14);
+  border-color: rgba(91, 147, 196, 0.34);
 }
 /* 数字徽章覆盖在装饰圆上 */
 .stat-badge {
