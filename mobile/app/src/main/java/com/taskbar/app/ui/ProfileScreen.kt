@@ -122,8 +122,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
 
         // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====
         val gloss = 0.30f + (level.lv - 1) * 0.06f   // 镜面光泽强度随等级（克制，不挡字）
-        Box(Modifier.fillMaxWidth().height(108.dp).clip(RoundedCornerShape(14.dp))) {
-            Canvas(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))) {
+            Canvas(Modifier.matchParentSize()) {
                 val w = size.width; val h = size.height; val r = 14.dp.toPx()
                 // 1) 底层：深咖→金 斜向渐变（金属板底色）
                 drawRoundRect(
@@ -176,10 +176,11 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 )
             }
             // 内容层：文字用深咖（金底上比白字更贵气）+ 阴影托底
-            Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                // v5.15.7：等级徽章与桌面端像素级对齐 ——
-                //   深色金属圆（linear-gradient 135°，rankFrom→rankTo）+ 亮边 + lucide 线稿图标（rank-ico 描边）
-                //   旧版是"亮紫圆 + ⚓ emoji"，与电脑端"深咖底 + 金锚线稿"完全不同（boss 反馈"两边徽章不一样"）
+            // v5.15.8：卡片高度自适应；等级标语独占整行宽度（之前被右列挤压 → "深渊在凝视，而你在…"）
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // v5.15.7/8：等级徽章与桌面端同渲染 ——
+                //   金色放射盘（radial 亮金→深金）+ 内侧双金环 + 外发光 + lucide 线稿图标（--rco 深棕描边）
                 val pal = level.palette
                 val glyphPaths = LevelGlyphs.PATHS[level.lv].orEmpty()
                 val hasGlyph = glyphPaths.any { !it.isEmpty }
@@ -246,29 +247,38 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     if (!hasGlyph) Text(levelEmoji, fontSize = 30.sp)
                 }
                 Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Lv.${level.lv} · ${level.name}",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp,
-                            style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0x66000000), Offset(0f, 1f), 0f))
-                        )
-                    }
-                    Spacer(Modifier.height(3.dp))
-                    Text(level.title, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(9.dp))
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
-                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF7A5516), Color(0xFFC9A227), Color(0xFFD8B45A)))))
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
+                // 等级名：整行剩余宽度独占（"Lv.N" 挪到右列小字，避免 18sp 名字被挤到截断）
+                Text(
+                    level.name,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                    style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0x66000000), Offset(0f, 1f), 0f))
+                )
+                Spacer(Modifier.width(12.dp))
                 Column(horizontalAlignment = Alignment.End) {
+                    Text("Lv.${level.lv}", color = Color(0xFFE8CB7F), fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                    Spacer(Modifier.height(1.dp))
                     Text("$points / ${level.max}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, style = LocalTextStyle.current.copy(shadow = androidx.compose.ui.graphics.Shadow(Color(0x66000000), Offset(0f, 1f), 0f)))
                     Spacer(Modifier.height(3.dp))
-                    Text(if (level.toNext > 0) "距下一级差 ${level.toNext}" else "已登顶", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
+                    Text(if (level.toNext > 0) "距下一级 ${level.toNext}" else "已登顶", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
+                }
+                }
+                // 等级标语：整行整宽，不再被挤压截断
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    level.title,
+                    color = Color.White.copy(alpha = 0.82f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
+                    Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF7A5516), Color(0xFFC9A227), Color(0xFFD8B45A)))))
                 }
             }
         }

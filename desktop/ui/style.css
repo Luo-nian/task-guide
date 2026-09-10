@@ -2338,3 +2338,15 @@ input::placeholder { color: var(--ink-faint); }
 #levelChar svg circle, #profileLevelIcon svg circle, .bless-lv-icon svg circle {
   stroke-width: 2.2;
 }
+
+/* ===== v5.15.8：个人信息弹窗「头像选择器」溢出修复 =====
+   病灶：.ph-avatar-picker{width:100%} 处在 .profile-hero 的横向 flex 里，等于要求"独占整行宽度"，
+   flex 无法收缩 → 「64px 头像列 + 昵称输入 + 保存按钮」被挤出弹窗右边界（boss 实测：昵称框/保存
+   按钮被裁掉点不到，8 个内置头像也被截断，「点击更换」被压成两行）。
+   修法：允许 hero 换行 + 让选择器整行落到下方（order:3），并给 hint 加 nowrap；
+   同时把弹窗加宽到 520px，8 个内置头像排布更舒展。 */
+.profile-modal { width: 520px; }
+.profile-hero { flex-wrap: wrap; }
+.ph-avatar-picker { flex: 1 1 100%; order: 3; margin-top: 12px; }
+.ph-avatar-hint { white-space: nowrap; }
+.ph-nick-row { gap: 8px 10px; }
