@@ -50,9 +50,9 @@
   .act:hover { transform: scale(1.1); }
   .act:active { transform: scale(0.92); }
   .act svg { display: block; }
-  /* 取消追踪：淡青（次要动作，不抢眼） */
-  .act.stop { background: linear-gradient(135deg, #B8D4E8, #7FA8C8);
-    box-shadow: 0 2px 6px rgba(79, 134, 181, 0.3), inset 0 0 0 1px rgba(255,255,255,0.35); }
+  /* v5.15.16（boss）：取消追踪 = 朱砂红（原来淡青，与"停止/取消"语义更匹配） */
+  .act.stop { background: linear-gradient(135deg, #D4705A, #BC4A34);
+    box-shadow: 0 2px 6px rgba(188, 74, 52, 0.32), inset 0 0 0 1px rgba(255,255,255,0.35); }
   /* 推进步骤：金（主操作） */
   .act.adv { background: linear-gradient(135deg, #D8B45A, #B98F2E);
     box-shadow: 0 2px 8px rgba(138, 106, 28, 0.35), inset 0 0 0 1px rgba(255, 244, 208, 0.25); }
@@ -77,6 +77,8 @@
   const ICONS = {
     diamond: '<circle cx="12" cy="12" r="9"/><path d="M12 3l4 4-4 4-4-4z" fill="currentColor" stroke="none"/>',
     stop:    '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    // v5.15.16：取消追踪改用"实心追踪键"（靶心反相填满），与主窗 app3.js 的 targetFill 同形
+    targetFill: '<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M3.4 12A8.6 8.6 0 1 1 20.6 12A8.6 8.6 0 1 1 3.4 12ZM6.9 12A5.1 5.1 0 1 1 17.1 12A5.1 5.1 0 1 1 6.9 12ZM8.7 12A3.3 3.3 0 1 1 15.3 12A3.3 3.3 0 1 1 8.7 12Z"/>',
     arrow:   '<path d="M9 18l6-6-6-6"/>',
     check:   '<path d="M20 6L9 17l-5-5"/>'
   };
@@ -113,7 +115,7 @@
         </div>
         <div class="pbar"><span class="pfill" style="width:${pct}%"></span></div>
         <div class="acts">
-          <div class="act stop" title="取消追踪">${svg('stop', 11, 2.6)}</div>
+          <div class="act stop" title="取消追踪">${svg('targetFill', 11)}</div>
           <div class="act adv ${canAdvance ? '' : 'disabled'}" title="${canAdvance ? '推进到下一步' : '没有可推进的步骤'}">${svg('arrow', 13, 2.8)}</div>
           <div class="act done" title="完成任务">${svg('check', 13, 3.0)}</div>
         </div>

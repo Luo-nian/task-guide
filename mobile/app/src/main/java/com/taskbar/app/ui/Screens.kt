@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -107,30 +108,38 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     ) { padding ->
         Column(Modifier.padding(padding)) {
             // 类型筛选条（= 电脑端侧边栏：只在今日待办里单看某一类）
-            CategoryFilterRow(catFilter) { catFilter = it }
+            // v5.15.16（boss）：主页首项不叫"全部"，叫"今日"（这里本来就是今日任务）
+            CategoryFilterRow(catFilter, { catFilter = it }, allLabel = "今日")
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
                 // 追踪置顶逻辑：当次在主页点追踪 → 不立即置顶（任务原位+金框+追踪键涟漪）；
                 // 退出主页（切子界面/重启）再回来 → 追踪任务才置顶显示
                 var showPinSection by remember { mutableStateOf(true) }  // 普通 remember（不用 rememberSaveable），避免 app 重建后状态粘住导致追踪任务永久不置顶
+                val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
+                // 列表状态：显式持有，回到主页时若有追踪任务则强制滚回顶部（否则停在旧位置看不到置顶的追踪区）
+                val listState = rememberLazyListState()
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 LaunchedEffect(backStackEntry?.destination?.route) {
                     // 重新进入主页 → 恢复置顶（刚追踪的"不置顶"只影响当次）
-                    if (backStackEntry?.destination?.route == "home") showPinSection = true
+                    if (backStackEntry?.destination?.route == "home") {
+                        showPinSection = true
+                        // v5.15.16（boss）：从别的界面回到主页，只要有追踪任务 → 页面坐标默认回到最上面
+                        if (tracking.isNotEmpty()) listState.scrollToItem(0)
+                    }
                 }
 
-                val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
                 // v5.15.16（boss）：每日任务不再单列"打卡区"，直接归入今日任务；今日任务内部按分类分组。
-                // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时追踪任务混在列表里
-                val todo = if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING }
-                else tasks
                 // 步骤聚合：一次 Flow 订阅获取全部步骤 Map，TaskRow 不再各自订阅（性能优化）
                 val stepsByUuid by vm.stepsByUuid.collectAsState()
                 // 今日已打卡的习惯 uuid 集合（订阅 habit_logs Flow，点完卡后 UI 立刻更新）
                 val checkedHabits by vm.todayCheckedHabits.collectAsState()
                 // v5.15.2：聚合 streak（HabitRow 不再每行独立 Flow → 切换卡顿优化）
                 val streaksMap by vm.allHabitStreaks.collectAsState()
+                // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时追踪任务混在列表里
+                // v5.15.16（boss）：每日任务打完卡当天就不再留在主页（明天自动重新出现）
+                val todo = (if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING } else tasks)
+                    .filter { !(it.type == TaskType.HABIT && it.uuid in checkedHabits) }
                 // 今日任务按分类分组（每日/目标/限时/次数）——与电脑端今日待办同一口径
                 val groupedTodo = remember(todo) {
                     listOf("daily", "goal", "time-limited", "once").map { k ->
@@ -160,6 +169,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 } else {
                     LazyColumn(
                         Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 12.dp),
+                        state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         // 底部留 150dp 给浮动追踪键（~70dp 圆钮+数字）+ 系统导航栏（~50dp）+ 缓冲
                         contentPadding = PaddingValues(bottom = 150.dp)
@@ -248,14 +258,14 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                 Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         } else {
-            // 未完成：打卡按钮（自家风格：绿底白字圆角，加宽确保"打卡"两字完整不截断）
-            PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+            // 未完成：打卡按钮（自家风格：绿底白字圆角）。
+            // 必须用 PressPill（PressIcon 内部的 IconButton 会强制 40dp 宽 → 文字被裁成只剩提手旁「扌」）
+            PressPill(onClick = { vm.completeTask(task.uuid) }) {
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(TGColors.Jade)
-                        .padding(horizontal = 16.dp, vertical = 7.dp)
-                        .widthIn(min = 64.dp),
+                        .padding(horizontal = 16.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("打卡", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -367,9 +377,9 @@ private fun TaskRow(
                     modifier = Modifier.weight(1f)
                 )
                 // 操作：停止追踪 + 推进/完成
-                // v5.15.16（M8）：追踪键 = 天蓝（Azure），取消追踪键 = 灰蓝（InkMute），两者颜色区分
+                // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
                 PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                    TGIcon(R.drawable.ic_close, contentDescription = "取消追踪", tint = TGColors.InkMute, size = 20.dp)
+                    TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
                 }
                 if (hasSteps) {
                     // 剩余未完成步骤 > 3 时，连按 3 次推进键才弹"完成"键（步骤少直接推进就行，不需要这个机制）
@@ -522,9 +532,9 @@ private fun TaskRow(
                 }
                 // 右侧操作：追踪 + 主操作（完成/推进）
                 if (tracking) {
-                    // M8：取消追踪 = 灰蓝（与追踪键的天蓝区分）
+                    // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
                     PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                        TGIcon(R.drawable.ic_close, contentDescription = "取消追踪", tint = TGColors.InkMute, size = 20.dp)
+                        TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
                     }
                 } else {
                     PressIcon(onClick = {
@@ -609,16 +619,17 @@ private fun TaskRow(
     }
 }
 
-/** v5.15.16：任务类型筛选条（4 类 + 全部），主页与「所有任务」页共用
- *  boss：「主页上面的分类就相当于电脑端的侧边栏，只是为了今日待办中单独查看某一个分类的任务」 */
+/** v5.15.16：任务类型筛选条（4 类 + 首项），主页与「所有任务」页共用
+ *  boss：「主页上面的分类就相当于电脑端的侧边栏，只是为了今日待办中单独查看某一个分类的任务」
+ *  allLabel：首项文案。主页列表全是"今日"的任务 → 传"今日"；「所有任务」页含未来任务 → 传"全部" */
 @Composable
-private fun CategoryFilterRow(selected: String, onSelect: (String) -> Unit) {
+private fun CategoryFilterRow(selected: String, onSelect: (String) -> Unit, allLabel: String = "全部") {
     androidx.compose.foundation.lazy.LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         items(listOf(
-            "all" to "全部", "daily" to "每日", "goal" to "目标",
+            "all" to allLabel, "daily" to "每日", "goal" to "目标",
             "time-limited" to "限时", "once" to "次数"
         )) { (k, l) ->
             FilterChip(selected = selected == k, onClick = { onSelect(k) }, label = { Text(l) })
@@ -1078,8 +1089,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
             )
         }
-        // 分类筛选条（与主页同一套口径）
-        CategoryFilterRow(catFilter) { catFilter = it }
+        // 分类筛选条（与主页同一套口径；本页含未来任务，首项保持"全部"）
+        CategoryFilterRow(catFilter, { catFilter = it })
         if (trackingF.isEmpty() && todoF.isEmpty() && futureF.isEmpty() && todayCheckedList.isEmpty()) {
             EmptyState(if (keyword.isNotBlank()) "没有匹配「" + keyword + "」的任务" else "还没有任何任务", Modifier.fillMaxSize())
         } else {
@@ -1087,12 +1098,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                if (todayCheckedList.isNotEmpty()) {
-                    item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
-                    items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
-                        HabitRow(task, vm, checkedToday = true)
-                    }
-                }
+                // v5.15.16（boss）：追踪中的任务必须置顶（原来"今日打卡"占着第一位）
                 if (trackingF.isNotEmpty()) {
                     item(key = "hdr-t") { SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet) }
                     items(trackingF, key = { "t-${it.uuid}" }) { task ->
@@ -1100,6 +1106,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onUnpin = { pendingRepoAction = task.uuid to "unpin" })
+                    }
+                }
+                if (todayCheckedList.isNotEmpty()) {
+                    item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
+                    items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
+                        HabitRow(task, vm, checkedToday = true)
                     }
                 }
                 if (todoF.isNotEmpty()) {

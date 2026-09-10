@@ -146,6 +146,9 @@ const ICONS = {
   //   行内三个键的前两个渲染成空圆（boss 截图："前面两个按键没图标"），正好是记忆里踩过的坑。
   play:     '<path d="M8 5.2l11.2 6.8L8 18.8z"/>',
   stop:     '<circle cx="12" cy="12" r="8.6"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>',
+  // v5.15.16（boss）：取消追踪不再用 ✕，改成"实心追踪键"（target 的反相：镂空处填满）。
+  //   svgIcon 默认 fill=none，这里对 path 显式 fill=currentColor + stroke=none + evenOdd 挖环槽。
+  targetFill: '<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M3.4 12A8.6 8.6 0 1 1 20.6 12A8.6 8.6 0 1 1 3.4 12ZM6.9 12A5.1 5.1 0 1 1 17.1 12A5.1 5.1 0 1 1 6.9 12ZM8.7 12A3.3 3.3 0 1 1 15.3 12A3.3 3.3 0 1 1 8.7 12Z"/>',
   arrow:    '<path d="M4.6 12h13.4"/><path d="M12.8 6.6l5.4 5.4-5.4 5.4"/>',
   alert:    '<path d="M12 4.4L2.9 20h18.2z"/><path d="M12 9.8v4.3M12 17.1h.01"/>',
   popup:    '<rect x="2.6" y="4.6" width="18.8" height="12.4" rx="2.4"/><path d="M8 20.3h8"/>',
@@ -744,7 +747,7 @@ function rowActsHtml(t) {
   const tracking = isTracking(t);
   const noStep = !(t.step_total > 0);
   const first = tracking
-    ? `<div class="act" data-act="stop" title="取消追踪"><span class="b">${svgIcon('stop', 11, 2.5)}</span><span class="l">取消</span></div>`
+    ? `<div class="act" data-act="stop" title="取消追踪"><span class="b">${svgIcon('targetFill', 11)}</span><span class="l">取消</span></div>`
     : `<div class="act track" data-act="track" title="开始追踪"><span class="b">${svgIcon('play', 11, 2.3)}</span><span class="l">追踪</span></div>`;
   return `<div class="acts">
     ${first}
@@ -1166,7 +1169,7 @@ window.openDetail = async function(uuid) {
     <div class="dv-acts">
       ${isTrk
         ? `<div class="dva" data-dva="stop" onclick="untrackTask('${t.uuid}')">
-             <span class="dva-b stop">${svgIcon('stop', 19, 2.2)}</span><span class="dva-l">取消追踪</span></div>`
+             <span class="dva-b stop">${svgIcon('targetFill', 19)}</span><span class="dva-l">取消追踪</span></div>`
         : `<div class="dva ${canTrack ? 'disabled' : ''}" data-dva="track" ${canTrack ? '' : `onclick="trackTask('${t.uuid}')"`}>
              <span class="dva-b track">${svgIcon('play', 19, 2.1)}</span>
              <span class="dva-l">${canTrack ? '追踪已满' : '追踪任务'}</span></div>`}

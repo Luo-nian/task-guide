@@ -2409,7 +2409,7 @@ body { background-color: var(--bg-paper); }
 .act:active .b { transform: scale(0.92); }
 .act.disabled { cursor: default; }
 .act.disabled .b { opacity: 0.32; filter: grayscale(0.6); }
-.act[data-act="stop"] .b { background: linear-gradient(135deg, #B8D4E8, #7FA8C8); }
+.act[data-act="stop"] .b { background: linear-gradient(135deg, #D4705A, var(--crimson)); }
 .act[data-act="done"] .b { background: linear-gradient(135deg, #7FC9A0, #3F8A62); }
 
 /* ===== v5.15.11：历史任务「记账式流水」=====
@@ -2495,7 +2495,7 @@ body { background-color: var(--bg-paper); }
 }
 .dva-l { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 .dva-b.track { background: linear-gradient(135deg, #8FD3B4, #3F8A62); }
-.dva-b.stop  { background: linear-gradient(135deg, #B8D4E8, #7099BC); }
+.dva-b.stop  { background: linear-gradient(135deg, #D4705A, var(--crimson)); }
 .dva-b.adv   { background: linear-gradient(135deg, #E0C177, #B98F2E); }
 .dva-b.done  { background: linear-gradient(135deg, #F0A87A, #CE6A2B); }
 .dva:hover .dva-b { transform: scale(1.06); box-shadow: 0 4px 14px rgba(201, 162, 39, 0.42); }
@@ -2566,9 +2566,10 @@ body { background-color: var(--bg-paper); }
 .dv-edit:hover { color: var(--gold-deep); border-color: var(--gold); background: #FFFDF5; }
 
 /* ===== v5.15.13：动作键配色（boss：追踪与完成都是绿色，分不清）=====
-   追踪 = 天蓝（开始跟踪）｜取消 = 灰蓝（停止）｜推进 = 金（向前）｜完成 = 沉玉青（收尾） */
+   追踪 = 天蓝（开始跟踪）｜取消 = 朱砂红（停止）｜推进 = 金（向前）｜完成 = 沉玉青（收尾）
+   v5.15.16（boss）：取消追踪图标换成"实心追踪键"（targetFill）+ 红色，与天蓝镂空追踪键互为反相 */
 .act[data-act="track"] .b, .dva-b.track { background: linear-gradient(135deg, #7FB6E0, #3D7FA8); }
-.act[data-act="stop"] .b,  .dva-b.stop  { background: linear-gradient(135deg, #B4C4D4, #78909F); }
+.act[data-act="stop"] .b,  .dva-b.stop  { background: linear-gradient(135deg, #D4705A, var(--crimson)); }
 .act.done .b,              .dva-b.done  { background: linear-gradient(135deg, #6FB894, #2F7D57); }
 .act[data-act="advance"] .b, .dva-b.adv { background: linear-gradient(135deg, #E0C177, #B98F2E); }
 

@@ -88,6 +88,38 @@ fun PressIcon(
     ) { content() }
 }
 
+/**
+ * 带按压缩放反馈的**自适应尺寸**按钮（按下缩小 0.84，松开回弹）。
+ *
+ * 与 [PressIcon] 的区别：PressIcon 内部是 Material3 `IconButton`，而后者会强制
+ * `.size(40.dp)`。文字按钮用它会撞死宽度 —— 左右 padding 16dp 吃掉 32dp 后只剩
+ * 8dp，「打卡」被裁成只剩提手旁「扌」。
+ * 所以文字/胶囊类按钮一律用本组件（Box + clickable，尺寸跟着内容走）。
+ */
+@Composable
+fun PressPill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, tween(100))
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
 // ==================== 配色（v5.4 暖土撞色：赤陶+桃黏土+鼠尾草绿，告别冰川蓝冷感） ====================
 // 设计思路：2026 流行 Terracotta Modern 撞色——米白底 + 暖赤陶主 + 桃黏土强调 + 鼠尾草绿完成 + 浓缩咖啡深底
 // 蓝调（冰川蓝）取消，整体偏暖不冷；金调（之前的金色仍保留少量做"荣誉"色，不作主色）
