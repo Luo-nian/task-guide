@@ -142,6 +142,20 @@ const ICONS = {
   clock:    '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.1 1.9"/>',
   coin:     '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.4v9.2M14.5 9.5a2.7 2.7 0 0 0-2.5-1.5c-1.5 0-2.5.9-2.5 2.1 0 2.9 5.2 1.5 5.2 4.3 0 1.3-1.1 2.2-2.7 2.2a3 3 0 0 1-2.6-1.4"/>',
   trend:    '<path d="M3.5 16.5l5-5 3.5 3.5 7-7.2"/><path d="M14.6 7.8h4.4v4.4"/>',
+  // v5.15.12：动作键图标补齐 —— 此前 ICONS 里没有 stop/arrow/alert，
+  //   行内三个键的前两个渲染成空圆（boss 截图："前面两个按键没图标"），正好是记忆里踩过的坑。
+  play:     '<path d="M8 5.2l11.2 6.8L8 18.8z"/>',
+  stop:     '<circle cx="12" cy="12" r="8.6"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>',
+  arrow:    '<path d="M4.6 12h13.4"/><path d="M12.8 6.6l5.4 5.4-5.4 5.4"/>',
+  alert:    '<path d="M12 4.4L2.9 20h18.2z"/><path d="M12 9.8v4.3M12 17.1h.01"/>',
+  popup:    '<rect x="2.6" y="4.6" width="18.8" height="12.4" rx="2.4"/><path d="M8 20.3h8"/>',
+  expand:   '<path d="M9.4 3.6H4.4v5M14.6 3.6h5v5M9.4 20.4H4.4v-5M14.6 20.4h5v-5"/>',
+  appico:   '<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.2"/><path d="M8.4 9.4h7.2M8.4 13.2h7.2"/>',
+  edit:     '<path d="M4.6 19.4h3l10.1-10.1a1.9 1.9 0 0 0 0-2.7l-.7-.7a1.9 1.9 0 0 0-2.7 0L4.6 16z"/><path d="M14.1 7.2l2.7 2.7"/>',
+  // v5.15.12：补齐 3 个此前缺失的图标（缺图标时 svgIcon 返回空串 → 按钮变空白圆）
+  lock:     '<rect x="4.6" y="10.4" width="14.8" height="9.6" rx="2.2"/><path d="M8 10.4V7.8a4 4 0 0 1 8 0v2.6"/>',
+  target:   '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.6v2.2M12 18.2v2.2M3.6 12h2.2M18.2 12h2.2"/>',
+  diamond:  '<path d="M12 3.4l6.4 4.2v8.8L12 20.6 5.6 16.4V7.6z"/>',
   trophy:   '<path d="M8 4.4h8v4.2a4 4 0 0 1-8 0V4.4Z"/><path d="M8 5.8H5.6a2.4 2.4 0 0 0 2.4 2.4M16 5.8h2.4a2.4 2.4 0 0 1-2.4 2.4"/><path d="M12 12.6v3.4M9.6 19.6h4.8M10.2 16h3.6l.5 3.6h-4.6l.5-3.6Z"/>'
 };
 
@@ -305,9 +319,17 @@ function applySettingsToUi() {
     b.onclick = () => {
       settings[LEAD_KEY] = parseInt(b.dataset.min, 10);
       saveSettings();
-      // 选中预设时清空自定义输入
+      // v5.15.12：选中预设时把「自定义」自动填成对应数值 + 单位
+      //   （boss：点「1 小时前」应该自动补 1 / 小时，方便在此基础上微调）
       const cust = document.getElementById('setLeadCustom');
-      if (cust) cust.value = '';
+      const unit = document.getElementById('setLeadUnit');
+      const mm = parseInt(b.dataset.min, 10);
+      if (cust && unit) {
+        if (mm <= 0) { cust.value = ''; unit.value = '1'; }
+        else if (mm % 1440 === 0) { cust.value = mm / 1440; unit.value = '1440'; }
+        else if (mm % 60 === 0) { cust.value = mm / 60; unit.value = '60'; }
+        else { cust.value = mm; unit.value = '1'; }
+      }
       applySettingsToUi();
     };
   });
@@ -485,15 +507,19 @@ function renderTrackingView() {
   if (!lvEl) return;
   const trackTasks = tasks.filter(t => isTracking(t) && !t.done && t.deleted !== 1);
   // v5.14h.9：角标统一由 render() 里 updateTrackingBadge() 更新（此处不再写）
+  // v5.15.12：空态改成"中间一句话"（boss：这个页面文字很拥挤，没有看的欲望）
   let html = `
     <div class="list-view-header">
       <span class="vh-title">追踪任务</span>
       <span class="vh-meta">${trackTasks.length} 项进行中</span>
     </div>
-    <div class="vh-hint">追踪中的任务会显示进度与剩余步骤</div>
   `;
   if (trackTasks.length === 0) {
-    html += `<div class="empty-tip">暂无追踪任务<br>点击任务详情页的「追踪任务」开始追踪</div>`;
+    html += `<div class="track-empty">
+      <div class="te-ico">${svgIcon('crosshair', 22, 1.9)}</div>
+      <div class="te-title">还没有追踪中的任务</div>
+      <div class="te-sub">在任务详情页点「追踪任务」即可开始</div>
+    </div>`;
   } else {
     html += `<div class="cat-group">
       <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>追踪中</span><span class="gh-count">${trackTasks.length}</span></div>
@@ -690,18 +716,31 @@ function timeMetaHtml(t) {
 }
 /** 三个圆形动作键（下面带功能文字）：取消追踪 / 推进 / 完成 */
 function rowActsHtml(t) {
+  // v5.15.12：第一个键按追踪状态切换 —— 未追踪时是「追踪」（可点），追踪中才是「取消」；
+  //   推进键在没有步骤时淡化且不可点（boss 明确要求）。
   const tracking = isTracking(t);
+  const noStep = !(t.step_total > 0);
+  const first = tracking
+    ? `<div class="act" data-act="stop" title="取消追踪"><span class="b">${svgIcon('stop', 11, 2.5)}</span><span class="l">取消</span></div>`
+    : `<div class="act track" data-act="track" title="开始追踪"><span class="b">${svgIcon('play', 11, 2.3)}</span><span class="l">追踪</span></div>`;
   return `<div class="acts">
-    <div class="act ${tracking ? '' : 'disabled'}" data-act="stop" title="${tracking ? '取消追踪' : '当前未追踪'}">
-      <span class="b">${svgIcon('stop', 11, 2.6)}</span><span class="l">取消</span>
-    </div>
-    <div class="act" data-act="advance" title="推进到下一步（没有步骤时可直接完成）">
-      <span class="b">${svgIcon('arrow', 12, 2.8)}</span><span class="l">推进</span>
+    ${first}
+    <div class="act ${noStep ? 'disabled' : ''}" data-act="advance" title="${noStep ? '没有步骤，无法推进' : '推进到下一步'}">
+      <span class="b">${svgIcon('arrow', 12, 2.6)}</span><span class="l">推进</span>
     </div>
     <div class="act done" data-act="done" title="完成任务">
       <span class="b">${svgIcon('check', 12, 3)}</span><span class="l">完成</span>
     </div>
   </div>`;
+}
+/** 逾期文案（详情页/行内共用） */
+function overdueText(t) {
+  const d = (typeof t.deadline === 'number') ? t.deadline : t.due_at;
+  if (typeof d !== 'number' || d >= Date.now()) return '';
+  const diff = Date.now() - d;
+  if (diff >= 86400000) return '逾期 ' + Math.floor(diff / 86400000) + ' 天';
+  if (diff >= 3600000) return '逾期 ' + Math.floor(diff / 3600000) + ' 小时';
+  return '已逾期';
 }
 /** 行内三个键的点击处理（事件委托到 document，避免 innerHTML 重建后失效） */
 document.addEventListener('click', async function (ev) {
@@ -714,12 +753,21 @@ document.addEventListener('click', async function (ev) {
   const what = actEl.dataset.act;
   if (actEl.classList.contains('disabled')) {
     if (what === 'stop') showToast('这个任务当前没有在追踪');
+    else if (what === 'advance') showToast('这个任务还没有步骤，没有可推进的进度');
     return;
   }
   try {
     if (what === 'stop') {
       await call('stop_tracking', { taskUuid: uuid });
       showToast('已取消追踪');
+    } else if (what === 'track') {
+      const trackingCount = tasks.filter(isTracking).length;
+      if (trackingCount >= settings.tracking_max) {
+        showToast('已达追踪上限 ' + settings.tracking_max + ' 个，请先取消其它追踪');
+        return;
+      }
+      await call('start_tracking', { taskUuid: uuid });
+      showToast('已开始追踪');
     } else if (what === 'advance') {
       const d = await call('get_task_detail', { taskUuid: uuid });
       const steps = (d && d.steps) || [];
@@ -1035,12 +1083,15 @@ window.openDetail = async function(uuid) {
   const allStepDone = hasStep && doneSteps === totalSteps;
   const remainingSteps = hasStep ? totalSteps - doneSteps : 0;
 
+  const _editBtn = document.getElementById('detailEdit');
+  if (_editBtn) _editBtn.onclick = function () { openEdit(uuid); };
   document.getElementById('detailName').textContent = t.title;
   document.getElementById('detailSub').innerHTML = `${CAT_LABEL[catOf(t)] || '未分类'}${t.due_at ? ' · 截止 ' + fmtDue(t.due_at) : ''}${t.deadline && t.deadline !== t.due_at ? ' · 期限 ' + fmtDue(t.deadline) : ''}`;
   document.getElementById('detailChips').innerHTML = `
     <span class="chip cat-${catOf(t)}">${CAT_LABEL[catOf(t)] || ''}</span>
     <span class="chip prio-${(t.priority||'m').charAt(0)}">${PRIO_LABEL[t.priority] || ''}</span>
     ${isTrk ? '<span class="chip tracking">追踪中</span>' : ''}
+    ${isOverdue(t) ? `<span class="chip overdue">${svgIcon('alert', 10, 2.2)}${overdueText(t)}</span>` : ''}
     ${t.count > 1 ? `<span class="chip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
   `;
 
@@ -1078,18 +1129,35 @@ window.openDetail = async function(uuid) {
       <div class="reward-item"><span class="reward-ico">${svgIcon('trend',15,1.9)}</span><span class="reward-num">推进进度</span></div>
     </div>
 
-    <div class="btn-row">
-      <button class="track-btn ${isTrk?'tracking':''}" onclick="${isTrk ? `untrackTask('${t.uuid}')` : `trackTask('${t.uuid}')`}" ${(!isTrk && canTrack)?'disabled':''}>
-        <span class="btn-ico">${svgIcon(isTrk ? 'check' : 'plus', 12, 2.4)}</span>${isTrk ? '停止追踪' : (canTrack ? '已达上限' : '追踪任务')}
-      </button>
-      <button class="complete-btn ${hasStep && !allStepDone ? 'locked' : ''}" 
-              onclick="${(hasStep && !allStepDone) ? '' : `completeTask('${t.uuid}')`}" 
-              ${(hasStep && !allStepDone) ? 'disabled' : ''}
-              title="${(hasStep && !allStepDone) ? '还有 ' + remainingSteps + ' 个步骤未完成，请先完成所有步骤' : ''}">
-        <span class="btn-ico">${svgIcon((hasStep && !allStepDone) ? 'lock' : 'check', 12, 2.6)}</span>${(hasStep && !allStepDone) ? '还需 ' + remainingSteps + ' 步' : '完成任务'}
-      </button>
+    <div class="dv-acts">
+      ${isTrk
+        ? `<div class="dva" data-dva="stop" onclick="untrackTask('${t.uuid}')">
+             <span class="dva-b stop">${svgIcon('stop', 19, 2.2)}</span><span class="dva-l">取消追踪</span></div>`
+        : `<div class="dva ${canTrack ? 'disabled' : ''}" data-dva="track" ${canTrack ? '' : `onclick="trackTask('${t.uuid}')"`}>
+             <span class="dva-b track">${svgIcon('play', 19, 2.1)}</span>
+             <span class="dva-l">${canTrack ? '追踪已满' : '追踪任务'}</span></div>`}
+      <div class="dva ${hasStep ? '' : 'disabled'}" data-dva="advance" ${hasStep ? `onclick="advanceFromDetail('${t.uuid}')"` : ''}>
+        <span class="dva-b adv">${svgIcon('arrow', 19, 2.3)}</span>
+        <span class="dva-l">${hasStep ? '推进步骤' : '无步骤'}</span></div>
+      <div class="dva ${(hasStep && !allStepDone) ? 'disabled' : ''}" data-dva="done"
+           ${(hasStep && !allStepDone) ? '' : `onclick="completeTask('${t.uuid}')"`}
+           title="${(hasStep && !allStepDone) ? '还有 ' + remainingSteps + ' 个步骤未完成' : '完成任务'}">
+        <span class="dva-b done">${svgIcon((hasStep && !allStepDone) ? 'lock' : 'check', 19, 2.6)}</span>
+        <span class="dva-l">${(hasStep && !allStepDone) ? '还需 ' + remainingSteps + ' 步' : '完成任务'}</span></div>
     </div>
   `;
+};
+
+/** 详情页「推进步骤」：把第一个未完成步骤置为 done */
+window.advanceFromDetail = async function (uuid) {
+  const d = await call('get_task_detail', { taskUuid: uuid });
+  const steps = (d && d.steps) || [];
+  const next = steps.find(s => s.status !== 'done');
+  if (!next) { showToast('这个任务还没有步骤，没有可推进的进度'); return; }
+  await call('advance_step', { stepUuid: next.uuid, taskUuid: uuid, status: 'done' });
+  showToast('已推进：' + next.title);
+  await render();
+  openDetail(uuid);
 };
 
 window.closeDetail = function() {
@@ -1128,6 +1196,8 @@ window.completeTask = async function(uuid) {
   // 刷新主面板（积分/进度/列表）
   await render();
   if (isPartial) {
+    // v5.15.12：未满额的次数任务每次点完成都给一个即时小提示（boss：没有增加提示）
+    showToast('进度 +1 · 已完成 ' + r.done_count + ' / ' + r.count + ' 次');
     // 刷新详情页显示新 done_count / 进度（仍停留在详情页可继续点完成）
     openDetail(uuid);
     return;
@@ -1434,59 +1504,202 @@ ctxMenu.querySelectorAll('button').forEach(b => {
   });
 });
 
-// =============== 新建表单 ===============
+// =============== 新建 / 编辑任务表单（v5.15.12 重做） ===============
+// boss 反馈整批：① 类型切换后不该再让用户选无关项（限时任务别出现次数、目标任务默认不限时…）
+// ② 提醒方式要按端区分（选「仅电脑端」下面却在显示手机端的振动/铃声）
+// ③ 次数任务直接填次数，不要「默认 N 次 · 修改」两段式
+// ④ 新建/编辑都要能写备注（手机端早就有，桌面端一直缺）
 const addOverlay = document.getElementById('addOverlay');
 let draftCat = null;
 let draftDdl = 'none';
 let draftPrio = 'medium';
-let draftCount = 1;
+let editingUuid = null;        // null = 新建，非空 = 编辑该任务
+let draftDevice = 'none';      // none / mobile / desktop / both
+let draftRemMin = 15;          // 提前多少分钟提醒
 
-function openAdd() {
-  draftCat = null; draftDdl = 'none'; draftPrio = 'medium'; draftCount = settings.count_default;
-  document.getElementById('addTitle').value = '';
-  document.getElementById('addCount').value = settings.count_default;
-  // 次数行：默认态（"默认 N 次 · 修改"），点修改才出输入框
-  document.getElementById('addCountText').textContent = settings.count_default;
-  document.getElementById('addCountDefaultRow').classList.remove('hidden');
-  document.getElementById('addCountEditRow').classList.add('hidden');
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', false));
-  document.querySelectorAll('.ddl-btn').forEach(b => b.classList.toggle('active', b.dataset.ddl === 'none'));
-  document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', b.dataset.prio === 'medium'));
-  document.getElementById('addDdlCustom').classList.add('hidden');
-  document.getElementById('addCatHint').textContent = '请选择一个分类';
-  document.getElementById('addSubmit').disabled = true;
-  // v5.14d：新建任务 modal 提醒设置条件显示（端→方式→时间）
-  // 端选择：默认从 settings.reminder_default_range 套用
-  const addRem = settings.reminder_default_range || 'none';
-  document.querySelectorAll('#addOverlay .rem-device-btn').forEach(b => b.classList.toggle('active', b.dataset.device === addRem));
-  document.getElementById('addRemStrength').style.display = addRem === 'none' ? 'none' : '';
-  document.getElementById('addRemTime').style.display = addRem === 'none' ? 'none' : '';
-  addOverlay.style.display = '';
-  setTimeout(() => document.getElementById('addTitle').focus(), 50);
-}
-// v5.14d：新建任务 modal 提醒设置条件显示（端→方式→时间）
-// v5.14d 修：改用 inline onclick（CDP 验证 addEventListener 在动态创建的 button 上不可靠）
-function _addRemSet(dev) {
-  document.querySelectorAll('#addOverlay .rem-device-btn').forEach(x => {
-    const isMatch = x.dataset.device === dev;
-    x.classList.toggle('active', isMatch);
+const DDL_OPTS = [
+  ['5min', '5 分钟'], ['60min', '1 小时'], ['6h', '6 小时'], ['1d', '1 天'],
+  ['3d', '3 天'], ['7d', '7 天'], ['30d', '30 天'], ['custom', '自定义']
+];
+const CAT_TIP = {
+  'daily': '每天固定时间提醒，第二天自动回到待办',
+  'goal': '为目标坚持推进；默认不限时，也可以设定限时',
+  'time-limited': '必须选择限时时长，到期前会提醒',
+  'once': '每完成一次记一次数，满次数结算'
+};
+
+/** 限时时长按钮：限时任务不含「不限」；目标任务含「不限」且默认选中 */
+function renderDdlRow(forCat) {
+  const wrap = document.getElementById('addDdlWrap');
+  const row = document.getElementById('addDdlRow');
+  const label = document.getElementById('addDdlLabel');
+  const opts = (forCat === 'time-limited') ? DDL_OPTS : [['none', '不限']].concat(DDL_OPTS);
+  if (forCat === 'time-limited' && draftDdl === 'none') draftDdl = '60min';
+  row.innerHTML = opts.map(function (o) {
+    return '<button type="button" class="ddl-btn ' + (draftDdl === o[0] ? 'active' : '') + '" data-ddl="' + o[0] + '">' + o[1] + '</button>';
+  }).join('');
+  label.innerHTML = (forCat === 'time-limited') ? '限时时长 <span class="must">*</span>' : '限时时长（可选）';
+  wrap.style.display = '';
+  const custom = document.getElementById('addDdlCustom');
+  if (custom) custom.classList.toggle('hidden', draftDdl !== 'custom');
+  row.querySelectorAll('.ddl-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      draftDdl = b.dataset.ddl;
+      row.querySelectorAll('.ddl-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
+      const c = document.getElementById('addDdlCustom');
+      if (c) c.classList.toggle('hidden', draftDdl !== 'custom');
+    });
   });
-  document.getElementById('addRemStrength').style.display = dev === 'none' ? 'none' : '';
-  document.getElementById('addRemTime').style.display = dev === 'none' ? 'none' : '';
+}
+
+/** 类型联动：按类型显示/隐藏 时长 / 每日提醒时间 / 次数 */
+function applyCatLayout() {
+  const cat = draftCat;
+  const ddlWrap = document.getElementById('addDdlWrap');
+  document.getElementById('addCatHint').textContent = CAT_TIP[cat] || '先选类型，下面的项目会按类型自动调整';
+  if (cat === 'time-limited') renderDdlRow('time-limited');
+  else if (cat === 'goal') renderDdlRow('goal');
+  else ddlWrap.style.display = 'none';
+  document.getElementById('addDailyWrap').style.display = (cat === 'daily') ? '' : 'none';
+  document.getElementById('addCountWrap').style.display = (cat === 'once') ? '' : 'none';
+}
+
+function addSelectCat(cat) {
+  draftCat = cat;
+  document.querySelectorAll('#addCatRow .cat-btn').forEach(function (x) { x.classList.toggle('active', x.dataset.cat === cat); });
+  document.getElementById('addSubmit').disabled = false;
+  applyCatLayout();
+}
+
+function _addRemSet(dev) {
+  draftDevice = dev;
+  document.querySelectorAll('#addOverlay .rem-device-btn').forEach(function (x) { x.classList.toggle('active', x.dataset.device === dev); });
+  const show = dev !== 'none';
+  document.getElementById('addRemStrength').style.display = show ? '' : 'none';
+  document.getElementById('addRemTime').style.display = show ? '' : 'none';
+  // v5.15.12：提醒方式按端区分（boss：选电脑端/双端时下面却只有手机端的振动、铃声）
+  document.getElementById('addRemMobileGroup').style.display = (dev === 'mobile' || dev === 'both') ? '' : 'none';
+  document.getElementById('addRemPcGroup').style.display = (dev === 'desktop' || dev === 'both') ? '' : 'none';
   settings.reminder_default_range = dev;
 }
-// 在 HTML 里直接绑 onclick：document.querySelectorAll(...).forEach(b => b.addEventListener...) 不可靠，
-// 改为在 openAdd 时同步更新 onclick 属性
-// (在 index.html 的 #addRem* button 上写 onclick="_addRemSet('none')" 等)
-// 新建任务 modal 提前时间高亮
-document.querySelectorAll('#addOverlay .rem-time-btn').forEach(b => {
-  b.addEventListener('click', () => {
-    document.querySelectorAll('#addOverlay .rem-time-btn').forEach(x => x.classList.toggle('active', x === b));
+
+function _addRemTimeSet(min) {
+  draftRemMin = min;
+  document.querySelectorAll('#addOverlay .rem-time-btn').forEach(function (x) {
+    x.classList.toggle('active', parseInt(x.dataset.min, 10) === min);
   });
-});
+  // v5.15.12：预设与「自定义」联动填充（点 1 小时前 → 自定义 = 1 / 小时前）
+  const num = document.getElementById('addRemCustomNum');
+  const unit = document.getElementById('addRemCustomUnit');
+  if (num && unit) {
+    if (min <= 0) { num.value = ''; unit.value = '60'; }
+    else if (min % 1440 === 0) { num.value = min / 1440; unit.value = '1440'; }
+    else if (min % 60 === 0) { num.value = min / 60; unit.value = '60'; }
+    else { num.value = min; unit.value = '1'; }
+  }
+}
+
+function resetAddForm() {
+  draftCat = null; draftDdl = 'none'; draftPrio = 'medium';
+  document.getElementById('addTitle').value = '';
+  document.getElementById('addDesc').value = '';
+  document.getElementById('addCount').value = settings.count_default || 5;
+  document.getElementById('addDailyTime').value = '09:00';
+  document.querySelectorAll('#addCatRow .cat-btn').forEach(function (b) { b.classList.remove('active'); });
+  document.querySelectorAll('.prio-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.prio === 'medium'); });
+  ['addRemNotif', 'addRemVibrate', 'addRemSound', 'addRemPopup', 'addRemFull', 'addRemInApp'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.checked = false;
+  });
+  document.getElementById('addRemStrength').style.display = 'none';
+  document.getElementById('addRemTime').style.display = 'none';
+  document.getElementById('addDdlWrap').style.display = 'none';
+  document.getElementById('addDailyWrap').style.display = 'none';
+  document.getElementById('addCountWrap').style.display = 'none';
+  document.getElementById('addDdlCustom').classList.add('hidden');
+  _addRemTimeSet(15);
+}
+
+function openAdd() {
+  resetAddForm();
+  editingUuid = null;
+  document.getElementById('addModalTitle').textContent = '新建任务';
+  document.getElementById('addSubmit').textContent = '创建';
+  document.getElementById('addCatHint').textContent = '先选类型，下面的项目会按类型自动调整';
+  document.getElementById('addSubmit').disabled = true;
+  _addRemSet(settings.reminder_default_range || 'none');
+  addOverlay.style.display = '';
+  setTimeout(function () { document.getElementById('addTitle').focus(); }, 50);
+}
+
+/** 解析 reminder_strength：{"ch":"notify,popup","scope":"both","min":60} */
+function parseReminderConfig(raw) {
+  const out = { ch: [], device: 'none', min: 15 };
+  if (!raw) return out;
+  try {
+    const o = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+    if (o && o.ch) out.ch = String(o.ch).split(',').filter(Boolean);
+    if (o && o.scope) out.device = o.scope;
+    if (o && typeof o.min === 'number') out.min = o.min;
+  } catch (e) { }
+  return out;
+}
+
+/** 编辑已有任务：同一个弹窗回填字段 */
+async function openEdit(uuid) {
+  const d = await call('get_task_detail', { taskUuid: uuid });
+  const t = d && d.task; if (!t) return;
+  resetAddForm();
+  editingUuid = uuid;
+  document.getElementById('addModalTitle').textContent = '编辑任务';
+  document.getElementById('addSubmit').textContent = '保存';
+  document.getElementById('addSubmit').disabled = false;
+  document.getElementById('addTitle').value = t.title || '';
+  document.getElementById('addDesc').value = t.desc || '';
+  draftPrio = t.priority || 'medium';
+  document.querySelectorAll('.prio-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.prio === draftPrio); });
+  draftCat = catOf(t);
+  document.querySelectorAll('#addCatRow .cat-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.cat === draftCat); });
+  if (t.count > 1) document.getElementById('addCount').value = t.count;
+  const dl = t.deadline || t.due_at;
+  if (draftCat === 'daily') draftDdl = 'none';
+  else if (dl) {
+    const left = dl - Date.now();
+    const cands = [['5min', 300000], ['60min', 3600000], ['6h', 21600000], ['1d', 86400000], ['3d', 259200000], ['7d', 604800000], ['30d', 2592000000]];
+    let best = 'custom', bd = Infinity;
+    cands.forEach(function (c) { const dd = Math.abs(c[1] - left); if (dd < bd) { bd = dd; best = c[0]; } });
+    draftDdl = (bd < 3600000) ? best : 'custom';
+    if (draftDdl === 'custom') {
+      document.getElementById('ddlCustomNum').value = Math.max(1, Math.round(left / 3600000));
+      document.getElementById('ddlCustomUnit').value = 'hour';
+    }
+  } else draftDdl = 'none';
+  if (draftCat === 'daily' && t.due_at) {
+    const dt = new Date(t.due_at);
+    document.getElementById('addDailyTime').value = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+  }
+  applyCatLayout();
+  const cfg = parseReminderConfig(t.reminder_strength);
+  _addRemSet(cfg.device);
+  document.getElementById('addRemNotif').checked = cfg.ch.indexOf('notify') >= 0;
+  document.getElementById('addRemVibrate').checked = cfg.ch.indexOf('vibrate') >= 0;
+  document.getElementById('addRemSound').checked = (cfg.ch.indexOf('ring') >= 0 || cfg.ch.indexOf('beep') >= 0);
+  document.getElementById('addRemPopup').checked = cfg.ch.indexOf('popup') >= 0;
+  document.getElementById('addRemFull').checked = cfg.ch.indexOf('fullscreen') >= 0;
+  document.getElementById('addRemInApp').checked = cfg.ch.indexOf('inapp') >= 0;
+  if ([0, 15, 60, 1440].indexOf(cfg.min) >= 0) _addRemTimeSet(cfg.min);
+  else {
+    draftRemMin = cfg.min;
+    document.getElementById('addRemCustomNum').value = cfg.min;
+    document.getElementById('addRemCustomUnit').value = '1';
+    document.querySelectorAll('#addOverlay .rem-time-btn').forEach(function (x) { x.classList.remove('active'); });
+  }
+  addOverlay.style.display = '';
+}
+window.openEdit = openEdit;
+
 function closeAdd() { addOverlay.style.display = 'none'; }
 document.getElementById('fabAdd').addEventListener('click', openAdd);
-document.querySelectorAll('[data-close-overlay="addOverlay"]').forEach(b => b.addEventListener('click', closeAdd));
+document.querySelectorAll('[data-close-overlay="addOverlay"]').forEach(function (b) { b.addEventListener('click', closeAdd); });
 
 // v5.14e：主窗+挂件拖动 JS 兜底（lib.rs win_start_dragging IPC 已加，data-tauri-drag-region 在 WebView2 偶发失效）
 //   mousedown 时调 IPC，OS 进入 native 拖动循环（Win10/11 适配）
@@ -1527,84 +1740,94 @@ function bindDragFallback(selector, label) {
 bindDragFallback('#topbar', 'main');
 // widget 单独绑（widget.html 也在 ui/ 下但脚本不同）
 
-// 次数"默认 N 次 · 修改"：点修改展开输入，点确定写回本次次数
-document.getElementById('addCountEditBtn').addEventListener('click', () => {
-  document.getElementById('addCount').value = draftCount;
-  document.getElementById('addCountDefaultRow').classList.add('hidden');
-  document.getElementById('addCountEditRow').classList.remove('hidden');
-  document.getElementById('addCount').focus();
-  document.getElementById('addCount').select();
+// =============== 表单交互与提交（v5.15.12） ===============
+document.querySelectorAll('#addCatRow .cat-btn').forEach(function (b) {
+  b.addEventListener('click', function () { addSelectCat(b.dataset.cat); });
 });
-document.getElementById('addCountOkBtn').addEventListener('click', () => {
-  const v = Math.max(1, parseInt(document.getElementById('addCount').value, 10) || 1);
-  draftCount = v;
-  document.getElementById('addCountText').textContent = v;
-  document.getElementById('addCountEditRow').classList.add('hidden');
-  document.getElementById('addCountDefaultRow').classList.remove('hidden');
-});
-
-document.querySelectorAll('.cat-btn').forEach(b => {
-  b.addEventListener('click', () => {
-    draftCat = b.dataset.cat;
-    document.querySelectorAll('.cat-btn').forEach(x => x.classList.toggle('active', x === b));
-    document.getElementById('addCatHint').textContent = CAT_LABEL[draftCat];
-    document.getElementById('addSubmit').disabled = false;
-  });
-});
-document.querySelectorAll('.ddl-btn').forEach(b => {
-  b.addEventListener('click', () => {
-    draftDdl = b.dataset.ddl;
-    document.querySelectorAll('.ddl-btn').forEach(x => x.classList.toggle('active', x === b));
-    // 选「自定义」时展开数字输入，选其他收起
-    const custom = document.getElementById('addDdlCustom');
-    if (custom) custom.classList.toggle('hidden', b.dataset.ddl !== 'custom');
-  });
-});
-document.querySelectorAll('.prio-btn').forEach(b => {
-  b.addEventListener('click', () => {
+document.querySelectorAll('.prio-btn').forEach(function (b) {
+  b.addEventListener('click', function () {
     draftPrio = b.dataset.prio;
-    document.querySelectorAll('.prio-btn').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.prio-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
   });
 });
-document.getElementById('addCount').addEventListener('change', e => {
-  draftCount = Math.max(1, parseInt(e.target.value) || 1);
-  e.target.value = draftCount;
+document.querySelectorAll('#addOverlay .rem-time-btn').forEach(function (b) {
+  b.addEventListener('click', function () { _addRemTimeSet(parseInt(b.dataset.min, 10)); });
 });
+function syncRemCustom() {
+  const n = Math.max(1, parseInt(document.getElementById('addRemCustomNum').value, 10) || 0);
+  const f = parseInt(document.getElementById('addRemCustomUnit').value, 10) || 1;
+  if (n > 0) {
+    draftRemMin = n * f;
+    document.querySelectorAll('#addOverlay .rem-time-btn').forEach(function (x) { x.classList.remove('active'); });
+  }
+}
+document.getElementById('addRemCustomNum').addEventListener('input', syncRemCustom);
+document.getElementById('addRemCustomUnit').addEventListener('change', syncRemCustom);
 
-document.getElementById('addSubmit').addEventListener('click', async () => {
+function collectReminder() {
+  const ch = [];
+  if (draftDevice === 'mobile' || draftDevice === 'both') {
+    if (document.getElementById('addRemNotif').checked) ch.push('notify');
+    if (document.getElementById('addRemVibrate').checked) ch.push('vibrate');
+    if (document.getElementById('addRemSound').checked) ch.push('ring');
+  }
+  if (draftDevice === 'desktop' || draftDevice === 'both') {
+    if (document.getElementById('addRemPopup').checked) ch.push('popup');
+    if (document.getElementById('addRemFull').checked) ch.push('fullscreen');
+    if (document.getElementById('addRemInApp').checked) ch.push('inapp');
+  }
+  return JSON.stringify({ ch: ch.join(','), scope: draftDevice, min: draftRemMin });
+}
+
+/** 每日任务 → 今天（已过则明天）的 HH:mm 时间戳 */
+function collectDailyDueAt() {
+  const v = document.getElementById('addDailyTime').value || '09:00';
+  const p = v.split(':');
+  const d = new Date();
+  d.setHours(parseInt(p[0], 10) || 0, parseInt(p[1], 10) || 0, 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
+document.getElementById('addSubmit').addEventListener('click', async function () {
   const title = document.getElementById('addTitle').value.trim();
   if (!title || !draftCat) return;
-  // 限时任务强制要求选个时长（不是 none）
-  if (draftCat === 'time-limited' && draftDdl === 'none') {
-    alert('限时任务请选择时长');
-    return;
-  }
-  // 自定义时长：把"数值 + 单位"换算成毫秒传给后端（custom:<ms>）
-  let deadlineKey = draftCat === 'time-limited' ? draftDdl : 'none';
+  let deadlineKey = 'none';
+  if (draftCat === 'time-limited' || draftCat === 'goal') deadlineKey = draftDdl;
+  if (draftCat === 'time-limited' && deadlineKey === 'none') { showToast('限时任务必须选择限时时长'); return; }
   if (deadlineKey === 'custom') {
     const num = Math.max(1, parseInt(document.getElementById('ddlCustomNum').value, 10) || 0);
-    if (num <= 0) { alert('请填写自定义时长'); return; }
+    if (num <= 0) { showToast('请填写自定义时长'); return; }
     const unit = document.getElementById('ddlCustomUnit').value;
     const factor = unit === 'day' ? 86400000 : unit === 'hour' ? 3600000 : 60000;
     deadlineKey = 'custom:' + (num * factor);
   }
-  // v5.13k：所有类型任务都能传 count>1（后端会自动生成 N 个步骤）
-  //   之前 v4.13.5 只 once 类别允许 count>1，boss 决定所有任务统一用步骤推进
-  const submitCount = Math.max(1, parseInt(draftCount, 10) || 1);
-  await call('add_task', {
-    title, category: draftCat,
-    deadlineKey,
-    priority: draftPrio,
-    count: submitCount
-  });
+  const submitCount = (draftCat === 'once') ? Math.max(1, parseInt(document.getElementById('addCount').value, 10) || 1) : 1;
+  const payload = {
+    title: title, category: draftCat, deadlineKey: deadlineKey, priority: draftPrio,
+    count: submitCount,
+    desc: document.getElementById('addDesc').value.trim(),
+    reminder: collectReminder(),
+    remindMin: draftRemMin,
+    dueAt: (draftCat === 'daily') ? collectDailyDueAt() : null
+  };
+  try {
+    if (editingUuid) await call('update_task', Object.assign({ taskUuid: editingUuid }, payload));
+    else await call('add_task', payload);
+  } catch (e) { showToast('保存失败：' + (e.message || e)); return; }
+  const keep = editingUuid;
   closeAdd();
-  render();
+  editingUuid = null;
+  await render();
+  if (keep) openDetail(keep);
 });
 
 // =============== 设置抽屉 ===============
 document.getElementById('settingsBtn').addEventListener('click', () => {
   applySettingsToUi();
   document.getElementById('settingsOverlay').style.display = '';
+  // v5.15.12：打开设置页时若已配对但未连接，短时间内自动扫描重连
+  if (settings.pairing) autoScanAndReconnect(3);
   bindSetting('setEtaShort', 'eta_short_pct', v => Math.max(1, Math.min(100, parseInt(v) || 30)));
   bindSetting('setEtaLong', 'eta_long_h', v => Math.max(1, Math.min(240, parseInt(v) || 36)));
 });
@@ -1744,6 +1967,18 @@ function openProfileModal() {
   // 头像：先用用户自定义图，没有再回退字符
   avatarIdx = (settings.avatar_idx != null) ? settings.avatar_idx : 0;
   renderProfileAvatar();
+  // v5.15.12：今日进度卡片填充（个人信息页）
+  call('get_progress').then(pr => {
+    const doneEl = document.getElementById('profileTodayDone');
+    const fillEl = document.getElementById('profileTodayFill');
+    const hintEl = document.getElementById('profileTodayHint');
+    if (!doneEl || !pr) return;
+    const dt = pr.done_today || 0, tt = pr.total_today || 0;
+    doneEl.textContent = dt + ' / ' + tt;
+    if (fillEl) fillEl.style.width = (tt > 0 ? Math.round(dt / tt * 100) : 0) + '%';
+    if (hintEl) hintEl.textContent = tt === 0 ? '今天还没有任务'
+      : (dt >= tt ? '今天的任务全部完成' : '还有 ' + (tt - dt) + ' 项待完成');
+  }).catch(() => {});
   document.getElementById('profileOverlay').style.display = '';
 }
 function closeProfileModal() { document.getElementById('profileOverlay').style.display = 'none'; }
@@ -2065,6 +2300,34 @@ document.getElementById('setPairBtn').addEventListener('click', async () => {
 });
 
 // mDNS 自动发现手机
+/** v5.15.12：连上网后短时间内自动扫描并重连（boss：「应该有连上网后短时间内自动扫描的功能」）
+ *  已配对 + 当前未连接时：每 2.5s 扫一次，发现即自动配对；最多 rounds 轮。 */
+async function autoScanAndReconnect(rounds) {
+  if (window._autoScanBusy) return;
+  window._autoScanBusy = true;
+  try {
+    for (let i = 0; i < rounds; i++) {
+      try { if (await call('is_ws_connected')) return; } catch (e) { }
+      try {
+        const list = await call('discover_devices', { timeoutMs: 2500 });
+        if (list && list.length) {
+          const d = list[0];
+          await call('connect_server', { url: d.url, deviceId: d.deviceId || '' });
+          settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
+          saveSettings();
+          persistSettingsServer();
+          showToast('已自动连接手机端：' + (d.name || d.addr || ''));
+          const ps = document.getElementById('setPairingStatus');
+          if (ps) ps.textContent = '已配对：' + d.url;
+          return;
+        }
+      } catch (e) { }
+      await new Promise(function (r) { setTimeout(r, 2500); });
+    }
+  } finally { window._autoScanBusy = false; }
+}
+window.autoScanAndReconnect = autoScanAndReconnect;
+
 document.getElementById('setScanBtn').addEventListener('click', async () => {
   const wrap = document.getElementById('setDeviceListWrap');
   const box = document.getElementById('setDeviceList');
@@ -2325,6 +2588,8 @@ function startApp() {
   }).catch(() => {});
   setTimeout(render, 250);
   setTimeout(render, 1000);
+  // v5.15.12：已配对但当前未连接 → 启动后短时间内自动扫描重连（不用手动点「扫描设备」）
+  if (settings.pairing) setTimeout(() => autoScanAndReconnect(2), 3000);
   setInterval(render, 15000);
   // v5.15.7：手机端改了数据 → Rust ws_loop 落库后 emit "sync-applied" → 立刻刷新
   //   （否则要等上面 15s 轮询；同时把手机端选的 emoji 头像映射成桌面 avatar_idx 实现头像互见）

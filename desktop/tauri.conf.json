@@ -19,6 +19,7 @@
         "x": 100,
         "y": 80,
         "transparent": true,
+        "backgroundColor": "#F7F1E3",
         "decorations": false,
         "alwaysOnTop": false,
         "resizable": true,

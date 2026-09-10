@@ -6,7 +6,7 @@
 <title>任务挂件</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: transparent; overflow: hidden; user-select: none;
+  html, body { background: transparent; overflow: visible; user-select: none;
     font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
   .w { position: relative; width: 360px; max-height: 360px; padding: 8px 10px;
     display: flex; flex-direction: column; gap: 6px;
@@ -121,32 +121,36 @@
   }
 
   let cards = [];
-  // v5.14h.13：按追踪任务数动态伸缩整个窗（行数不变不调 set_size，避免拖动/轮询跳动）
-  let lastRows = -1;
-  function autoFitHeight(n) {
-    if (n === lastRows) return;
-    lastRows = n;
-    const h = n === 0 ? 96 : Math.min(360, 12 + n * 44 + 8);  // 每行 44px + 上下 padding
+  // v5.15.12：窗口高度按**实际内容高度**伸缩
+  //   旧实现按行数硬算（n===0 → 96px），没算上 .w 的 8px*2 padding + 1px*2 边框，
+  //   内容比窗口高一点 → 底部被窗口裁掉，boss 看到"挂件下边缘边框没显示出来"。
+  let lastH = -1;
+  function fitWindow() {
+    const h = Math.min(372, Math.max(96, cardEl.scrollHeight + 6));   // scrollHeight 含 padding，不含 border
+    if (h === lastH) return;
+    lastH = h;
     invoke('set_window_size', { w: 360, h }).catch(function(){});
   }
   async function refresh() {
     try {
       cards = await invoke('get_track_cards');
-      autoFitHeight(cards ? cards.length : 0);
-    if (!cards || cards.length === 0) {
+      if (!cards || cards.length === 0) {
         cardEl.innerHTML = '<div class="empty" id="empty" title="点击打开客户端">暂无追踪任务<br>点击打开客户端</div>';
         bindCardEvents();
+        fitWindow();
         lastKey = '';
         return;
       }
       const sig = cards.map(c => (c.task?.uuid || '') + ':' + (c.task?.done_count || 0) + '/' + (c.task?.count || c.total_steps || 0)).join('|');
-      if (sig === lastKey) return;
+      if (sig === lastKey) { fitWindow(); return; }
       lastKey = sig;
       cardEl.innerHTML = cards.map((c, i) => rowHtml(c, i)).join('');
       bindCardEvents();
+      fitWindow();
     } catch (e) {
       cardEl.innerHTML = '<div class="empty" id="empty">客户端未启动</div>';
       bindCardEvents();
+      fitWindow();
     }
   }
 

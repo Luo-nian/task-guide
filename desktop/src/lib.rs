@@ -49,6 +49,10 @@ pub struct Task {
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted: i64,
+    // v5.15.12：该任务下的步骤总数（列表查询用子查询带出）
+    //   前端据此判断「没有步骤 -> 推进键淡化不可点」（boss 明确要求）
+    #[serde(default)]
+    pub step_total: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -312,6 +316,7 @@ pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
         created_at: r.get::<_, Option<i64>>("created_at").unwrap_or(None).unwrap_or(0),
         updated_at: r.get::<_, Option<i64>>("updated_at").unwrap_or(None).unwrap_or(0),
         deleted: r.get::<_, Option<i64>>("deleted").unwrap_or(None).unwrap_or(0),
+        step_total: r.get::<_, Option<i64>>("step_total").unwrap_or(None).unwrap_or(0),
     })
 }
 
@@ -423,7 +428,7 @@ fn get_today_tasks(state: tauri::State<AppState>) -> Vec<Task> {
         params![now, day_start]
     ).ok();
     let mut stmt = db.prepare(
-        "SELECT * FROM tasks WHERE track_status!='done' AND deleted=0 ORDER BY \
+        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total FROM tasks WHERE track_status!='done' AND deleted=0 ORDER BY \
          CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END, \
          CASE WHEN deadline IS NOT NULL THEN 0 ELSE 1 END, \
          deadline IS NULL, deadline ASC, due_at ASC"
@@ -797,6 +802,9 @@ fn add_task(
     deadline_key: Option<String>,
     priority: Option<String>,
     count: Option<i64>,
+    desc: Option<String>,       // v5.15.12：备注（手机端一直有，桌面端补上）
+    reminder: Option<String>,   // v5.15.12：{"ch":"notify,popup","scope":"both","min":15}
+    due_at: Option<i64>,        // v5.15.12：每日任务的"每天几点提醒"时刻
 ) -> serde_json::Value {
     let now = chrono::Local::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
@@ -806,6 +814,9 @@ fn add_task(
     let ddl = deadline_key.as_deref().unwrap_or("none");
     let deadline_ms = deadline_key_to_ms(ddl);
     let deadline = deadline_ms.map(|d| now + d);
+    // v5.15.12：due_at 三态 —— 限时任务 = 截止时刻；每日任务 = 用户设定的每天提醒时刻；其余为空
+    let due = if ddl != "none" { deadline } else { due_at };
+    let repeat_rule: Option<&str> = if cat == "daily" { Some("daily") } else { None };
     // 次数任务：前端传 count（如「喝水 8 次」），默认 1
     let cnt = count.unwrap_or(1).max(1);
     // 积分规则与手机端 RewardRules 对齐：类型基础分 + 优先级加成
@@ -815,9 +826,9 @@ fn add_task(
         // 限时任务同时写 deadline 与 due_at：前端渲染读 due_at，跨端同步用 deadline，
         // 只写一列会导致「今日到期」判定与详情页显示对不上
         db.execute(
-            "INSERT INTO tasks (uuid,type,title,category,priority,due_at,deadline,count,done_count,track_status,reward_points,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?6,?7,0,'pending',?9,?8,?8)",
-            params![&uuid, &typ, &title, &cat, &prio, &deadline, cnt, now, rp]
+            "INSERT INTO tasks (uuid,type,title,desc,category,priority,due_at,deadline,repeat_rule,count,done_count,track_status,reward_points,reminder_strength,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,'pending',?11,?12,?13,?13)",
+            params![&uuid, &typ, &title, desc.unwrap_or_default(), &cat, &prio, due, deadline, repeat_rule, cnt, rp, reminder, now]
         ).ok();
         // v5.13k：通用步骤化——count > 1 时自动生成 N 个步骤（覆盖所有 type）
         //   之前 v4.13.5 做法是用户手动 add_step，boss 决定所有任务都用步骤推进更统一
@@ -838,6 +849,47 @@ fn add_task(
 
 /** 积分规则（与手机端 com.taskbar.app.data.model.RewardRules 对齐）：
  *  类型基础分 once8/repeat10/habit5/note2/goal15 + 优先级加成 high7/medium4/low1 */
+/// v5.15.12：编辑任务（桌面端此前完全没有编辑入口，boss 反馈"编辑任务不能写备注"）
+#[tauri::command]
+fn update_task(
+    state: tauri::State<AppState>,
+    task_uuid: String,
+    title: Option<String>,
+    category: Option<String>,
+    deadline_key: Option<String>,
+    priority: Option<String>,
+    count: Option<i64>,
+    desc: Option<String>,
+    reminder: Option<String>,
+    due_at: Option<i64>,
+) -> serde_json::Value {
+    let now = chrono::Local::now().timestamp_millis();
+    let cat = category.unwrap_or_else(|| "once".into());
+    let typ = category_to_type(&cat).to_string();
+    let prio = priority.unwrap_or_else(|| "medium".into());
+    let ddl = deadline_key.as_deref().unwrap_or("none");
+    let deadline = deadline_key_to_ms(ddl).map(|d| now + d);
+    let due = if ddl != "none" { deadline } else { due_at };
+    let repeat_rule: Option<&str> = if cat == "daily" { Some("daily") } else { None };
+    let cnt = count.unwrap_or(1).max(1);
+    {
+        let db = state.db.lock().unwrap();
+        db.execute(
+            "UPDATE tasks SET type=?2, title=COALESCE(?3,title), desc=?4, category=?5, priority=?6, \
+             due_at=?7, deadline=?8, repeat_rule=?9, count=?10, reminder_strength=?11, updated_at=?12 \
+             WHERE uuid=?1",
+            params![&task_uuid, &typ, title, desc.unwrap_or_default(), &cat, &prio, due, deadline, repeat_rule, cnt, reminder, now]
+        ).ok();
+        // 次数调小后把已完成次数夹到范围内，避免出现 5/3 这种越界显示
+        let _ = db.execute(
+            "UPDATE tasks SET done_count=MIN(done_count, count) WHERE uuid=?1",
+            params![&task_uuid]
+        );
+    }
+    sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    serde_json::json!({ "uuid": task_uuid, "status": "ok" })
+}
+
 fn reward_points_for(task_type: &str, priority: &str) -> i64 {
     let base = match task_type {
         "repeat" => 10,
@@ -1090,7 +1142,7 @@ fn delay_task(state: tauri::State<AppState>, task_uuid: String, minutes: i64) ->
 fn get_tasks_by_category(state: tauri::State<AppState>, category: String) -> Vec<Task> {
     let db = state.db.lock().unwrap();
     let mut stmt = match db.prepare(
-        "SELECT * FROM tasks WHERE category=?1 AND deleted=0 AND track_status!='done' \
+        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total FROM tasks WHERE category=?1 AND deleted=0 AND track_status!='done' \
          ORDER BY COALESCE(due_at, deadline, created_at), CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END"
     ) { Ok(s) => s, Err(_) => return vec![] };
     let rows = stmt.query_map(params![&category], row_to_task);
@@ -1653,7 +1705,56 @@ fn start_emergency_tick(state: &AppState) {
 
 // =============== 启动 ===============
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+// v5.15.12：单实例保护 —— 防止「同时存在两个客户端」（boss：点挂件又打开了一个）
+//
+// 首个实例占住 127.0.0.1:53911；后来的实例连上去发 SHOW，让已有实例唤起主窗，然后自己退出。
+// 纯 std::net，零新依赖。（验证用的第二实例可用 TASKGUIDE_NO_SINGLE_INSTANCE=1 旁路）
+const INSTANCE_PORT: u16 = 53911;
+
+fn single_instance_guard() -> bool {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    if std::env::var("TASKGUIDE_NO_SINGLE_INSTANCE").is_ok() {
+        return true;
+    }
+    match TcpListener::bind(("127.0.0.1", INSTANCE_PORT)) {
+        Ok(listener) => {
+            std::thread::spawn(move || {
+                for stream in listener.incoming() {
+                    if let Ok(mut st) = stream {
+                        let mut buf = [0u8; 32];
+                        let _ = st.read(&mut buf);
+                        if let Some(h) = sync::APP_HANDLE.get() {
+                            // 两份 clone：run_on_main_thread 借用一份，闭包 move 另一份
+                            let app_cb = h.clone();
+                            let app_run = h.clone();
+                            let _ = app_run.run_on_main_thread(move || {
+                                if let Some(w) = app_cb.get_webview_window("main") {
+                                    let _ = w.show();
+                                    let _ = w.unminimize();
+                                    let _ = w.set_focus();
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+            true
+        }
+        Err(_) => {
+            if let Ok(mut st) = TcpStream::connect(("127.0.0.1", INSTANCE_PORT)) {
+                let _ = st.write_all(b"SHOW\n");
+            }
+            false
+        }
+    }
+}
+
 pub fn run() {
+    // v5.15.12：已有实例在跑就不再起第二个进程（boss 反馈出现两个「任务栏」）
+    if !single_instance_guard() {
+        std::process::exit(0);
+    }
     // db 固定放 exe 同目录（不随 CWD 漂移）：否则从快捷方式/其他工作目录启动时
     // 会在 CWD 下新建空库，造成多个分裂 taskguide.db（验证期实测踩坑）
     let exe_dir = std::env::current_exe().ok()
@@ -1735,7 +1836,7 @@ pub fn run() {
             get_habits_status, get_task_detail, get_total_points,
             get_tasks_by_category,
             get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
-            advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
+            advance_step, add_step, import_steps, complete_task, delete_task, add_task, update_task, start_tracking, stop_tracking,
             delay_task,
             restore_task,
             set_display_mode, set_window_size,

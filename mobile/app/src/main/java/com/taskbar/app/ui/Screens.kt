@@ -4,7 +4,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,8 +78,13 @@ private val DONE_QUOTES = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
-    val tasks by vm.mainList.collectAsState()
+    val allTasks by vm.mainList.collectAsState()
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    // v5.15.12：按任务类型筛选查看（boss：手机端所有任务也应该可以分类查看）
+    var catFilter by remember { mutableStateOf("all") }
+    val tasks = remember(allTasks, catFilter) {
+        if (catFilter == "all") allTasks else allTasks.filter { catKeyOf(it) == catFilter }
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -94,6 +100,18 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
+            // 类型筛选条（比电脑端轻量：一行胶囊）
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(listOf(
+                    "all" to "全部", "daily" to "每日", "goal" to "目标",
+                    "time-limited" to "限时", "once" to "次数"
+                )) { (k, l) ->
+                    FilterChip(selected = catFilter == k, onClick = { catFilter = k }, label = { Text(l) })
+                }
+            }
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
@@ -287,6 +305,16 @@ private fun TaskRow(
         ?: steps.firstOrNull { it.status != StepStatus.DONE }
     val currentStepIndex = currentStep?.let { steps.indexOf(it) }
 
+    // v5.15.12：按住 320ms 未松手 → 进入编辑（比系统 ~500ms 更快）
+    val pressSrc = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by pressSrc.collectIsPressedAsState()
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            kotlinx.coroutines.delay(320)
+            onEdit()
+        }
+    }
+
     // 置顶框（非黑金）：追踪中 = 天蓝框 + 顶部蓝金渐变条（原神风清爽）
     Column(
         modifier = Modifier
@@ -298,7 +326,14 @@ private fun TaskRow(
                 color = if (tracking) TGColors.Azure.copy(alpha = 0.65f) else TGColors.BorderSoft,
                 shape = RoundedCornerShape(12.dp)
             )
-            .combinedClickable(onClick = onClick, onLongClick = onEdit)
+            // v5.15.12：长按 320ms 触发编辑（系统默认 ~500ms，boss 觉得太久）
+            //   实现：监听「按下」状态 + 320ms delay —— 松手即取消（不用 AwaitPointerEventScope 的
+            //   超时方案，那是 @RestrictsSuspension scope，withTimeout/协程定时器都不可用）
+            .clickable(
+                interactionSource = pressSrc,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                onClick = onClick
+            )
     ) {
         // 顶部渐变条（仅追踪中置顶框）
         if (tracking) {
@@ -1261,4 +1296,15 @@ fun CenterTrackingButton(navController: NavController, trackingCount: Int = 0) {
             }
         }
     }
+}
+
+/** v5.15.12：任务类型归类（与桌面端 app3.js 的 catOf 逐条一致，保证两端分类口径相同） */
+fun catKeyOf(t: com.taskbar.app.data.model.Task): String = when {
+    t.category == "daily" || t.category == "goal" ||
+        t.category == "time-limited" || t.category == "once" -> t.category
+    t.type == com.taskbar.app.data.model.TaskType.HABIT -> "daily"
+    t.type == com.taskbar.app.data.model.TaskType.GOAL ||
+        t.type == com.taskbar.app.data.model.TaskType.MILESTONE -> "goal"
+    t.type == com.taskbar.app.data.model.TaskType.REPEAT -> "time-limited"
+    else -> "once"
 }

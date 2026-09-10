@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v56">
+<link rel="stylesheet" href="style.css?v=v60">
 </head>
 <body>
 <div class="widget" id="app">
@@ -195,6 +195,7 @@
           <div class="dv-sub" id="detailSub"></div>
           <div class="chip-row" id="detailChips"></div>
         </div>
+        <button class="dv-edit" id="detailEdit" title="编辑任务"><span class="ico-slot" data-icon="edit" data-icon-size="16"></span></button>
       </div>
       <div class="dv-body" id="detailBody"></div>
     </div>
@@ -322,6 +323,24 @@
           <div class="pc-exp-row">
             <div class="pc-exp-bar"><div class="pc-exp-fill" id="profileExpFill" style="width:0%"></div></div>
             <div class="pc-exp-hint" id="profileExpHint">距下一级 0 分</div>
+          </div>
+        </div>
+
+        <!-- v5.15.12：补「今日进度」卡片（boss：个人信息页的那个卡片没有） -->
+        <div class="profile-card">
+          <div class="pc-head">
+            <div class="pc-level-text">
+              <div class="pc-level-name">今日进度</div>
+              <div class="pc-level-title" id="profileTodayHint">今天还没有任务</div>
+            </div>
+            <div class="pc-points">
+              <div class="pc-points-num" id="profileTodayDone">0 / 0</div>
+              <div class="pc-points-label">已完成</div>
+            </div>
+          </div>
+          <div class="pc-exp-row">
+            <div class="pc-exp-bar"><div class="pc-exp-fill" id="profileTodayFill" style="width:0%"></div></div>
+            <div class="pc-exp-hint">今日任务完成比例</div>
           </div>
         </div>
 
@@ -464,34 +483,6 @@
             <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
             <span class="hint">即将超时的任务主动弹</span>
           </div>
-          <div class="setting-row">
-            <label>短任务（48小时内）剩多少提醒</label>
-            <div class="ss-default" id="dsp_setEtaShort">
-              <span class="ss-cur" id="cur_setEtaShort">30</span>
-              <span class="ss-unit">%</span>
-              <button class="small-btn" data-toggle-edit="setEtaShort">修改</button>
-            </div>
-            <div class="ss-edit" id="edt_setEtaShort" style="display:none">
-              <input type="number" id="setEtaShort" min="1" max="100" />
-              <span class="ss-unit">%</span>
-              <button class="small-btn primary" data-save-edit="setEtaShort">确定</button>
-              <button class="small-btn" data-toggle-edit="setEtaShort">取消</button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <label>长任务（超过48小时）提前几小时提醒</label>
-            <div class="ss-default" id="dsp_setEtaLong">
-              <span class="ss-cur" id="cur_setEtaLong">36</span>
-              <span class="ss-unit">小时</span>
-              <button class="small-btn" data-toggle-edit="setEtaLong">修改</button>
-            </div>
-            <div class="ss-edit" id="edt_setEtaLong" style="display:none">
-              <input type="number" id="setEtaLong" min="1" max="240" />
-              <span class="ss-unit">小时</span>
-              <button class="small-btn primary" data-save-edit="setEtaLong">确定</button>
-              <button class="small-btn" data-toggle-edit="setEtaLong">取消</button>
-            </div>
-          </div>
         </div>
 
         <div class="settings-section">
@@ -501,7 +492,7 @@
             <span class="hint" id="setPairingStatus">未配对</span>
             <button class="small-btn danger" id="setUnpair">解除配对</button>
           </div>
-          <div class="setting-row ss-pair-hidden-on-pair">
+          <div class="setting-row">
             <label>自动发现（同一 WiFi）</label>
             <button class="small-btn primary" id="setScanBtn">扫描设备</button>
             <span class="hint">扫描手机端「任务栏」服务</span>
@@ -563,50 +554,54 @@
   <!-- ===== 新建任务抽屉 ===== -->
   <div class="overlay" id="addOverlay" style="display:none">
     <div class="modal add-modal">
-      <div class="m-head"><span>新建任务</span><button class="m-close" data-close-overlay="addOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
+      <div class="m-head"><span id="addModalTitle">新建任务</span><button class="m-close" data-close-overlay="addOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
         <label class="label">任务名</label>
         <input type="text" id="addTitle" placeholder="例：每日锻炼" />
 
-        <label class="label">任务分类 <span class="must">*</span></label>
+        <label class="label">任务类型 <span class="must">*</span></label>
         <div class="cat-row" id="addCatRow">
           <button type="button" class="cat-btn" data-cat="daily">每日任务</button>
           <button type="button" class="cat-btn" data-cat="goal">目标任务</button>
           <button type="button" class="cat-btn" data-cat="time-limited">限时任务</button>
           <button type="button" class="cat-btn" data-cat="once">次数任务</button>
         </div>
-        <span class="hint" id="addCatHint">请选择一个分类</span>
+        <span class="hint" id="addCatHint">先选类型，下面的项目会按类型自动调整</span>
 
-        <label class="label">限时时长（仅限时任务必填）</label>
-        <div class="ddl-row" id="addDdlRow">
-          <button type="button" class="ddl-btn" data-ddl="5min">5 分钟</button>
-          <button type="button" class="ddl-btn" data-ddl="60min">1 小时</button>
-          <button type="button" class="ddl-btn" data-ddl="6h">6 小时</button>
-          <button type="button" class="ddl-btn" data-ddl="1d">1 天</button>
-          <button type="button" class="ddl-btn" data-ddl="3d">3 天</button>
-          <button type="button" class="ddl-btn" data-ddl="7d">7 天</button>
-          <button type="button" class="ddl-btn" data-ddl="30d">30 天</button>
-          <button type="button" class="ddl-btn" data-ddl="none">不限</button>
-          <button type="button" class="ddl-btn" data-ddl="custom">自定义</button>
-        </div>
-        <div class="ddl-custom hidden" id="addDdlCustom">
-          <input type="number" id="ddlCustomNum" min="1" max="99999" placeholder="时长" style="width:110px" />
-          <select id="ddlCustomUnit">
-            <option value="minute">分钟</option>
-            <option value="hour" selected>小时</option>
-            <option value="day">天</option>
-          </select>
+        <!-- 限时时长：限时任务必填且无「不限」；目标任务可选（默认不限） -->
+        <div id="addDdlWrap" style="display:none">
+          <label class="label" id="addDdlLabel">限时时长 <span class="must">*</span></label>
+          <div class="ddl-row" id="addDdlRow"></div>
+          <div class="ddl-custom hidden" id="addDdlCustom">
+            <input type="number" id="ddlCustomNum" min="1" max="99999" placeholder="时长" style="width:110px" />
+            <select id="ddlCustomUnit">
+              <option value="minute">分钟</option>
+              <option value="hour" selected>小时</option>
+              <option value="day">天</option>
+            </select>
+          </div>
         </div>
 
-        <label class="label">次数（仅次数任务）</label>
-        <div class="count-row" id="addCountDefaultRow">
-          <span class="count-default-text">默认 <b id="addCountText">5</b> 次</span>
-          <button type="button" class="small-btn" id="addCountEditBtn">修改</button>
+        <!-- 每日任务：每天几点提醒 -->
+        <div id="addDailyWrap" style="display:none">
+          <label class="label">每天提醒时间</label>
+          <div class="time-input-row">
+            <input type="time" id="addDailyTime" value="09:00" />
+            <span class="hint">每天到这个点提醒你（第二天自动回到待办）</span>
+          </div>
         </div>
-        <div class="count-row hidden" id="addCountEditRow">
-          <input type="number" id="addCount" min="1" max="999" value="5" style="max-width:110px" />
-          <button type="button" class="small-btn primary" id="addCountOkBtn">确定</button>
+
+        <!-- 次数任务：直接填次数 -->
+        <div id="addCountWrap" style="display:none">
+          <label class="label">次数</label>
+          <div class="count-row">
+            <input type="number" id="addCount" min="1" max="999" value="5" style="max-width:110px" />
+            <span class="hint">每完成一次记一次数，满次数结算</span>
+          </div>
         </div>
+
+        <label class="label">备注</label>
+        <textarea id="addDesc" rows="2" placeholder="可选，补充说明（会同步到手机端）"></textarea>
 
         <label class="label">优先级</label>
         <div class="prio-row" id="addPrioRow">
@@ -615,30 +610,46 @@
           <button type="button" class="prio-btn" data-prio="low">低</button>
         </div>
 
-        <!-- v5.14d：boss 要求 新建/编辑任务时"端→方式→时间"条件显示（点不提醒就整块隐藏） -->
         <label class="label">提醒</label>
-        <!-- 1) 端选择 -->
         <div class="add-rem-row">
-          <button type="button" class="rem-device-btn" data-device="none" id="addRemNone" onclick="_addRemSet('none')">不提醒</button>
-          <button type="button" class="rem-device-btn" data-device="mobile" id="addRemMobile" onclick="_addRemSet('mobile')">仅手机端</button>
-          <button type="button" class="rem-device-btn" data-device="desktop" id="addRemDesktop" onclick="_addRemSet('desktop')">仅电脑端</button>
-          <button type="button" class="rem-device-btn" data-device="both" id="addRemBoth" onclick="_addRemSet('both')">双端</button>
+          <button type="button" class="rem-device-btn" data-device="none" onclick="_addRemSet('none')">不提醒</button>
+          <button type="button" class="rem-device-btn" data-device="mobile" onclick="_addRemSet('mobile')">仅手机端</button>
+          <button type="button" class="rem-device-btn" data-device="desktop" onclick="_addRemSet('desktop')">仅电脑端</button>
+          <button type="button" class="rem-device-btn" data-device="both" onclick="_addRemSet('both')">双端</button>
         </div>
-        <!-- 2) 提醒方式（条件显示：选了端才显示） -->
+        <!-- 提醒方式：按端分组 —— 手机端（通知栏/振动/铃声）与电脑端（弹窗/全屏/应用内）各一套 -->
         <div class="add-rem-strength" id="addRemStrength" style="display:none">
-          <div class="add-rem-method">
-            <label class="chk-pill"><input type="checkbox" id="addRemNotif" /> <span>通知栏</span></label>
-            <label class="chk-pill"><input type="checkbox" id="addRemVibrate" /> <span>振动</span></label>
-            <label class="chk-pill"><input type="checkbox" id="addRemSound" /> <span>铃声</span></label>
+          <div class="rm-group" id="addRemMobileGroup">
+            <div class="rm-group-label">手机端</div>
+            <div class="add-rem-method">
+              <label class="chk-pill"><input type="checkbox" id="addRemNotif" /> <span>通知栏</span></label>
+              <label class="chk-pill"><input type="checkbox" id="addRemVibrate" /> <span>振动</span></label>
+              <label class="chk-pill"><input type="checkbox" id="addRemSound" /> <span>响铃</span></label>
+            </div>
+          </div>
+          <div class="rm-group" id="addRemPcGroup">
+            <div class="rm-group-label">电脑端</div>
+            <div class="add-rem-method">
+              <label class="chk-pill"><input type="checkbox" id="addRemPopup" /> <span>弹窗提醒</span></label>
+              <label class="chk-pill"><input type="checkbox" id="addRemFull" /> <span>全屏提醒</span></label>
+              <label class="chk-pill"><input type="checkbox" id="addRemInApp" /> <span>应用内提示</span></label>
+            </div>
           </div>
         </div>
-        <!-- 3) 提前时间（条件显示） -->
         <div class="add-rem-time" id="addRemTime" style="display:none">
           <div class="rem-time-row">
             <button type="button" class="rem-time-btn" data-min="0">准时</button>
             <button type="button" class="rem-time-btn" data-min="15">15分钟前</button>
             <button type="button" class="rem-time-btn" data-min="60">1小时前</button>
             <button type="button" class="rem-time-btn" data-min="1440">1天前</button>
+          </div>
+          <div class="rem-custom-row">
+            <input type="number" id="addRemCustomNum" min="1" max="99999" placeholder="自定义" />
+            <select id="addRemCustomUnit">
+              <option value="1">分钟前</option>
+              <option value="60" selected>小时前</option>
+              <option value="1440">天前</option>
+            </select>
           </div>
         </div>
 
@@ -716,6 +727,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v57"></script>
+<script src="app3.js?v=v61"></script>
 </body>
 </html>

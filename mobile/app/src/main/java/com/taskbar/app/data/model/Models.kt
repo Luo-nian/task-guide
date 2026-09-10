@@ -70,6 +70,16 @@ object ReminderStrength {
     /** 响铃提醒：播放自定义铃声 + 振动 */
     const val RING = "ring"
 
+    // ---- 电脑端通道（v5.15.12）----
+    // boss：选「仅电脑端 / 双端」时不该只显示手机端的振动与铃声；
+    //   桌面端用自己的提醒 UI（自绘弹窗 / 全屏 / 应用内卡片），不用系统通知。
+    /** 桌面弹窗提醒（桌面端自绘卡片） */
+    const val POPUP = "popup"
+    /** 桌面全屏提醒（重要任务，铺满屏幕） */
+    const val FULLSCREEN = "fullscreen"
+    /** 桌面应用内提示（列表内高亮 + 角标） */
+    const val INAPP = "inapp"
+
     // ---- 提醒范围（端选择，单选） ----
     const val SCOPE_NONE = "none"      // 不提醒
     const val SCOPE_MOBILE = "mobile"  // 仅手机端
@@ -78,6 +88,12 @@ object ReminderStrength {
 
     /** 通道从轻到重（决定最高档/升级顺序） */
     val CHANNEL_ORDER = listOf(NOTIFY, VIBRATE, BEEP, RING)
+
+    /** 电脑端通道（弹窗 → 应用内 → 全屏，由轻到重） */
+    val PC_CHANNEL_ORDER = listOf(INAPP, POPUP, FULLSCREEN)
+
+    /** 该通道是否属于电脑端 */
+    fun isPcChannel(ch: String): Boolean = ch == POPUP || ch == FULLSCREEN || ch == INAPP
 
     /** 旧值兼容映射（DB 里可能存 standard/repeat/alarm） */
     fun migrateLegacy(s: String?): String = when (s) {

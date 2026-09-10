@@ -426,7 +426,16 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     val ctx = LocalContext.current
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(TaskType.ONCE) }
+    // v5.15.12：任务类型与电脑端统一为 4 类（daily/goal/time-limited/once）
+    //   boss：「手机端和电脑端的任务类型还存在不一样的？命名和数量都不一样 同步一下啊你！」
+    var catSel by remember { mutableStateOf("daily") }
+    // 由分类派生的内部 type（保持与桌面端 category_to_type 完全一致的映射）
+    val type: String = when (catSel) {
+        "daily" -> TaskType.HABIT
+        "goal" -> TaskType.GOAL
+        "time-limited" -> TaskType.REPEAT
+        else -> TaskType.ONCE
+    }
     var priority by remember { mutableStateOf(Priority.MEDIUM) }
     var category by remember { mutableStateOf("") }
     // 提醒时间：直接存 dueAt，null = 不提醒
@@ -444,6 +453,19 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     // 提醒方式：四通道多选 + 端选择（存储为 serializeConfig 格式）
     var reminderChannels by remember { mutableStateOf(reminderDefaults.first) }
     var reminderScope by remember { mutableStateOf(reminderDefaults.second) }
+    // v5.15.12：切换端后，如果该端一个通道都没勾 → 自动补一个默认（避免"选了端却没有任何方式"）
+    LaunchedEffect(reminderScope) {
+        when (reminderScope) {
+            ReminderStrength.SCOPE_MOBILE ->
+                if (reminderChannels.none { !ReminderStrength.isPcChannel(it) }) reminderChannels = reminderChannels + ReminderStrength.NOTIFY
+            ReminderStrength.SCOPE_PC ->
+                if (reminderChannels.none { ReminderStrength.isPcChannel(it) }) reminderChannels = reminderChannels + ReminderStrength.POPUP
+            ReminderStrength.SCOPE_BOTH -> {
+                if (reminderChannels.none { !ReminderStrength.isPcChannel(it) }) reminderChannels = reminderChannels + ReminderStrength.NOTIFY
+                if (reminderChannels.none { ReminderStrength.isPcChannel(it) }) reminderChannels = reminderChannels + ReminderStrength.POPUP
+            }
+        }
+    }
     // 里程碑目标次数
     var milestoneTarget by remember { mutableStateOf("1") }
     // 新建/编辑时临时添加的步骤（title, attrLabel, attrValue）——保存后批量入库
@@ -457,7 +479,16 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
         if (editUuid != null) {
             val t = vm.observeTaskFlow(editUuid).first() ?: return@LaunchedEffect
             editing = t
-            title = t.title; desc = t.desc; type = t.type; priority = t.priority
+            title = t.title; desc = t.desc; priority = t.priority
+            // v5.15.12：类型回填 —— 优先读 category（新口径），旧数据按 type 反推
+            catSel = when {
+                t.category == "daily" || t.category == "goal" ||
+                    t.category == "time-limited" || t.category == "once" -> t.category
+                t.type == TaskType.HABIT -> "daily"
+                t.type == TaskType.GOAL || t.type == TaskType.MILESTONE -> "goal"
+                t.type == TaskType.REPEAT -> "time-limited"
+                else -> "once"
+            }
             category = t.category; dueAt = t.dueAt; habitRule = t.repeatRule
             // 编辑：解析任务已存配置
             val (ch, sc) = ReminderStrength.parseConfig(t.reminderStrength)
@@ -489,10 +520,12 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 20.dp)
                     }
                 },
-                // 右上角"JSON"：一键粘贴 AI 拆解好的步骤（新建页才显示，编辑页也可用）
+                // v5.15.12：右上角 JSON 只在「新建任务」出现（boss：编辑任务的右上角不该有 JSON）
                 actions = {
-                    TextButton(onClick = { showJsonImport = true }) {
-                        Text("JSON", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    if (editUuid == null) {
+                        TextButton(onClick = { showJsonImport = true }) {
+                            Text("JSON", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -514,21 +547,29 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(desc, { desc = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-                // 类型
+                // 类型（与电脑端同一套：每日 / 目标 / 限时 / 次数）
                 Text("类型", color = TGColors.InkSoft, fontSize = 13.sp)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(listOf(
-                        TaskType.ONCE to "单次", TaskType.REPEAT to "重复", TaskType.NOTE to "速记",
-                        TaskType.HABIT to "习惯", TaskType.GOAL to "目标", TaskType.MILESTONE to "里程碑"
+                        "daily" to "每日任务", "goal" to "目标任务",
+                        "time-limited" to "限时任务", "once" to "次数任务"
                     )) { (v, l) ->
-                        FilterChip(selected = type == v, onClick = { type = v }, label = { Text(l) })
+                        FilterChip(selected = catSel == v, onClick = { catSel = v }, label = { Text(l) })
                     }
                 }
-                if (type == TaskType.MILESTONE) {
+                Text(
+                    when (catSel) {
+                        "daily" -> "每天到这个点提醒你，第二天自动回到待办"
+                        "goal" -> "为目标坚持推进；默认不限时，可另设截止时间"
+                        "time-limited" -> "必须选择截止时间，到期前会提醒"
+                        else -> "每完成一次记一次数，满次数结算"
+                    },
+                    color = TGColors.InkMute, fontSize = 11.sp
+                )
+                if (catSel == "once") {
                     Spacer(Modifier.height(6.dp))
-                    Text("里程碑是能多次推进的大任务，达到目标次数才算真正完成（如：坚持跑步 10 次）", color = TGColors.InkMute, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("目标次数", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Text("次数", color = TGColors.InkSoft, fontSize = 13.sp)
                         OutlinedTextField(
                             value = milestoneTarget,
                             onValueChange = { v -> milestoneTarget = v.filter { c -> c.isDigit() }.take(3).ifEmpty { "1" } },
@@ -536,8 +577,15 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                             modifier = Modifier.width(90.dp),
                             singleLine = true
                         )
-                        Text("次", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Text("次（每完成一次记一次数）", color = TGColors.InkSoft, fontSize = 12.sp)
                     }
+                } else {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (catSel == "daily") "每天提醒时间" else if (catSel == "time-limited") "截止时间（必填）" else "截止时间（可选）",
+                        color = TGColors.InkSoft, fontSize = 13.sp
+                    )
+                    DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
                 }
 
                 // 优先级
@@ -548,68 +596,6 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                     }
                 }
 
-                // 分类（预设 + 自定义持久化 + 分类+；长按进入删除模式；横排可滑动）
-                Text("分类", color = TGColors.InkSoft, fontSize = 13.sp)
-                var deleteMode by remember { mutableStateOf(false) }
-                var pendingDelete by remember { mutableStateOf<String?>(null) }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                ) {
-                    allCategories.forEach { c ->
-                        // 分类 chip：点击选中；长按任意分类进入删除模式；删除模式下点击弹确认
-                        Box {
-                            CategoryChipButton(
-                                label = c,
-                                selected = category == c && !deleteMode,
-                                onClick = { if (deleteMode) pendingDelete = c else category = c },
-                                onLongClick = { deleteMode = true }
-                            )
-                            if (deleteMode) {
-                                // 红色圆形 ×（右上角）
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopEnd)
-                                        .offset(x = 3.dp, y = (-3).dp)
-                                        .size(16.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .background(TGColors.Crimson),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("×", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                    // 分类+：删除模式下变红色"完成"，点击退出删除模式
-                    CategoryChipButton(
-                        label = if (deleteMode) "完成" else "分类+",
-                        selected = false,
-                        onClick = { if (deleteMode) deleteMode = false else showAddCategory = true },
-                        onLongClick = { deleteMode = true },
-                        highlightColor = if (deleteMode) TGColors.Crimson else TGColors.GoldDeep
-                    )
-                }
-                if (deleteMode) {
-                    Text("点击分类右上角的红色 × 可以删除分类", color = TGColors.Crimson, fontSize = 11.sp)
-                } else if (category.isBlank()) {
-                    Text("点击分类或「分类+」新建自己的分类", color = TGColors.InkMute, fontSize = 11.sp)
-                }
-                // 自家风格确认弹窗（删除分类）
-                pendingDelete?.let { c ->
-                    TGConfirmDialog(
-                        title = "删除分类",
-                        message = "确定要删除分类「$c」吗？\n删除后该分类下已建的任务不受影响",
-                        confirmText = "确定删除",
-                        onConfirm = {
-                            vm.removeCustomCategory(c)
-                            if (category == c) category = ""
-                            customCategories = customCategories - c
-                            pendingDelete = null
-                        },
-                        onDismiss = { pendingDelete = null }
-                    )
-                }
 
                 // 习惯类型：显示周期设置
                 if (type == TaskType.HABIT) {
@@ -619,7 +605,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 // 提醒（v5.15.10：字段顺序与电脑端「新建任务」弹窗完全一致 ——
                 //   端（不提醒/仅手机/仅电脑/双端）→ 方式（四通道多选）→ 时间；
                 //   选「不提醒」时方式与时间整块收起，与电脑端同一套逻辑）
-                if (type != TaskType.NOTE && type != TaskType.HABIT) {
+                run {
                     Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     // 1) 端（单选）——每行两个，防挤压
@@ -638,41 +624,36 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         Spacer(Modifier.height(4.dp))
                     }
                     if (reminderScope != ReminderStrength.SCOPE_NONE) {
-                        // 2) 方式（四通道多选）
+                        // 2) 方式 —— v5.15.12：按端分组（boss：选电脑端/双端时下面却只有手机端的方式）
                         Spacer(Modifier.height(6.dp))
                         Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
-                        Text("可多选组合（默认已按你的全局设置选中），点通道可切换", color = TGColors.InkMute, fontSize = 11.sp)
-                        Spacer(Modifier.height(4.dp))
-                        listOf(
-                            ReminderStrength.NOTIFY to "通知栏",
-                            ReminderStrength.VIBRATE to "振动",
-                            ReminderStrength.BEEP to "提示音",
-                            ReminderStrength.RING to "铃声"
-                        ).forEach { (v, l) ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
-                                }
-                            ) {
-                                Checkbox(
-                                    checked = v in reminderChannels,
-                                    onCheckedChange = {
-                                        reminderChannels = if (v in reminderChannels) reminderChannels - v else reminderChannels + v
-                                    },
-                                    colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
-                                )
-                                Text(l, color = TGColors.Ink, fontSize = 13.sp)
-                            }
+                        Text("可多选组合，点一下切换", color = TGColors.InkMute, fontSize = 11.sp)
+                        if (reminderScope == ReminderStrength.SCOPE_MOBILE || reminderScope == ReminderStrength.SCOPE_BOTH) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("手机端", color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            listOf(
+                                ReminderStrength.NOTIFY to "通知栏",
+                                ReminderStrength.VIBRATE to "振动",
+                                ReminderStrength.RING to "响铃"
+                            ).forEach { (v, l) -> ReminderChannelRow(v, l, reminderChannels) { reminderChannels = it } }
                         }
                         if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
                             Spacer(Modifier.height(4.dp))
-                            Text("需双端连接后同步提醒", color = TGColors.Azure, fontSize = 11.sp)
+                            Text("电脑端", color = TGColors.Azure, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            listOf(
+                                ReminderStrength.POPUP to "弹窗提醒",
+                                ReminderStrength.FULLSCREEN to "全屏提醒",
+                                ReminderStrength.INAPP to "应用内提示"
+                            ).forEach { (v, l) -> ReminderChannelRow(v, l, reminderChannels) { reminderChannels = it } }
+                            Text("桌面端使用自绘提醒卡（弹窗/全屏/应用内），不是系统通知", color = TGColors.InkMute, fontSize = 10.5.sp)
                         }
-                        // 3) 时间
+                        // 3) 提前多久提醒
                         Spacer(Modifier.height(8.dp))
-                        Text("提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
-                        DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
+                        Text("提前多久提醒", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Text(
+                            if (dueAt == null) "先在上面选择时间，才能设置提前量" else "默认在设定时刻提醒",
+                            color = TGColors.InkMute, fontSize = 11.sp
+                        )
                     }
                 }
 
@@ -715,19 +696,15 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 Button(
                     onClick = {
                         if (title.isBlank()) return@Button
-                        // 必选分类：没选分类不允许保存（boss 需求：不能无分类建任务）
-                        if (category.isBlank()) {
-                            ToastHelper.show(ctx, "请先选择分类")
+                        // v5.15.12：类型 → (type / category / 重复规则 / 截止) 映射（与电脑端 add_task 一致）
+                        if (catSel == "time-limited" && dueAt == null) {
+                            ToastHelper.show(ctx, "限时任务请先选择截止时间")
                             return@Button
                         }
-                        // 习惯类型的 dueAt 不使用（习惯没 dueAt 概念），周期走 repeatRule
-                        val finalDue = if (type == TaskType.HABIT) null else dueAt
-                        val finalRepeat = when (type) {
-                            TaskType.HABIT -> habitRule
-                            TaskType.REPEAT -> "daily"
-                            else -> null
-                        }
-                        val deadline = if (type == TaskType.GOAL) System.currentTimeMillis() + 30L * 86_400_000L else null
+                        val finalCat = catSel
+                        val finalDue = if (catSel == "once") null else dueAt
+                        val finalRepeat = if (catSel == "daily") "daily" else null
+                        val deadline = if (catSel == "time-limited") dueAt else null
 
                         // 提醒配置序列化（四通道 + 端选择）；全不选=null（不提醒）
                         val remCfg = if (reminderChannels.isEmpty() || reminderScope == ReminderStrength.SCOPE_NONE) {
@@ -738,7 +715,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         if (editing != null) {
                             vm.updateTask(editing!!.copy(
                                 title = title.trim(), desc = desc, type = type,
-                                priority = priority, category = category, dueAt = finalDue,
+                                priority = priority, category = finalCat, dueAt = finalDue,
                                 repeatRule = finalRepeat, deadline = deadline,
                                 reminderStrength = remCfg,
                                 target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1
@@ -748,7 +725,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                                 if (t.isNotBlank()) vm.addStep(editing!!.uuid, t.trim(), l.trim(), v.trim())
                             }
                         } else {
-                            vm.createTask(type, title.trim(), desc, category, priority, finalDue, finalRepeat, deadline,
+                            vm.createTask(type, title.trim(), desc, finalCat, priority, finalDue, finalRepeat, deadline,
                                 reminderStrength = remCfg,
                                 target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                                 onCreated = { uuid ->
@@ -813,6 +790,30 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 showJsonImport = false
             }
         )
+    }
+}
+
+/** v5.15.12：提醒通道行（手机端/电脑端共用） */
+@Composable
+private fun ReminderChannelRow(
+    value: String,
+    label: String,
+    selected: List<String>,
+    onChange: (List<String>) -> Unit
+) {
+    val checked = value in selected
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable {
+            onChange(if (checked) selected - value else selected + value)
+        }
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onChange(if (checked) selected - value else selected + value) },
+            colors = CheckboxDefaults.colors(checkedColor = TGColors.Gold)
+        )
+        Text(label, color = TGColors.Ink, fontSize = 13.sp)
     }
 }
 

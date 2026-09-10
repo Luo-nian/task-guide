@@ -76,26 +76,29 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         // v5.15.10：手机端也能自定义头像 —— 相册选图 → 只取中间圆形区域 → 256px PNG → 推电脑端
         val scope = rememberCoroutineScope()
         var uploading by remember { mutableStateOf(false) }
+        // v5.15.12：选完图先进「裁剪界面」，由用户自己拖动/缩放决定圆形范围（boss：不要自动裁）
+        var cropUri by remember { mutableStateOf<android.net.Uri?>(null) }
         val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.GetContent()
         ) { uri ->
-            if (uri != null) {
-                uploading = true
-                scope.launch {
-                    val dataUrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        AvatarUtil.uriToCircularDataUrl(ctx, uri)
-                    }
-                    if (dataUrl != null) {
-                        // 走设置同步通道 → 电脑端「个人信息」也换成同一张（圆形）
+            if (uri != null) cropUri = uri
+        }
+        // 裁剪确认 → 生成圆形 PNG → 走设置同步通道推给电脑端
+        cropUri?.let { u ->
+            AvatarCropDialog(
+                uri = u,
+                onCancel = { cropUri = null },
+                onConfirm = { dataUrl ->
+                    cropUri = null
+                    uploading = true
+                    scope.launch {
                         vm.setSyncedSetting("avatar_img", dataUrl)
                         prefs.edit().putString("avatar_emoji", "").apply()
                         avatarEmoji = ""
-                    } else {
-                        android.widget.Toast.makeText(ctx, "这张图读不了，换一张试试", android.widget.Toast.LENGTH_SHORT).show()
+                        uploading = false
                     }
-                    uploading = false
                 }
-            }
+            )
         }
         val avatarPalette = listOf("#E8CB7F", "#D8B45A", "#C9A227", "#8CE0C8", "#5BA3D0", "#B49BE0", "#E07BD0", "#FF8A5B")
         val avatarEmojis = listOf("🦊", "🐯", "🦉", "🐺", "🐼", "🦁", "🐲", "🦅")
@@ -107,7 +110,7 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         ) {
             // 大头像（自定义图 > 选中 emoji > 人形），点它 = 从相册选图
             Box(
-                Modifier.size(52.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                Modifier.size(68.dp).clip(androidx.compose.foundation.shape.CircleShape)
                     .background(if (avatarEmoji.isNotEmpty() || syncedBmp != null) Color(0xFF1A1206) else TGColors.GoldLight)
                     .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape)
                     .clickable { pickImage.launch("image/*") },
@@ -120,8 +123,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 24.sp)
-                else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 26.dp)
+                } else if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 32.sp)
+                else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 34.dp)
             }
             Spacer(Modifier.width(10.dp))
             // 相册上传入口（自动裁中间圆形区域 + 同步电脑端）
@@ -134,12 +137,12 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        if (uploading) "处理中…" else "上传头像",
+                        if (uploading) "处理中…" else "选择头像",
                         color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
                     )
                 }
-                Spacer(Modifier.height(3.dp))
-                Text("自动裁中间圆形 · 同步电脑", color = TGColors.InkMute, fontSize = 9.5.sp)
+                // v5.15.12：boss 要求去掉这行提示文案（改为裁剪界面里说明）
+
             }
             Spacer(Modifier.width(10.dp))
             // 8 内置头像网格（横向）—— 选中即换头像：同时清掉自定义图

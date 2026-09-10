@@ -1299,7 +1299,7 @@ body::after {
   position: absolute; inset: 0; z-index: 30;
   background: rgba(58, 46, 26, 0.45);
   display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */
 }
 .modal {
   width: calc(100% - 32px);
@@ -1465,7 +1465,7 @@ input::placeholder { color: var(--ink-faint); }
   position: absolute; inset: 0; z-index: 40;
   background: rgba(58, 46, 26, 0.55);
   display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
+  backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */
 }
 .emergency-modal {
   width: calc(100% - 28px);
@@ -1500,7 +1500,7 @@ input::placeholder { color: var(--ink-faint); }
   position: absolute; inset: 0; z-index: 60;
   background: radial-gradient(circle at center, rgba(212, 175, 55, 0.22), rgba(90, 72, 40, 0.42));
   display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */
   animation: blessFade 0.4s ease-out;
 }
 @keyframes blessFade { from { opacity: 0; } to { opacity: 1; } }
@@ -2178,7 +2178,7 @@ input::placeholder { color: var(--ink-faint); }
   position: fixed; inset: 0; z-index: 10000;
   background: rgba(86, 71, 44, 0.42);
   display: none; align-items: center; justify-content: center;
-  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */ -webkit-backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */
 }
 .crop-overlay.show { display: flex; }
 .crop-card {
@@ -2430,3 +2430,126 @@ body { background-color: var(--bg-paper); }
 .lg-cat { flex: 0 0 auto; font-size: 10px; color: var(--ink-mute);
   padding: 1px 6px; border-radius: 999px; background: rgba(201, 162, 39, 0.12); }
 .lg-pts { flex: 0 0 40px; text-align: right; font-size: 11px; font-weight: 700; color: var(--jade); }
+
+/* ===== v5.15.12：分类分组头 / 任务行 统一为「记账式」观感 =====
+   boss：「每日任务11 这个样式你能不能做得和历史任务的样式一样？」
+   —— 分组头现在是一行扁平灰字（分类名 + 数字连读），任务行是金色渐变条；
+   统一成历史任务那套：分组头 = 金色左条 + 金色渐变底 + 右侧条目数；行 = 白底细金边圆角 + hover。 */
+.cat-group { margin-bottom: 10px; }
+.cat-group-head, .list-view-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 9px; margin-bottom: 5px;
+  background: linear-gradient(90deg, rgba(232, 203, 127, 0.34), rgba(232, 203, 127, 0.06));
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+  font-size: 12px; font-weight: 700; color: var(--gold-deep); letter-spacing: 0.3px;
+}
+.cat-group-head .gh-count {
+  margin-left: auto; padding: 0;
+  font-size: 11px; font-weight: 700; color: var(--jade); background: transparent;
+}
+.cat-task, .list-task {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 10px; border-radius: 8px; margin-bottom: 2px;
+  background: rgba(255, 254, 251, 0.78);
+  border: 1px solid rgba(201, 162, 39, 0.16);
+  position: relative;
+}
+.cat-task:hover, .list-task:hover {
+  background: var(--bar-hover); border-color: rgba(201, 162, 39, 0.42);
+}
+.cat-task.overdue, .list-task.overdue {
+  background: rgba(255, 246, 243, 0.85); border-color: rgba(184, 86, 56, 0.38);
+}
+.cat-task.overdue::before, .list-task.overdue::before { border-radius: 8px 0 0 8px; }
+
+/* 逾期 chip（详情页） */
+.chip.overdue {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(192, 57, 43, 0.1); color: var(--crimson);
+  border: 1px solid rgba(192, 57, 43, 0.32); font-weight: 700;
+}
+
+/* ===== v5.15.12：详情页三个圆形动作键（与行内同语义，尺寸更大）===== */
+.dv-acts {
+  display: flex; align-items: flex-start; justify-content: center; gap: 30px;
+  padding: 20px 0 8px;
+}
+.dva { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
+.dva-b {
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; color: #FFFDF5;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3), 0 2px 8px rgba(120, 90, 30, 0.22);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.dva-l { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.dva-b.track { background: linear-gradient(135deg, #8FD3B4, #3F8A62); }
+.dva-b.stop  { background: linear-gradient(135deg, #B8D4E8, #7099BC); }
+.dva-b.adv   { background: linear-gradient(135deg, #E0C177, #B98F2E); }
+.dva-b.done  { background: linear-gradient(135deg, #F0A87A, #CE6A2B); }
+.dva:hover .dva-b { transform: scale(1.06); box-shadow: 0 4px 14px rgba(201, 162, 39, 0.42); }
+.dva:active .dva-b { transform: scale(0.93); }
+.dva.disabled { cursor: default; }
+.dva.disabled .dva-b { opacity: 0.32; filter: grayscale(0.55); }
+.dva.disabled .dva-l { opacity: 0.5; }
+
+/* 行内「追踪」键（未追踪状态）—— 玉青，与「取消」的淡蓝区分开 */
+.act[data-act="track"] .b { background: linear-gradient(135deg, #8FD3B4, #3F8A62); }
+
+/* ===== v5.15.12：追踪页空态（居中、少字，boss：文字很拥挤没有看的欲望）===== */
+.track-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  padding: 64px 24px; text-align: center;
+}
+.track-empty .te-ico {
+  width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold-deep); background: rgba(232, 203, 127, 0.22);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+}
+.track-empty .te-title { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.track-empty .te-sub { font-size: 11.5px; color: var(--ink-faint); }
+
+/* ===== v5.15.12：侧边栏数量角标更清晰（原来 9px 太小发虚）===== */
+.nav-count {
+  min-width: 18px; height: 16px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.2px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 2px rgba(90, 30, 20, 0.35);
+  transform: translateZ(0);          /* 落在整数像素，减轻子像素模糊 */
+}
+
+/* ===== v5.15.12：新建/编辑任务弹窗的新控件 ===== */
+.add-modal textarea {
+  width: 100%; min-height: 52px; resize: vertical;
+  padding: 7px 9px; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.72);
+  color: var(--ink); font-size: 12.5px; font-family: inherit; line-height: 1.5;
+}
+.add-modal textarea:focus { outline: none; border-color: var(--gold); background: #FFFDF7; }
+.time-input-row { display: flex; align-items: center; gap: 8px; }
+.time-input-row input[type="time"] {
+  padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75); color: var(--ink); font-size: 12.5px;
+}
+.add-rem-strength .rm-group { margin-bottom: 6px; }
+.add-rem-strength .rm-group-label {
+  font-size: 10.5px; color: var(--ink-mute); margin-bottom: 3px;
+  padding-left: 2px; letter-spacing: 0.4px;
+}
+.rem-custom-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.rem-custom-row input { width: 92px; padding: 5px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.75); color: var(--ink); font-size: 12px; }
+.rem-custom-row select { padding: 5px 6px; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.75); color: var(--ink); font-size: 12px; }
+
+/* 详情页「编辑」按钮 */
+.dv-head { position: relative; }
+.dv-edit {
+  position: absolute; right: 12px; top: 12px;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-soft); background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(201, 162, 39, 0.28); cursor: pointer; transition: all 0.14s;
+}
+.dv-edit:hover { color: var(--gold-deep); border-color: var(--gold); background: #FFFDF5; }
