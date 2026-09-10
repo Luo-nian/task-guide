@@ -67,6 +67,12 @@ private val dateFmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 // ==================== 主页（今天要完成的任务） ====================
 // 分区顺序：正在追踪 → 今日任务（待办）→ 习惯（放最下面）
 // 全部完成（普通任务清空 + 习惯都打卡）→ 主页显示随机语录
+/** v5.15.16：今日任务分组标题（与电脑端 titleMap 同口径） */
+private val CAT_FILTER_LABEL = mapOf(
+    "daily" to "每日任务", "goal" to "目标任务",
+    "time-limited" to "限时任务", "once" to "次数任务"
+)
+
 private val DONE_QUOTES = listOf(
     "今天的任务都已经完成啦，可以去休息休息，或者继续完成非今日的任务哦",
     "全部搞定！今天的进度 100%，干得漂亮",
@@ -79,8 +85,8 @@ private val DONE_QUOTES = listOf(
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val allTasks by vm.mainList.collectAsState()
-    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     // v5.15.12：按任务类型筛选查看（boss：手机端所有任务也应该可以分类查看）
+    // v5.15.16：这个筛选条 = 电脑端侧边栏的等价物，只用来"在今日待办里单看某一类"
     var catFilter by remember { mutableStateOf("all") }
     val tasks = remember(allTasks, catFilter) {
         if (catFilter == "all") allTasks else allTasks.filter { catKeyOf(it) == catFilter }
@@ -100,18 +106,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            // 类型筛选条（比电脑端轻量：一行胶囊）
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(listOf(
-                    "all" to "全部", "daily" to "每日", "goal" to "目标",
-                    "time-limited" to "限时", "once" to "次数"
-                )) { (k, l) ->
-                    FilterChip(selected = catFilter == k, onClick = { catFilter = k }, label = { Text(l) })
-                }
-            }
+            // 类型筛选条（= 电脑端侧边栏：只在今日待办里单看某一类）
+            CategoryFilterRow(catFilter) { catFilter = it }
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
@@ -125,22 +121,28 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 }
 
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
-                // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时包含（追踪混在列表里）
-                val todo = if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING && it.type != TaskType.HABIT }
-                else tasks.filter { it.type != TaskType.HABIT }
-                val habits = tasks.filter { it.type == TaskType.HABIT }
+                // v5.15.16（boss）：每日任务不再单列"打卡区"，直接归入今日任务；今日任务内部按分类分组。
+                // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时追踪任务混在列表里
+                val todo = if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING }
+                else tasks
                 // 步骤聚合：一次 Flow 订阅获取全部步骤 Map，TaskRow 不再各自订阅（性能优化）
                 val stepsByUuid by vm.stepsByUuid.collectAsState()
                 // 今日已打卡的习惯 uuid 集合（订阅 habit_logs Flow，点完卡后 UI 立刻更新）
                 val checkedHabits by vm.todayCheckedHabits.collectAsState()
                 // v5.15.2：聚合 streak（HabitRow 不再每行独立 Flow → 切换卡顿优化）
                 val streaksMap by vm.allHabitStreaks.collectAsState()
-                // 全部完成：无追踪、无待办、习惯非空且全部已打卡
-                val allDone = tracking.isEmpty() && todo.isEmpty() && habits.isNotEmpty() && checkedHabits.size == habits.size
+                // 今日任务按分类分组（每日/目标/限时/次数）——与电脑端今日待办同一口径
+                val groupedTodo = remember(todo) {
+                    listOf("daily", "goal", "time-limited", "once").map { k ->
+                        k to todo.filter { catKeyOf(it) == k }
+                    }.filter { it.second.isNotEmpty() }
+                }
+                // 全部完成：无追踪、无待办
+                val allDone = tracking.isEmpty() && todo.isEmpty()
 
                 if (allDone) {
                     // 随机语录（每次到达此状态重新随机）
-                    val quote = remember(habits.size, checkedHabits.size) { DONE_QUOTES.random() }
+                    val quote = remember(allDone) { DONE_QUOTES.random() }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             TGIcon(R.drawable.ic_check_circle, contentDescription = null, tint = TGColors.Jade, size = 44.dp)
@@ -164,29 +166,26 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                     ) {
                         if (showPinSection && tracking.isNotEmpty()) {
                             item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
-                            items(tracking, key = { it.uuid }) { task ->
+                            items(tracking, key = { "tr-${it.uuid}" }) { task ->
                                 TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
                                     onJustTracked = { showPinSection = false })
                             }
                         }
-                        if (todo.isNotEmpty()) {
-                            item(key = "hdr-todo") { SectionHeader("今日任务 (${todo.size})", TGColors.GoldDeep) }
-                            items(todo, key = { "t-${it.uuid}" }) { task ->
-                                TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
-                                    onClick = { navController.navigate("detail/${task.uuid}") },
-                                    onEdit = { navController.navigate("edit/${task.uuid}") },
-                                    onJustTracked = { showPinSection = false })
+                        // 今日任务：按分类分组渲染（每日/目标/限时/次数）
+                        groupedTodo.forEach { (catKey, list) ->
+                            item(key = "hdr-todo-$catKey") {
+                                SectionHeader("${CAT_FILTER_LABEL[catKey] ?: catKey} · 今日 (${list.size})", TGColors.GoldDeep)
                             }
-                        }
-                        if (habits.isNotEmpty()) {
-                            // 只显示未打卡的（已打卡的挪到所有任务"今日打卡"区，防刷分）
-                            val habitsUnchecked = habits.filter { it.uuid !in checkedHabits }
-                            if (habitsUnchecked.isNotEmpty()) {
-                                item(key = "hdr-habit") { SectionHeader("每日任务 (${habitsUnchecked.size})", TGColors.Jade) }
-                                items(habitsUnchecked, key = { "h-${it.uuid}" }) { task ->
-                                    HabitRow(task, vm, checkedToday = false, streak = streaksMap[task.uuid] ?: 0)
+                            items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
+                                if (task.type == TaskType.HABIT) {
+                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits, streak = streaksMap[task.uuid] ?: 0)
+                                } else {
+                                    TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
+                                        onClick = { navController.navigate("detail/${task.uuid}") },
+                                        onEdit = { navController.navigate("edit/${task.uuid}") },
+                                        onJustTracked = { showPinSection = false })
                                 }
                             }
                         }
@@ -368,34 +367,42 @@ private fun TaskRow(
                     modifier = Modifier.weight(1f)
                 )
                 // 操作：停止追踪 + 推进/完成
+                // v5.15.16（M8）：追踪键 = 天蓝（Azure），取消追踪键 = 灰蓝（InkMute），两者颜色区分
                 PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                    TGIcon(R.drawable.ic_track, contentDescription = "停止追踪", tint = TGColors.Violet, size = 20.dp)
+                    TGIcon(R.drawable.ic_close, contentDescription = "取消追踪", tint = TGColors.InkMute, size = 20.dp)
                 }
                 if (hasSteps) {
                     // 剩余未完成步骤 > 3 时，连按 3 次推进键才弹"完成"键（步骤少直接推进就行，不需要这个机制）
                     val remainingSteps = steps.count { it.status != com.taskbar.app.data.model.StepStatus.DONE }
-                    PressIcon(onClick = {
-                        vm.advanceStepByTask(task.uuid)
-                        if (remainingSteps > 3) {
-                            val now = System.currentTimeMillis()
-                            if (now - lastClick > 5000) clicksInWindow = 0
-                            lastClick = now
-                            clicksInWindow++
-                            if (clicksInWindow >= 3 && !showFinish) {
-                                showFinish = true
-                                scope.launch {
-                                    kotlinx.coroutines.delay(3000)
-                                    showFinish = false
-                                    clicksInWindow = 0
-                                }
-                            }
-                        }
-                    }) {
-                        TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
-                    }
-                    if (showFinish) {
+                    // v5.15.16（M9）：只剩最后一步 → 推进键直接变「完成」键
+                    if (remainingSteps <= 1) {
                         PressIcon(onClick = { vm.completeTask(task.uuid) }) {
                             TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        }
+                    } else {
+                        PressIcon(onClick = {
+                            vm.advanceStepByTask(task.uuid)
+                            if (remainingSteps > 3) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastClick > 5000) clicksInWindow = 0
+                                lastClick = now
+                                clicksInWindow++
+                                if (clicksInWindow >= 3 && !showFinish) {
+                                    showFinish = true
+                                    scope.launch {
+                                        kotlinx.coroutines.delay(3000)
+                                        showFinish = false
+                                        clicksInWindow = 0
+                                    }
+                                }
+                            }
+                        }) {
+                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                        }
+                        if (showFinish) {
+                            PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                            }
                         }
                     }
                 } else {
@@ -515,8 +522,9 @@ private fun TaskRow(
                 }
                 // 右侧操作：追踪 + 主操作（完成/推进）
                 if (tracking) {
+                    // M8：取消追踪 = 灰蓝（与追踪键的天蓝区分）
                     PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                        TGIcon(R.drawable.ic_track, contentDescription = "停止追踪", tint = TGColors.Violet, size = 20.dp)
+                        TGIcon(R.drawable.ic_close, contentDescription = "取消追踪", tint = TGColors.InkMute, size = 20.dp)
                     }
                 } else {
                     PressIcon(onClick = {
@@ -534,28 +542,35 @@ private fun TaskRow(
                 if (hasSteps) {
                     // 剩余未完成步骤 > 3 时，连按 3 次推进键才弹"完成"键（步骤少直接推进就行，不需要这个机制）
                     val remainingSteps = steps.count { it.status != com.taskbar.app.data.model.StepStatus.DONE }
-                    PressIcon(onClick = {
-                        vm.advanceStepByTask(task.uuid)
-                        if (remainingSteps > 3) {
-                            val now = System.currentTimeMillis()
-                            if (now - lastClick > 5000) clicksInWindow = 0
-                            lastClick = now
-                            clicksInWindow++
-                            if (clicksInWindow >= 3 && !showFinish) {
-                                showFinish = true
-                                scope.launch {
-                                    kotlinx.coroutines.delay(3000)
-                                    showFinish = false
-                                    clicksInWindow = 0
-                                }
-                            }
-                        }
-                    }) {
-                        TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
-                    }
-                    if (showFinish) {
+                    // v5.15.16（M9）：只剩最后一步 → 推进键直接变「完成」键
+                    if (remainingSteps <= 1) {
                         PressIcon(onClick = { vm.completeTask(task.uuid) }) {
                             TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        }
+                    } else {
+                        PressIcon(onClick = {
+                            vm.advanceStepByTask(task.uuid)
+                            if (remainingSteps > 3) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastClick > 5000) clicksInWindow = 0
+                                lastClick = now
+                                clicksInWindow++
+                                if (clicksInWindow >= 3 && !showFinish) {
+                                    showFinish = true
+                                    scope.launch {
+                                        kotlinx.coroutines.delay(3000)
+                                        showFinish = false
+                                        clicksInWindow = 0
+                                    }
+                                }
+                            }
+                        }) {
+                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                        }
+                        if (showFinish) {
+                            PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                            }
                         }
                     }
                 } else {
@@ -594,6 +609,23 @@ private fun TaskRow(
     }
 }
 
+/** v5.15.16：任务类型筛选条（4 类 + 全部），主页与「所有任务」页共用
+ *  boss：「主页上面的分类就相当于电脑端的侧边栏，只是为了今日待办中单独查看某一个分类的任务」 */
+@Composable
+private fun CategoryFilterRow(selected: String, onSelect: (String) -> Unit) {
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(listOf(
+            "all" to "全部", "daily" to "每日", "goal" to "目标",
+            "time-limited" to "限时", "once" to "次数"
+        )) { (k, l) ->
+            FilterChip(selected = selected == k, onClick = { onSelect(k) }, label = { Text(l) })
+        }
+    }
+}
+
 /** 分类小标签（与 TypeChip 风格统一：金色鲜明底 + 深金字，不违和） */
 @Composable
 private fun CategoryChip(category: String) {
@@ -612,6 +644,9 @@ private fun CategoryChip(category: String) {
 fun TrackScreen(vm: TaskViewModel) {
     val tracking by vm.tracking.collectAsState()
     val limit by vm.trackLimit.collectAsState()
+    // v5.15.16（M4）：步骤只订阅一次（聚合 Map），不再让每张卡各自起 Flow + 查库。
+    //   原来切到追踪页要重建 N 个 Flow（WhileSubscribed 会重新查 DB）→ 肉眼可见的卡顿。
+    val stepsByUuid by vm.stepsByUuid.collectAsState()
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(
@@ -624,9 +659,13 @@ fun TrackScreen(vm: TaskViewModel) {
             EmptyState("没有追踪中的任务\n去主页点追踪图标", Modifier.fillMaxSize())
         } else {
             // 追踪任务竖排列表，每个任务一张卡，卡内可收起步骤栏
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // v5.15.16（M10）：卡片间距加大 + 卡片本身带边框 → 有步骤时也不会混成一大坨
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
                 items(tracking, key = { it.uuid }) { task ->
-                    TrackTaskCard(task, vm)
+                    TrackTaskCard(task, stepsByUuid[task.uuid].orEmpty(), vm)
                 }
             }
         }
@@ -635,26 +674,35 @@ fun TrackScreen(vm: TaskViewModel) {
 
 /** 追踪任务卡：标题 + 进度 + 可收起步骤栏（步骤带序号），无步骤可直接添加 */
 @Composable
-private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
-    val steps by remember(task.uuid) { vm.steps(task.uuid) }.collectAsState(emptyList())
+private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
+    // v5.15.16（M4）：steps 由外层聚合 Map 传入（原内部 vm.steps(uuid) 每次进页重建 Flow）
     val ctx = LocalContext.current
     var expanded by remember(task.uuid) { mutableStateOf(true) }
     var showAddStep by remember(task.uuid) { mutableStateOf(false) }
     val doneCount = steps.count { it.status == StepStatus.DONE }
     val total = steps.size
 
+    // v5.15.16（M10）：卡片边框加重为 1.5dp + 天蓝描边 + 左侧色条，卡片之间 14dp 间距，
+    //   有步骤时也能一眼看出"这是三个任务"
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
-            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(12.dp))
+            .border(1.5.dp, TGColors.Azure.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
     ) {
         // 卡头：点击展开/收起
         Row(
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                Modifier
+                    .size(5.dp, 22.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(TGColors.Azure)
+            )
+            Spacer(Modifier.width(8.dp))
             Box(
                 Modifier
                     .size(10.dp)
@@ -710,6 +758,35 @@ private fun TrackTaskCard(task: Task, vm: TaskViewModel) {
                     }
                 }
                 Spacer(Modifier.height(4.dp))
+            }
+        }
+        // v5.15.16（M11）：追踪页也要有「取消追踪 / 推进」两个键
+        val remaining = steps.count { it.status != StepStatus.DONE }
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Spacer(Modifier.weight(1f))
+            // 取消追踪（灰蓝，与追踪键的天蓝区分）
+            TextButton(onClick = { vm.stopTracking(task.uuid) }) {
+                TGIcon(R.drawable.ic_close, contentDescription = null, tint = TGColors.InkMute, size = 16.dp)
+                Spacer(Modifier.width(4.dp))
+                Text("取消追踪", color = TGColors.InkMute, fontSize = 13.sp)
+            }
+            // 推进 / 完成（只剩最后一步时变「完成」）
+            if (total == 0 || remaining <= 1) {
+                TextButton(onClick = { vm.completeTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_check_circle, contentDescription = null, tint = TGColors.Jade, size = 16.dp)
+                    Spacer(Modifier.width(4.dp))
+                    Text("完成", color = TGColors.Jade, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            } else {
+                TextButton(onClick = { vm.advanceStepByTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_forward, contentDescription = null, tint = TGColors.GoldDeep, size = 16.dp)
+                    Spacer(Modifier.width(4.dp))
+                    Text("推进", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
             }
         }
     }
@@ -955,14 +1032,24 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val todo = main.filter { it.trackStatus != TrackStatus.TRACKING }
     // 今日已打卡的每日任务（habit 类型 + checkedToday），挪到这里显示
     val todayCheckedHabits by vm.todayCheckedHabits.collectAsState()
-    val todayCheckedList = todo.filter { it.type == TaskType.HABIT && it.uuid in todayCheckedHabits }
+    // v5.15.16（M2）：所有任务页也要能分类查看 + 右上角搜索
+    var catFilter by remember { mutableStateOf("all") }
+    var searchOn by remember { mutableStateOf(false) }
+    var keyword by remember { mutableStateOf("") }
+    fun match(t: Task) = (keyword.isBlank() || t.title.contains(keyword, ignoreCase = true))
+    fun byCat(list: List<Task>) = list.filter { catFilter == "all" || catKeyOf(it) == catFilter }
+    val trackingF = byCat(tracking).filter(::match)
+    val todoF = byCat(todo).filter(::match)
+    val futureF = byCat(future).filter(::match)
+    val todayCheckedList = byCat(todo.filter { it.type == TaskType.HABIT && it.uuid in todayCheckedHabits })
+        .filter(::match)
     // 置顶/置底确认弹窗状态：(uuid, action) action = "pin" | "unpin"
     var pendingRepoAction by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        // 顶栏：返回 + 标题
+        // 顶栏：返回 + 标题 + 右上角搜索
         Row(
-            Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
+            Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
@@ -970,9 +1057,31 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             }
             Spacer(Modifier.width(4.dp))
             Text("所有任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            // 右上角搜索键（点开/收起搜索框）
+            PressIcon(onClick = { searchOn = !searchOn; if (!searchOn) keyword = "" }) {
+                TGIcon(
+                    drawable = if (searchOn) R.drawable.ic_close else R.drawable.ic_search,
+                    contentDescription = if (searchOn) "关闭搜索" else "搜索",
+                    tint = TGColors.GoldDeep, size = 22.dp
+                )
+            }
         }
-        if (tracking.isEmpty() && todo.isEmpty() && future.isEmpty() && todayCheckedList.isEmpty()) {
-            EmptyState("还没有任何任务", Modifier.fillMaxSize())
+        // 搜索框（展开时）
+        if (searchOn) {
+            OutlinedTextField(
+                value = keyword,
+                onValueChange = { keyword = it },
+                placeholder = { Text("搜索任务名…", color = TGColors.InkFaint, fontSize = 14.sp) },
+                singleLine = true,
+                leadingIcon = { TGIcon(R.drawable.ic_search, contentDescription = null, tint = TGColors.InkMute, size = 18.dp) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+            )
+        }
+        // 分类筛选条（与主页同一套口径）
+        CategoryFilterRow(catFilter) { catFilter = it }
+        if (trackingF.isEmpty() && todoF.isEmpty() && futureF.isEmpty() && todayCheckedList.isEmpty()) {
+            EmptyState(if (keyword.isNotBlank()) "没有匹配「" + keyword + "」的任务" else "还没有任何任务", Modifier.fillMaxSize())
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -984,27 +1093,27 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         HabitRow(task, vm, checkedToday = true)
                     }
                 }
-                if (tracking.isNotEmpty()) {
-                    item(key = "hdr-t") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
-                    items(tracking, key = { "t-${it.uuid}" }) { task ->
+                if (trackingF.isNotEmpty()) {
+                    item(key = "hdr-t") { SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet) }
+                    items(trackingF, key = { "t-${it.uuid}" }) { task ->
                         TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onUnpin = { pendingRepoAction = task.uuid to "unpin" })
                     }
                 }
-                if (todo.isNotEmpty()) {
-                    item(key = "hdr-todo") { SectionHeader("待办 (${todo.size})", TGColors.GoldDeep) }
-                    items(todo, key = { "todo-${it.uuid}" }) { task ->
+                if (todoF.isNotEmpty()) {
+                    item(key = "hdr-todo") { SectionHeader("待办 (${todoF.size})", TGColors.GoldDeep) }
+                    items(todoF, key = { "todo-${it.uuid}" }) { task ->
                         TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },
                             onUnpin = { pendingRepoAction = task.uuid to "unpin" })
                     }
                 }
-                if (future.isNotEmpty()) {
-                    item(key = "hdr-f") { SectionHeader("未来任务 (${future.size})", TGColors.Azure) }
-                    items(future, key = { "f-${it.uuid}" }) { task ->
+                if (futureF.isNotEmpty()) {
+                    item(key = "hdr-f") { SectionHeader("未来任务 (${futureF.size})", TGColors.Azure) }
+                    items(futureF, key = { "f-${it.uuid}" }) { task ->
                         TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                             onClick = { navController.navigate("detail/${task.uuid}") },
                             onEdit = { navController.navigate("edit/${task.uuid}") },

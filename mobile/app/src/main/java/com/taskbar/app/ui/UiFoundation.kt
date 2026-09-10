@@ -2,7 +2,11 @@ package com.taskbar.app.ui
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.taskbar.app.R
 import com.taskbar.app.data.model.Priority
 
 // ==================== 全局 Toast（自家风格 + 防抖 + 单例覆盖，杜绝连点刷屏/截断） ====================
@@ -306,104 +311,151 @@ fun CompletionCelebration(
     newLevelName: String?,
     onDismiss: () -> Unit
 ) {
+    val isLevelUp = newLevel != null && newLevelName != null
+
+    // 入场动画：遮罩淡入 + 卡片缩放上浮
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         visible = true
-        kotlinx.coroutines.delay(2800)
+        kotlinx.coroutines.delay(if (isLevelUp) 3200 else 2400)
         onDismiss()
     }
-    val scale by animateFloatAsState(if (visible) 1f else 0.92f, tween(280))
-    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(280))
+    val bgAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(220))
+    val scale by animateFloatAsState(if (visible) 1f else 0.9f, tween(320))
+    val slide by animateFloatAsState(if (visible) 0f else 18f, tween(320))
+
+    // 光晕呼吸（用无限动画驱动外圈光晕的透明度）
+    val halo = rememberInfiniteTransition(label = "halo")
+    val haloAlpha by halo.animateFloat(
+        initialValue = 0.35f, targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "haloAlpha"
+    )
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F1822).copy(alpha = 0.55f * alpha))
-            .clickable(onClick = onDismiss),
+            .background(Color(0xFF1B2430).copy(alpha = 0.62f * bgAlpha))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.graphicsLayer {
-                scaleX = scale; scaleY = scale; this.alpha = alpha
-            }
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = scale; scaleY = scale
+                    alpha = bgAlpha
+                    translationY = slide
+                }
         ) {
-            // 任务名小字（柔和米色）
-            Text(
-                title,
-                color = Color(0xFFEFE8DC).copy(alpha = 0.7f),
-                fontSize = 12.sp,
-                maxLines = 1,
-                letterSpacing = 0.5.sp
-            )
-            Spacer(Modifier.height(20.dp))
-            // 奖励块：白米底 + 冰川蓝描边 + 极简排版
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))   // 圆角小一点更现代
-                    .background(Color(0xFFF6F0E1))
-                    .border(1.dp, TGColors.GoldLight, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 40.dp, vertical = 26.dp)
-            ) {
-                // 极简横线 + "获得"小字
-                Text(
-                    "获  得",
-                    color = TGColors.InkMute,
-                    fontSize = 11.sp,
-                    letterSpacing = 4.sp
+            // ── 顶部徽记：金色渐变圆环 + 光晕 ──
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(96.dp)
+                        .graphicsLayer { this.alpha = haloAlpha }
+                        .background(
+                            Brush.radialGradient(
+                                listOf(TGColors.Gold.copy(alpha = 0.5f), Color.Transparent)
+                            ),
+                            androidx.compose.foundation.shape.CircleShape
+                        )
                 )
-                Spacer(Modifier.height(10.dp))
-                // 大数字 + 积分（冰川蓝，深海岩作高对比）
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "+",
-                        color = TGColors.GoldDeep,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        "$points",
-                        color = TGColors.Black,
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-1).sp
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(TGColors.GoldLight, TGColors.Gold, TGColors.GoldDeep)
+                            )
+                        )
+                        .border(2.dp, Color(0xFFFFF6DA).copy(alpha = 0.85f), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TGIcon(
+                        drawable = R.drawable.ic_coin,
+                        contentDescription = null,
+                        tint = Color(0xFF2A1D06),
+                        size = 30.dp
                     )
                 }
+            }
+            Spacer(Modifier.height(14.dp))
+
+            // ── 任务名（小字，克制） ──
+            Text(
+                title,
+                color = Color(0xFFEDE4D3).copy(alpha = 0.78f),
+                fontSize = 13.sp,
+                maxLines = 1,
+                letterSpacing = 0.7.sp,
+                modifier = Modifier.padding(horizontal = 40.dp)
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (isLevelUp) "任务完成 · 等级提升" else "任务完成",
+                color = TGColors.GoldLight,
+                fontSize = 11.sp,
+                letterSpacing = 3.sp
+            )
+            Spacer(Modifier.height(18.dp))
+
+            // ── 积分卡：米白底 + 金色细描边 + 大数字 ──
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.verticalGradient(listOf(Color(0xFFFFFDF6), Color(0xFFF7EFDC)))
+                    )
+                    .border(1.dp, TGColors.Gold.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 36.dp, vertical = 16.dp)
+            ) {
                 Text(
-                    "积分",
+                    "+",
+                    color = TGColors.GoldDeep,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                Text(
+                    "$points",
+                    color = Color(0xFF1F1A10),
+                    fontSize = 46.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-1.5).sp
+                )
+                Text(
+                    " 积分",
                     color = TGColors.InkMute,
-                    fontSize = 11.sp,
-                    letterSpacing = 3.sp
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 9.dp)
                 )
             }
-            // 升级横幅（冰川蓝→赤陶撞色横条——柔和高亮）
-            if (newLevel != null && newLevelName != null) {
-                Spacer(Modifier.height(14.dp))
+
+            // ── 升级横幅（仅升级时出现） ──
+            if (isLevelUp) {
+                Spacer(Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(2.dp))   // 几乎无圆角=横条感
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Brush.horizontalGradient(listOf(TGColors.Gold, TGColors.Orange)))
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .padding(horizontal = 18.dp, vertical = 9.dp)
                 ) {
-                    Text("Lv.$newLevel", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
+                    Text("Lv.$newLevel", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
                     Spacer(Modifier.width(8.dp))
-                    Box(
-                        Modifier
-                            .size(width = 1.dp, height = 12.dp)
-                            .background(Color.White.copy(alpha = 0.5f))
-                    )
+                    Box(Modifier.size(width = 1.dp, height = 13.dp).background(Color.White.copy(alpha = 0.55f)))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        newLevelName,
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 1.sp
-                    )
+                    Text(newLevelName ?: "", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
                 }
             }
+            Spacer(Modifier.height(14.dp))
+            Text("点击任意位置关闭", color = Color(0xFFEDE4D3).copy(alpha = 0.42f), fontSize = 10.sp, letterSpacing = 1.sp)
         }
     }
 }

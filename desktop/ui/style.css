@@ -1109,6 +1109,14 @@ body::after {
   margin: 4px 0 10px;
 }
 .json-modal .json-area:focus { border-color: var(--gold-light); box-shadow: 0 0 0 2px var(--glow-gold); }
+/* D8：输入框里的提示走 placeholder（灰字提示，一输入就消失、清空又出现）——
+   与"示例文本"区别开，boss 要的就是这种"提示而非内容"的观感 */
+.json-modal .json-area::placeholder {
+  color: var(--ink-faint);
+  opacity: 0.72;
+  font-style: normal;
+  line-height: 1.7;
+}
 .json-modal .json-example {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
@@ -2566,3 +2574,64 @@ body { background-color: var(--bg-paper); }
 
 /* 限时任务里被禁用的「不提醒」 */
 .rem-device-btn.banned { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== v5.15.16 ===== */
+
+/* P0：今日待办/追踪视图是直接写进 #listView 的扁平结构（没有 .lv-body），
+   原来只有 .lv-body 有 overflow-y:auto → 这两个视图内容超出后完全滚不动。
+   让 .list-view 自身可滚、子项不被 flex 压缩、标题吸顶。 */
+.list-view { overflow-y: auto !important; overscroll-behavior: contain; }
+.list-view > * { flex-shrink: 0; }
+.list-view .list-view-header, .list-view .view-head {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg-paper);
+}
+/* 今日待办分组间距（滚动时一眼看出分组） */
+.list-view .cat-group { margin-bottom: 8px; }
+.list-view .empty-tip { padding: 24px 10px; text-align: center; color: var(--ink-faint); font-size: 12px; }
+
+/* D1：等级徽章被 flex 压扁 → 固定 48px 正方形；那一行（卡片头）加高、整行拉长 */
+.pc-level-icon { flex: 0 0 48px; width: 48px; height: 48px; aspect-ratio: 1 / 1; }
+.profile-card .pc-head {
+  min-height: 62px; gap: 14px; align-items: center;
+  padding: 4px 10px 12px;            /* boss：这一行长一点 */
+  border-bottom: 1px solid rgba(201, 162, 39, 0.16);
+}
+.profile-card .pc-level-text { padding-right: 8px; }
+.profile-card .pc-level-name { font-size: 17px; }
+
+/* D5：追踪特效优先于逾期特效（boss：追踪提示比"逾期 N 天"更重要，不该被盖住）
+   覆盖规则必须写在 .overdue 之后 —— 放这里即可（同特异性后者胜） */
+.cat-task.tracking, .list-task.tracking {
+  background: linear-gradient(90deg, rgba(214, 238, 255, 0.92), rgba(255, 250, 225, 0.72)) !important;
+  border-color: rgba(79, 134, 181, 0.55) !important;
+}
+.cat-task.tracking::before, .list-task.tracking::before {
+  background: linear-gradient(90deg, var(--azure), transparent) !important;
+  opacity: 1 !important;
+}
+.cat-task.tracking.overdue .ct-over, .list-task.tracking.overdue .ct-over { color: var(--azure); }
+
+/* D6：详情页删除键（红色，与编辑键区分） */
+.dv-del {
+  position: absolute; right: 50px; top: 12px;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--crimson); background: rgba(255, 245, 243, 0.72);
+  border: 1px solid rgba(192, 57, 43, 0.3); cursor: pointer; transition: all 0.14s;
+}
+.dv-del:hover { color: #fff; background: var(--crimson); border-color: var(--crimson); }
+
+/* D3：白闪继续压制 —— 根节点/主容器彻底去掉毛玻璃。
+   根因：窗口是 transparent:true，而 .widget 上那层 backdrop-filter:blur(18px) 会让
+   WebView2 在每次重建合成层（弹窗开合、列表重绘）时先清成窗口底色（白）再重绘 → 一闪。
+   .widget 的 --panel 本身已是不透明米色，毛玻璃纯属多余：干掉它，白闪的源头就没了。 */
+html, body { background-color: var(--bg-paper) !important; background-image: none; }
+.widget { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background-color: var(--bg-paper); }
+.app { will-change: transform; contain: paint; }
+.overlay, .emergency-overlay, .bless-overlay, .crop-overlay {
+  will-change: opacity; contain: paint; background-color: rgba(31, 36, 48, 0.42) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+/* 弹窗面板本身也不要用毛玻璃（透明底 + blur = 又一处分层重建） */
+.m, .modal, .dialog, .bless-card, .crop-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }

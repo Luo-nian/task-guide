@@ -152,6 +152,7 @@ const ICONS = {
   expand:   '<path d="M9.4 3.6H4.4v5M14.6 3.6h5v5M9.4 20.4H4.4v-5M14.6 20.4h5v-5"/>',
   appico:   '<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.2"/><path d="M8.4 9.4h7.2M8.4 13.2h7.2"/>',
   edit:     '<path d="M4.6 19.4h3l10.1-10.1a1.9 1.9 0 0 0 0-2.7l-.7-.7a1.9 1.9 0 0 0-2.7 0L4.6 16z"/><path d="M14.1 7.2l2.7 2.7"/>',
+  trash:    '<path d="M4.4 7h15.2"/><path d="M9.6 4.5h4.8v2.5H9.6z"/><path d="M6.5 7l.9 12.1a1.8 1.8 0 0 0 1.8 1.7h5.6a1.8 1.8 0 0 0 1.8-1.7L17.5 7"/><path d="M10.4 11v6M13.6 11v6"/>',
   // v5.15.12：补齐 3 个此前缺失的图标（缺图标时 svgIcon 返回空串 → 按钮变空白圆）
   lock:     '<rect x="4.6" y="10.4" width="14.8" height="9.6" rx="2.2"/><path d="M8 10.4V7.8a4 4 0 0 1 8 0v2.6"/>',
   target:   '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.6v2.2M12 18.2v2.2M3.6 12h2.2M18.2 12h2.2"/>',
@@ -556,6 +557,8 @@ function renderTodayView() {
     if (grouped[k]) grouped[k].push(t);
     else grouped.once.push(t);
   });
+  // v5.15.16：每个分组内把"追踪中"排到最前（boss：电脑端追踪任务也要置顶）
+  Object.keys(grouped).forEach(k => grouped[k].sort((a, b) => (isTracking(b) ? 1 : 0) - (isTracking(a) ? 1 : 0)));
   const titleMap = { daily:'每日任务', 'time-limited':'限时任务', once:'次数任务', goal:'目标任务' };
   const iconMap = { daily:'daily', 'time-limited':'lim', once:'once', goal:'goal' };
   let html = `
@@ -696,6 +699,8 @@ function renderListView() {
     if (hintEl) hintEl.textContent = '次数任务可重复完成';
   }
 
+  // v5.15.16：追踪中的排最前
+  arr = arr.slice().sort((a, b) => (isTracking(b) ? 1 : 0) - (isTracking(a) ? 1 : 0));
   if (arr.length === 0) {
     box.innerHTML = `<div class="empty-line">这一类暂时没有任务</div>`;
   } else {
@@ -794,8 +799,18 @@ document.addEventListener('click', async function (ev) {
       await call('advance_step', { stepUuid: next.uuid, taskUuid: uuid, status: 'done' });
       showToast('已推进：' + next.title);
     } else if (what === 'done') {
+      const before = (typeof tasks !== 'undefined' ? tasks : []).find(t => t.uuid === uuid);
+      const basePts = (before && before.reward_points) || 0;
       const r = await call('complete_task', { taskUuid: uuid });
-      if (typeof celebrateCompletion === 'function') celebrateCompletion(uuid, r);
+      // v5.15.16：原来这里调用的 celebrateCompletion 根本不存在（typeof 检查静默跳过）→ 点完成没任何反馈
+      if (r && r.already_done) {
+        showToast('今日已完成 ✓');
+      } else if (r && r.partial === true) {
+        showToast('进度 +1 · 已完成 ' + r.done_count + ' / ' + r.count + ' 次');
+      } else {
+        const pts = (r && r.habit && !r.final_exp) ? 5 : ((r && r.final_exp) || basePts);
+        showBless({ mode: 'reward', title: (before && before.title) || '任务完成', points: pts, isCritical: !!(r && r.is_critical) });
+      }
     }
     await render();
   } catch (e) {
@@ -872,7 +887,9 @@ function ledgerRowHtml(t) {
   const ts = t.done_at || t.updated_at || 0;
   const time = ts ? new Date(ts).toTimeString().slice(0, 5) : '';
   const cat = CAT_LABEL[catOf(t)] || '';
-  return `<div class="lg-row" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')">
+  // v5.15.16：历史任务左键不再打开"外面"的任务详情（boss：历史任务不该跳当前详情）
+  //   改为右键菜单「恢复任务 / 取消」；悬停时给个提示
+  return `<div class="lg-row" data-uuid="${t.uuid}" title="右键可恢复任务">
     <span class="lg-time">${time}</span>
     <span class="lg-title" title="${esc(t.title)}">${esc(t.title)}</span>
     <span class="lg-cat">${cat}</span>
@@ -929,12 +946,12 @@ async function doRestore(uuid) {
   renderArchiveModal();
 }
 document.getElementById('archiveBody').addEventListener('contextmenu', (e) => {
-  const item = e.target.closest('.arc-item');
+  // v5.15.16：记账式流水行是 .lg-row（旧结构 .arc-item 已不用）→ 两种都支持
+  const item = e.target.closest('.lg-row') || e.target.closest('.arc-item');
   if (!item) return;
   e.preventDefault();
   hideRestoreMenu();
-  const uuid = item.dataset.uuid;
-  showRestoreMenu(e.clientX, e.clientY, uuid);
+  showRestoreMenu(e.clientX, e.clientY, item.dataset.uuid);
 });
 // 点别处 / Esc 关闭菜单
 document.addEventListener('click', (e) => {
@@ -1100,6 +1117,8 @@ window.openDetail = async function(uuid) {
 
   const _editBtn = document.getElementById('detailEdit');
   if (_editBtn) _editBtn.onclick = function () { openEdit(uuid); };
+  const _delBtn = document.getElementById('detailDelete');
+  if (_delBtn) _delBtn.onclick = function () { deleteTaskWithConfirm(uuid, t.title); };
   document.getElementById('detailName').textContent = t.title;
   document.getElementById('detailSub').innerHTML = `${CAT_LABEL[catOf(t)] || '未分类'}${t.due_at ? ' · 截止 ' + fmtDue(t.due_at) : ''}${t.deadline && t.deadline !== t.due_at ? ' · 期限 ' + fmtDue(t.deadline) : ''}`;
   document.getElementById('detailChips').innerHTML = `
@@ -1173,6 +1192,17 @@ window.advanceFromDetail = async function (uuid) {
   showToast('已推进：' + next.title);
   await render();
   openDetail(uuid);
+};
+
+// v5.15.16：删除任务（带二次确认，防误删）
+window.deleteTaskWithConfirm = async function (uuid, title) {
+  if (!window.confirm('确定删除「' + (title || '这个任务') + '」吗？\n删除后无法恢复。')) return;
+  try {
+    await call('delete_task', { taskUuid: uuid });
+    showToast('已删除');
+  } catch (e) { showToast('删除失败：' + (e.message || e)); return; }
+  if (typeof closeDetail === 'function') closeDetail();
+  await render();
 };
 
 window.closeDetail = function() {
@@ -1418,13 +1448,8 @@ let jsonImportTaskUuid = null;
 function openJsonImport(taskUuid) {
   jsonImportTaskUuid = taskUuid;
   const area = document.getElementById('jsonArea');
-  // 默认填一份示意模板：次数默认 5，与「次数任务默认次数」保持一致
-  area.value = JSON.stringify({
-    steps: [
-      { title: '步骤一', attr_label: '次数', attr_value: '5 次' },
-      { title: '步骤二' }
-    ]
-  }, null, 2);
+  // v5.15.16：不再预填示例（boss：示例应该当灰字提示，一输入就消失、清空又出现）
+  area.value = '';
   const hint = document.getElementById('jsonHint');
   hint.textContent = '';
   hint.className = 'hint';

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v63">
+<link rel="stylesheet" href="style.css?v=v64">
 </head>
 <body>
 <div class="widget" id="app">
@@ -199,6 +199,7 @@
           <div class="chip-row" id="detailChips"></div>
         </div>
         <button class="dv-edit" id="detailEdit" title="编辑任务"><span class="ico-slot" data-icon="edit" data-icon-size="16"></span></button>
+        <button class="dv-del" id="detailDelete" title="删除任务"><span class="ico-slot" data-icon="trash" data-icon-size="16"></span></button>
       </div>
       <div class="dv-body" id="detailBody"></div>
     </div>
@@ -668,7 +669,7 @@
       <div class="m-head"><span>添加 JSON 步骤</span><button class="m-close" data-close-overlay="jsonOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
         <label class="label">把外部 AI 拆好的 JSON 粘进来，自动生成步骤</label>
-        <textarea id="jsonArea" class="json-area" rows="7" spellcheck="false" placeholder='{"steps":[{"title":"步骤一"},{"title":"步骤二","attr_label":"用时","attr_value":"30 分钟"}]}'></textarea>
+        <textarea id="jsonArea" class="json-area" rows="7" spellcheck="false" placeholder='把外部 AI 拆好的 JSON 粘到这里…（格式：{"steps":[{"title":"步骤名","attr_label":"可选标签","attr_value":"可选值"}]}）'></textarea>
 
         <div class="json-example">
           <div class="json-example-head">
@@ -728,6 +729,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v64"></script>
+<script src="app3.js?v=v65"></script>
 </body>
 </html>

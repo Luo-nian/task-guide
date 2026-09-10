@@ -70,6 +70,17 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
     var showAddStepDialog by remember { mutableStateOf(false) }
     val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
+    Column(Modifier.fillMaxSize()) {
+        // v5.15.16：左上角返回键（boss：不要完全依赖系统返回；系统返回依然可用）
+        Row(
+            Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { navController.popBackStack() }) {
+                TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
+            }
+            Text("任务详情", color = TGColors.InkSoft, fontSize = 14.sp)
+        }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             // 标题区
@@ -189,6 +200,7 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
             }
         }
     }
+    }   // v5.15.16：关闭新增的 Column（左上角返回键那一行）
 
     if (showDelayDialog) {
         DelayDialog(onDismiss = { showDelayDialog = false }, onConfirm = { millis ->
@@ -361,6 +373,8 @@ fun AddStepDialog(
 private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
     var num by remember { mutableStateOf("1") }
     var unit by remember { mutableStateOf("天") }
+    // v5.15.16：预设只做「选中」（boss：点七天直接就延迟了，确定键意义何在）
+    var preset by remember { mutableStateOf<Long?>(null) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         try { focusRequester.requestFocus() } catch (_: Exception) {}
@@ -388,7 +402,11 @@ private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
                         "7天" to 7L * 86_400_000L,
                         "30天" to 30L * 86_400_000L
                     )) { (label, millis) ->
-                        AssistChip(onClick = { onConfirm(millis) }, label = { Text(label) })
+                        FilterChip(
+                            selected = preset == millis,
+                            onClick = { preset = if (preset == millis) null else millis },
+                            label = { Text(label) }
+                        )
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -396,14 +414,14 @@ private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = num, onValueChange = { num = it.filter { c -> c.isDigit() }.take(4).ifEmpty { "1" } },
+                        value = num, onValueChange = { num = it.filter { c -> c.isDigit() }.take(4).ifEmpty { "1" }; preset = null },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                         singleLine = true,
                         modifier = Modifier.width(90.dp).focusRequester(focusRequester)
                     )
                     // 单位选择：分钟/小时/天/月
                     listOf("分钟", "小时", "天", "月").forEach { u ->
-                        FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u) })
+                        FilterChip(selected = unit == u && preset == null, onClick = { unit = u; preset = null }, label = { Text(u) })
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -411,7 +429,7 @@ private fun DelayDialog(onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(toMillis(num.toIntOrNull() ?: 1, unit)) }) {
+            TextButton(onClick = { onConfirm(preset ?: toMillis(num.toIntOrNull() ?: 1, unit)) }) {
                 Text("确定", color = TGColors.GoldDeep, fontWeight = FontWeight.Medium)
             }
         },
@@ -480,6 +498,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     var pendingSteps by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
     var showAddStepInline by remember { mutableStateOf(false) }
     var showJsonImport by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     var editing by remember { mutableStateOf<Task?>(null) }
     LaunchedEffect(editUuid) {
@@ -529,8 +548,15 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 20.dp)
                     }
                 },
-                // v5.15.13：右上角不再放 JSON（boss：新建/编辑都不该出现；步骤区里已有「添加 JSON」入口）
-                actions = { },
+                // v5.15.13：右上角不再放 JSON（步骤区里已有「添加 JSON」入口）
+                // v5.15.16：编辑页右上角加删除键（红垃圾桶 + 二次确认）
+                actions = {
+                    if (editUuid != null) {
+                        TextButton(onClick = { showDeleteConfirm = true }) {
+                            TGIcon(R.drawable.ic_delete, contentDescription = "删除任务", tint = TGColors.Crimson, size = 18.dp)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = TGColors.PanelSolid,
                     titleContentColor = TGColors.Ink,
@@ -761,6 +787,21 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 ) { Text("保存", color = TGColors.Ink) }
             }
         }
+    }
+
+    // 删除任务二次确认
+    if (showDeleteConfirm) {
+        TGConfirmDialog(
+            title = "删除任务",
+            message = "确定删除这个任务吗？删除后无法恢复。",
+            confirmText = "删除",
+            onConfirm = {
+                showDeleteConfirm = false
+                editUuid?.let { vm.deleteTask(it) }
+                navController.popBackStack()
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
     }
 
     if (showAddCategory) {
