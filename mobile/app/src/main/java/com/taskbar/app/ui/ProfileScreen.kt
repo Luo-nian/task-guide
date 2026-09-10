@@ -177,10 +177,12 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             }
             // 内容层：文字用深咖（金底上比白字更贵气）+ 阴影托底
             Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                // v5.15.6：等级徽章 —— 外圈进度环 + 中央圆形金徽章内绘等级图形（替代 v5.15.4 旋转方块数字）
-                //   PathParser 在 release APK 解析 path 异常返空 — 改用 emoji 直接绘（轻量可靠）
-                val metal = level.palette.metal
-                val metalLight = level.palette.metalLight
+                // v5.15.7：等级徽章与桌面端像素级对齐 ——
+                //   深色金属圆（linear-gradient 135°，rankFrom→rankTo）+ 亮边 + lucide 线稿图标（rank-ico 描边）
+                //   旧版是"亮紫圆 + ⚓ emoji"，与电脑端"深咖底 + 金锚线稿"完全不同（boss 反馈"两边徽章不一样"）
+                val pal = level.palette
+                val glyphPaths = LevelGlyphs.PATHS[level.lv].orEmpty()
+                val hasGlyph = glyphPaths.any { !it.isEmpty }
                 val levelEmoji = when (level.lv) {
                     1 -> "\uD83C\uDF31"  // 🌱 萌芽
                     2 -> "\uD83E\uDD6B"  // 🦫 风华游侠
@@ -196,41 +198,52 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 }
                 Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.fillMaxSize()) {
-                        val stroke = 4.dp.toPx()
-                        val inset = stroke / 2
-                        val arcSize = Size(size.width - stroke, size.height - stroke)
-                        // 底环（暗）
-                        drawArc(
-                            color = Color.White.copy(alpha = 0.14f),
-                            startAngle = -90f, sweepAngle = 360f, useCenter = false,
-                            topLeft = Offset(inset, inset), size = arcSize,
-                            style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                        )
-                        // 进度弧（palette 金属色）
-                        drawArc(
-                            color = metalLight,
-                            startAngle = -90f,
-                            sweepAngle = 360f * level.progress.coerceIn(0f, 1f),
-                            useCenter = false,
-                            topLeft = Offset(inset, inset), size = arcSize,
-                            style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                        )
-                        // 中央金徽章（radial 高光 + 白描边）
-                        val r = this.size.minDimension / 2f - 5.dp.toPx()
+                        val r = size.minDimension / 2f
+                        val c = center
+                        // 外发光（近似桌面 box-shadow 0 0 Npx）
+                        drawCircle(pal.glow.copy(alpha = pal.glow.alpha * 0.30f), radius = r + 3.dp.toPx(), center = c)
+                        drawCircle(pal.glow.copy(alpha = pal.glow.alpha * 0.16f), radius = r + 6.dp.toPx(), center = c)
+                        // 盘面：radial-gradient(circle at cx cy, 亮金 → 中金 55% → 深金)
+                        //   半径取"最远角"（CSS radial-gradient 默认 farthest-corner），与桌面同渲染
+                        val fx = maxOf(pal.cx, 1f - pal.cx) * size.width
+                        val fy = maxOf(pal.cy, 1f - pal.cy) * size.height
+                        val gradR = kotlin.math.sqrt(fx * fx + fy * fy)
                         drawCircle(
                             brush = Brush.radialGradient(
-                                colors = listOf(metalLight.copy(alpha = 0.95f), metal),
-                                center = this.center, radius = r
+                                colorStops = pal.stops.zip(pal.plate).toTypedArray(),
+                                center = Offset(size.width * pal.cx, size.height * pal.cy),
+                                radius = gradR
                             ),
-                            radius = r, center = this.center
+                            radius = r, center = c
                         )
-                        drawCircle(Color.White.copy(alpha = 0.75f), radius = r - 1.2.dp.toPx(), center = this.center,
-                            style = Stroke(width = 1.2.dp.toPx()))
-                        drawCircle(Color(0xFF3A2C0C).copy(alpha = 0.45f), radius = r - 2.8.dp.toPx(), center = this.center,
-                            style = Stroke(width = 1.dp.toPx()))
+                        // 内侧双环：2px 亮环贴边 + 2px 深金环（桌面 inset 0 0 0 2px / 4px）
+                        drawCircle(pal.ringLight, radius = r - 1.dp.toPx(), center = c,
+                            style = Stroke(width = 2.dp.toPx()))
+                        drawCircle(pal.ringDark, radius = r - 3.dp.toPx(), center = c,
+                            style = Stroke(width = 2.dp.toPx()))
+                        // 图标：与桌面同一套 lucide 线稿（24 视口 / stroke 2.2 / 深棕 --rco）
+                        if (hasGlyph) {
+                            val glyph = 36.dp.toPx()          // 桌面：48px 徽章 + 36px 图标
+                            val k = glyph / 24f
+                            withTransform({
+                                translate(c.x - glyph / 2f, c.y - glyph / 2f)
+                                scale(k, k, Offset.Zero)
+                            }) {
+                                glyphPaths.forEach { p ->
+                                    drawPath(
+                                        path = p, color = pal.iconColor,
+                                        style = Stroke(
+                                            width = 2.2f,
+                                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                            join = androidx.compose.ui.graphics.StrokeJoin.Round
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
-                    // 中央 emoji（在金属渐变圆上对比清晰）
-                    Text(levelEmoji, fontSize = 30.sp)
+                    // 兜底：线稿解析失败（极端情况）才退回 emoji，避免徽章空白
+                    if (!hasGlyph) Text(levelEmoji, fontSize = 30.sp)
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
@@ -248,7 +261,7 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     Text(level.title, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Spacer(Modifier.height(9.dp))
                     Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
-                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(metal, metalLight))))
+                        Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF7A5516), Color(0xFFC9A227), Color(0xFFD8B45A)))))
                     }
                 }
                 Spacer(Modifier.width(14.dp))

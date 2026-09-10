@@ -2317,3 +2317,24 @@ input::placeholder { color: var(--ink-faint); }
    v5.14h.1 引入 ::before 暗底覆盖中心（用于无图时衬底），但有 avatar_img 时也盖住图。
    修复：display:none 暗底，无图时 lucide glyph 直接显示在圆背景上。 */
 .dash-greet-avatar::before { display: none; }
+
+/* ===== v5.15.7：等级徽章的 svg 改回"线条"渲染（与手机端徽章逐值对齐）=====
+   背景：v4.11 浅色主题补充规则把 .level-icon svg path 强制 fill: ink-black-soft; stroke: none，
+   于是 lucide 的开放路径（如 lv7 锚底部那条弧）被填成实心色块 —— 手机端一直是线条稿，
+   两端同一等级徽章因此"长得不一样"。
+   这里只对等级徽章相关元素恢复线条渲染（fill:none / stroke:currentColor = --rco 深棕），
+   奖励图标、头像 glyph 等维持原实心样式不变。 */
+.level-icon svg path, .level-icon svg circle, .level-icon svg line, .level-icon svg polyline,
+.pc-level-icon svg path, .pc-level-icon svg circle, .pc-level-icon svg line, .pc-level-icon svg polyline,
+.level-character svg path, .level-character svg circle,
+#levelChar svg path, #levelChar svg circle,
+#profileLevelIcon svg path, #profileLevelIcon svg circle,
+.bless-lv-icon svg path, .bless-lv-icon svg circle {
+  fill: none;
+  stroke: currentColor;
+}
+/* 同级图标线条粗细统一 2.2（svgIcon 内联 stroke-width 只覆盖 path，circle 会漏掉） */
+.level-icon svg circle, .pc-level-icon svg circle, .level-character svg circle,
+#levelChar svg circle, #profileLevelIcon svg circle, .bless-lv-icon svg circle {
+  stroke-width: 2.2;
+}

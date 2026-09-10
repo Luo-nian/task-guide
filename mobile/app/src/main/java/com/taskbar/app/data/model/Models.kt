@@ -149,16 +149,30 @@ object ReminderStrength {
 
 // ==================== 等级体系（与桌面端 preview-server.js / Rust 端口径一致） ====================
 /**
- * 等级配色：暗色金属阶（原神冒险等阶风）——每级一条"金属色阶"，等级越高越亮越华丽。
- * 结构：深色底（不是亮彩渐变横幅）+ 金属细描边 + 顶部光带 + 水印等级数字。
- * 金属阶：锡铜 → 青铜 → 玫瑰金 → 黄金 → 炽金（高级感随等级递进）。
+ * v5.15.7：等级徽章配色改为**与桌面端 style.css 的 v5.14h.6"金色徽章层"逐值一致**
+ * （之前手机端自己一套调色板 → Lv7 手机是浅紫圆+⚓ emoji、电脑是金色盘+深色锚线稿，boss 反馈"两边长得不一样"）。
+ *
+ * 桌面口径（.rank-lvN）：
+ *   - 盘面：radial-gradient(circle at cx cy, 亮金 → 中金 55% → 深金)
+ *   - 内侧双环：2px 亮环 + 2px 深金环（inset box-shadow）
+ *   - 图标：深棕线条（--rco），光晕随等级增强
  */
 data class LevelPalette(
-    val metal: androidx.compose.ui.graphics.Color,        // 金属主色（描边/光带/大字）
-    val metalLight: androidx.compose.ui.graphics.Color,   // 金属高光（光带渐变尾/进度条/数字亮部）
-    val bgDeep: androidx.compose.ui.graphics.Color,        // 卡底色（深色近黑，带色相）
-    val onDeep: androidx.compose.ui.graphics.Color,        // 卡上主文字（近白）
-    val onDeepSoft: androidx.compose.ui.graphics.Color     // 卡上次级文字（米灰）
+    /** 盘面放射渐变（与桌面 radial-gradient 逐段对应） */
+    val plate: List<androidx.compose.ui.graphics.Color>,
+    /** 各段位置（与 plate 等长，末位 1f） */
+    val stops: List<Float>,
+    /** 放射中心（占直径比例，桌面 circle at cx% cy%） */
+    val cx: Float,
+    val cy: Float,
+    /** 内侧 2px 亮环（inset 0 0 0 2px） */
+    val ringLight: androidx.compose.ui.graphics.Color,
+    /** 内侧 2px 深金环（inset 0 0 0 4px） */
+    val ringDark: androidx.compose.ui.graphics.Color,
+    /** 图标线条色（--rco） */
+    val iconColor: androidx.compose.ui.graphics.Color,
+    /** 外发光（桌面 0 0 Npx rgba(...)） */
+    val glow: androidx.compose.ui.graphics.Color
 )
 
 data class LevelInfo(
@@ -176,77 +190,68 @@ data class LevelInfo(
 )
 
 object Levels {
-    // 5 级金属阶：锡铜 → 青铜 → 玫瑰金 → 黄金 → 炽金（暗底随等级由冷灰渐入暖黑）
-    private val P1 = LevelPalette(  // Lv1 历练学徒：锡铜（暗灰底，朴素沉稳）
-        metal = androidx.compose.ui.graphics.Color(0xFFA99E8E),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFD6CDBF),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF201C17),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFF2EDE4),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFB5AC9E)
+    private fun c(v: Long) = androidx.compose.ui.graphics.Color(v)
+    // v5.15.7：10 档逐值对齐桌面 .level-icon.rank-lvN（v5.14h.6 层）
+    private val P1 = LevelPalette(
+        plate = listOf(c(0xFFFFF6E0), c(0xFFEAD8AE), c(0xFFCFBA8D)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.35f, cy = 0.27f,
+        ringLight = c(0xFFFFF8E6), ringDark = c(0xFFA9925F), iconColor = c(0xFF6B5230),
+        glow = c(0x73A9925F)                      // rgba(169,146,95,.45)
     )
-    private val P2 = LevelPalette(  // Lv2 风华游侠：青铜（暖灰绿调底）
-        metal = androidx.compose.ui.graphics.Color(0xFFBFA257),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFE8D491),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF241F14),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFF4EFE2),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFBBAF8C)
+    private val P2 = LevelPalette(
+        plate = listOf(c(0xFFFFEFC4), c(0xFFE5C986), c(0xFFC9A85F)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.35f, cy = 0.27f,
+        ringLight = c(0xFFFFF4DA), ringDark = c(0xFFB09050), iconColor = c(0xFF5A4420),
+        glow = c(0x80B09050)
     )
-    private val P3 = LevelPalette(  // Lv3 破浪骑士：玫瑰金（紫咖底）
-        metal = androidx.compose.ui.graphics.Color(0xFFCE8A6E),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFF0BEa5),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF251913),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFF5ECE5),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFC0AA9E)
+    private val P3 = LevelPalette(
+        plate = listOf(c(0xFFFFEAB0), c(0xFFDFBC68), c(0xFFC0963C)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.35f, cy = 0.27f,
+        ringLight = c(0xFFFFF0C8), ringDark = c(0xFFB9882E), iconColor = c(0xFF4A340E),
+        glow = c(0x8CB9882E)
     )
-    private val P4 = LevelPalette(  // Lv4 群星行者：黄金（深咖底，金辉初显）
-        metal = androidx.compose.ui.graphics.Color(0xFFD9A94C),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFF4D97E),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF241A0E),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFF6EFDF),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFC6B28C)
+    private val P4 = LevelPalette(
+        plate = listOf(c(0xFFFFF2C0), c(0xFFE6C46E), c(0xFFC9992E)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.36f, cy = 0.28f,
+        ringLight = c(0xFFFFF3CF), ringDark = c(0xFFC4932C), iconColor = c(0xFF3E2A08),
+        glow = c(0x99C4932C)
     )
-    private val P5 = LevelPalette(  // Lv5 传奇勇者：炽金（最亮最华丽，黑金光带）
-        metal = androidx.compose.ui.graphics.Color(0xFFEAC66A),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFFFE9A8),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF201705),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF7E2),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFD9C492)
+    private val P5 = LevelPalette(
+        plate = listOf(c(0xFFFFEEB0), c(0xFFE0B25C), c(0xFFA8751E)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.37f, cy = 0.28f,
+        ringLight = c(0xFFFFEFC2), ringDark = c(0xFFA8751E), iconColor = c(0xFF322206),
+        glow = c(0xA6C9A227)
     )
-    // v5.15.4：Lv6-10（对齐桌面 10 级曲线：苍穹/深渊/星辰/天命/寰宇）
-    private val P6 = LevelPalette(  // Lv6 苍穹守护者：苍青金（天蓝调深咖底）
-        metal = androidx.compose.ui.graphics.Color(0xFF7FB4C8),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFC9E8F2),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF0E1A20),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFE9F3F6),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFF9FBCC6)
+    private val P6 = LevelPalette(
+        plate = listOf(c(0xFFFFEBA4), c(0xFFDFAC50), c(0xFF9A6410)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.38f, cy = 0.28f,
+        ringLight = c(0xFFFFECC0), ringDark = c(0xFF9A6410), iconColor = c(0xFF2A1C04),
+        glow = c(0xB3D8B45A)
     )
-    private val P7 = LevelPalette(  // Lv7 深渊征服者：暗紫金（深海调）
-        metal = androidx.compose.ui.graphics.Color(0xFF9B8BD0),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFD5CCF2),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF160F24),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFF0ECFA),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFB4A8D6)
+    private val P7 = LevelPalette(
+        plate = listOf(c(0xFFFFE899), c(0xFFE5B44C), c(0xFF8A5A12)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.38f, cy = 0.28f,
+        ringLight = c(0xFFFFEAB8), ringDark = c(0xFF8A5A12), iconColor = c(0xFF221800),
+        glow = c(0xC7E8BA5A)
     )
-    private val P8 = LevelPalette(  // Lv8 星辰霸主：星蓝紫（深空调）
-        metal = androidx.compose.ui.graphics.Color(0xFF6E9BD9),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFB8D6F5),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF0A1128),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFE8F0FB),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFF9FB4D9)
+    private val P8 = LevelPalette(
+        plate = listOf(c(0xFFFFE68C), c(0xFFE8AE3E), c(0xFF7A4C0E)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.39f, cy = 0.29f,
+        ringLight = c(0xFFFFE8AE), ringDark = c(0xFF7A4C0E), iconColor = c(0xFF1A1200),
+        glow = c(0xD9F0C864)
     )
-    private val P9 = LevelPalette(  // Lv9 天命传奇：鎏金赤（炽焰调）
-        metal = androidx.compose.ui.graphics.Color(0xFFE8A45C),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFFFD9A8),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF260F05),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF4E8),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFD9B694)
+    private val P9 = LevelPalette(
+        plate = listOf(c(0xFFFFE98A), c(0xFFEFA840), c(0xFF8A5A12)), stops = listOf(0f, 0.55f, 1f),
+        cx = 0.40f, cy = 0.30f,
+        ringLight = c(0xFFFFEFC0), ringDark = c(0xFFB97A14), iconColor = c(0xFF141000),
+        glow = c(0xE6F6D782)
     )
-    private val P10 = LevelPalette( // Lv10 寰宇传说：彩金（顶级渐变炫光）
-        metal = androidx.compose.ui.graphics.Color(0xFFF0C97A),
-        metalLight = androidx.compose.ui.graphics.Color(0xFFFFF0C0),
-        bgDeep = androidx.compose.ui.graphics.Color(0xFF1A1000),
-        onDeep = androidx.compose.ui.graphics.Color(0xFFFFF8E8),
-        onDeepSoft = androidx.compose.ui.graphics.Color(0xFFE0C890)
+    private val P10 = LevelPalette(
+        plate = listOf(c(0xFFFFF7C8), c(0xFFFFD769), c(0xFFE0A32A), c(0xFF8A5A12)),
+        stops = listOf(0f, 0.40f, 0.70f, 1f),
+        cx = 0.42f, cy = 0.28f,
+        ringLight = c(0xFFFFF8DC), ringDark = c(0xFFC08A1E), iconColor = c(0xFF1A1200),
+        glow = c(0xFFFFDC8C)
     )
 
     // v5.15.4：10 级曲线与桌面 LEVELS 完全对齐（历练学徒 0 / … / 寰宇传说 3200）
