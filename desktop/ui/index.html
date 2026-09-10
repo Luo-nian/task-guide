@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v60">
+<link rel="stylesheet" href="style.css?v=v61">
 </head>
 <body>
 <div class="widget" id="app">
@@ -566,7 +566,7 @@
           <button type="button" class="cat-btn" data-cat="time-limited">限时任务</button>
           <button type="button" class="cat-btn" data-cat="once">次数任务</button>
         </div>
-        <span class="hint" id="addCatHint">先选类型，下面的项目会按类型自动调整</span>
+        <span class="hint" id="addCatHint"></span>
 
         <!-- 限时时长：限时任务必填且无「不限」；目标任务可选（默认不限） -->
         <div id="addDdlWrap" style="display:none">
@@ -620,7 +620,7 @@
         <!-- 提醒方式：按端分组 —— 手机端（通知栏/振动/铃声）与电脑端（弹窗/全屏/应用内）各一套 -->
         <div class="add-rem-strength" id="addRemStrength" style="display:none">
           <div class="rm-group" id="addRemMobileGroup">
-            <div class="rm-group-label">手机端</div>
+            <div class="rm-group-label">手机端（可多选）</div>
             <div class="add-rem-method">
               <label class="chk-pill"><input type="checkbox" id="addRemNotif" /> <span>通知栏</span></label>
               <label class="chk-pill"><input type="checkbox" id="addRemVibrate" /> <span>振动</span></label>
@@ -628,7 +628,7 @@
             </div>
           </div>
           <div class="rm-group" id="addRemPcGroup">
-            <div class="rm-group-label">电脑端</div>
+            <div class="rm-group-label">电脑端（可多选）</div>
             <div class="add-rem-method">
               <label class="chk-pill"><input type="checkbox" id="addRemPopup" /> <span>弹窗提醒</span></label>
               <label class="chk-pill"><input type="checkbox" id="addRemFull" /> <span>全屏提醒</span></label>
@@ -727,6 +727,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v61"></script>
+<script src="app3.js?v=v62"></script>
 </body>
 </html>

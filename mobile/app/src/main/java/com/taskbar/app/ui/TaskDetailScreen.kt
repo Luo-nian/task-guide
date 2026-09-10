@@ -429,6 +429,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     // v5.15.12：任务类型与电脑端统一为 4 类（daily/goal/time-limited/once）
     //   boss：「手机端和电脑端的任务类型还存在不一样的？命名和数量都不一样 同步一下啊你！」
     var catSel by remember { mutableStateOf("daily") }
+    // 目标任务是否启用截止时间（默认关闭，避免"不提醒也摆一堆日期控件"）
+    var goalDeadlineOn by remember { mutableStateOf(false) }
     // 由分类派生的内部 type（保持与桌面端 category_to_type 完全一致的映射）
     val type: String = when (catSel) {
         "daily" -> TaskType.HABIT
@@ -453,6 +455,12 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     // 提醒方式：四通道多选 + 端选择（存储为 serializeConfig 格式）
     var reminderChannels by remember { mutableStateOf(reminderDefaults.first) }
     var reminderScope by remember { mutableStateOf(reminderDefaults.second) }
+    // 限时任务不允许"不提醒"
+    LaunchedEffect(catSel) {
+        if (catSel == "time-limited" && reminderScope == ReminderStrength.SCOPE_NONE) {
+            reminderScope = ReminderStrength.SCOPE_MOBILE
+        }
+    }
     // v5.15.12：切换端后，如果该端一个通道都没勾 → 自动补一个默认（避免"选了端却没有任何方式"）
     LaunchedEffect(reminderScope) {
         when (reminderScope) {
@@ -490,6 +498,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 else -> "once"
             }
             category = t.category; dueAt = t.dueAt; habitRule = t.repeatRule
+            if (catSel == "goal" && t.dueAt != null) goalDeadlineOn = true
             // 编辑：解析任务已存配置
             val (ch, sc) = ReminderStrength.parseConfig(t.reminderStrength)
             reminderChannels = ch
@@ -520,14 +529,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 20.dp)
                     }
                 },
-                // v5.15.12：右上角 JSON 只在「新建任务」出现（boss：编辑任务的右上角不该有 JSON）
-                actions = {
-                    if (editUuid == null) {
-                        TextButton(onClick = { showJsonImport = true }) {
-                            Text("JSON", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                },
+                // v5.15.13：右上角不再放 JSON（boss：新建/编辑都不该出现；步骤区里已有「添加 JSON」入口）
+                actions = { },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = TGColors.PanelSolid,
                     titleContentColor = TGColors.Ink,
@@ -577,15 +580,29 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                             modifier = Modifier.width(90.dp),
                             singleLine = true
                         )
-                        Text("次（每完成一次记一次数）", color = TGColors.InkSoft, fontSize = 12.sp)
+                        Text("次", color = TGColors.InkSoft, fontSize = 12.sp)
                     }
-                } else {
+                } else if (catSel == "daily") {
+                    // v5.15.13：每日任务只选「每天几点」（原来给整张日期选择器，还会出现"明天"）
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        if (catSel == "daily") "每天提醒时间" else if (catSel == "time-limited") "截止时间（必填）" else "截止时间（可选）",
-                        color = TGColors.InkSoft, fontSize = 13.sp
-                    )
+                    Text("每天提醒时间", color = TGColors.InkSoft, fontSize = 13.sp)
+                    DailyTimeEditor(dueAt = dueAt, onChange = { dueAt = it })
+                } else if (catSel == "time-limited") {
+                    Spacer(Modifier.height(6.dp))
+                    Text("截止时间", color = TGColors.InkSoft, fontSize = 13.sp)
                     DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
+                } else {
+                    // 目标任务：默认不限时，需要时再打开截止时间
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("截止时间（可选）", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Spacer(Modifier.weight(1f))
+                        Switch(checked = goalDeadlineOn, onCheckedChange = { on ->
+                            goalDeadlineOn = on
+                            if (!on) dueAt = null
+                        })
+                    }
+                    if (goalDeadlineOn) DueAtEditor(dueAt = dueAt, onChange = { dueAt = it })
                 }
 
                 // 优先级
@@ -609,12 +626,13 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                     Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     // 1) 端（单选）——每行两个，防挤压
-                    val scopeOpts = listOf(
-                        ReminderStrength.SCOPE_NONE to "不提醒",
-                        ReminderStrength.SCOPE_MOBILE to "仅手机",
-                        ReminderStrength.SCOPE_PC to "仅电脑",
-                        ReminderStrength.SCOPE_BOTH to "双端"
-                    )
+                    // v5.15.13：限时任务必须提醒 → 不提供「不提醒」选项
+                    val scopeOpts = buildList {
+                        if (catSel != "time-limited") add(ReminderStrength.SCOPE_NONE to "不提醒")
+                        add(ReminderStrength.SCOPE_MOBILE to "仅手机")
+                        add(ReminderStrength.SCOPE_PC to "仅电脑")
+                        add(ReminderStrength.SCOPE_BOTH to "双端")
+                    }
                     scopeOpts.chunked(2).forEach { rowOpts ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             rowOpts.forEach { (v, l) ->
@@ -626,8 +644,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                     if (reminderScope != ReminderStrength.SCOPE_NONE) {
                         // 2) 方式 —— v5.15.12：按端分组（boss：选电脑端/双端时下面却只有手机端的方式）
                         Spacer(Modifier.height(6.dp))
-                        Text("提醒方式", color = TGColors.InkSoft, fontSize = 13.sp)
-                        Text("可多选组合，点一下切换", color = TGColors.InkMute, fontSize = 11.sp)
+                        Text("提醒方式（可多选）", color = TGColors.InkSoft, fontSize = 13.sp)
                         if (reminderScope == ReminderStrength.SCOPE_MOBILE || reminderScope == ReminderStrength.SCOPE_BOTH) {
                             Spacer(Modifier.height(4.dp))
                             Text("手机端", color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -645,15 +662,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                                 ReminderStrength.FULLSCREEN to "全屏提醒",
                                 ReminderStrength.INAPP to "应用内提示"
                             ).forEach { (v, l) -> ReminderChannelRow(v, l, reminderChannels) { reminderChannels = it } }
-                            Text("桌面端使用自绘提醒卡（弹窗/全屏/应用内），不是系统通知", color = TGColors.InkMute, fontSize = 10.5.sp)
                         }
-                        // 3) 提前多久提醒
-                        Spacer(Modifier.height(8.dp))
-                        Text("提前多久提醒", color = TGColors.InkSoft, fontSize = 13.sp)
-                        Text(
-                            if (dueAt == null) "先在上面选择时间，才能设置提前量" else "默认在设定时刻提醒",
-                            color = TGColors.InkMute, fontSize = 11.sp
-                        )
+                        // v5.15.13：去掉无意义的"提前多久提醒/默认在设定时刻提醒"说明
                     }
                 }
 
@@ -695,7 +705,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        if (title.isBlank()) return@Button
+                        if (title.isBlank()) { ToastHelper.show(ctx, "给任务起个名字吧"); return@Button }
                         // v5.15.12：类型 → (type / category / 重复规则 / 截止) 映射（与电脑端 add_task 一致）
                         if (catSel == "time-limited" && dueAt == null) {
                             ToastHelper.show(ctx, "限时任务请先选择截止时间")
@@ -930,6 +940,65 @@ private fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit
 }
 
 // ==================== 提醒时间编辑器（快捷预设 + 可编辑日期 + 时间 + 清除） ====================
+@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * v5.15.13：每日任务专用「每天几点」选择器 —— 只挑时刻，不出现日期（boss：
+ * 「每日任务的提醒时间设置为什么会有明天这种选项？都说是每日啊」）。
+ * 内部把时刻换算成"今天该时刻（已过则明天）"的时间戳存进 dueAt。
+ */
+@Composable
+private fun DailyTimeEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
+    val ctx = LocalContext.current
+    val cal = remember(dueAt) {
+        java.util.Calendar.getInstance().apply {
+            if (dueAt != null) timeInMillis = dueAt else { set(java.util.Calendar.HOUR_OF_DAY, 9); set(java.util.Calendar.MINUTE, 0) }
+        }
+    }
+    val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+    val minute = cal.get(java.util.Calendar.MINUTE)
+    fun at(h: Int, m: Int): Long = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, h)
+        set(java.util.Calendar.MINUTE, m)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+        if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_YEAR, 1)
+    }.timeInMillis
+
+    var showPicker by remember { mutableStateOf(false) }
+    LaunchedEffect(showPicker) {
+        if (showPicker) {
+            android.app.TimePickerDialog(ctx, { _, h, m -> onChange(at(h, m)) }, hour, minute, true).show()
+            showPicker = false
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            Modifier.clip(RoundedCornerShape(999.dp))
+                .background(TGColors.Gold.copy(alpha = 0.16f))
+                .border(1.dp, TGColors.Gold, RoundedCornerShape(999.dp))
+                .clickable { showPicker = true }
+                .padding(horizontal = 14.dp, vertical = 7.dp)
+        ) {
+            Text(
+                "每天 " + String.format("%02d:%02d", hour, minute),
+                color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.SemiBold
+            )
+        }
+        Text("点这里改时间", color = TGColors.InkMute, fontSize = 11.sp)
+    }
+    Spacer(Modifier.height(6.dp))
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(listOf(8 to 0, 12 to 0, 18 to 0, 20 to 0, 22 to 0)) { (h, m) ->
+            FilterChip(
+                selected = (hour == h && minute == m),
+                onClick = { onChange(at(h, m)) },
+                label = { Text(String.format("%02d:00", h)) }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {

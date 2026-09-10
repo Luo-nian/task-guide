@@ -2436,7 +2436,8 @@ body { background-color: var(--bg-paper); }
    —— 分组头现在是一行扁平灰字（分类名 + 数字连读），任务行是金色渐变条；
    统一成历史任务那套：分组头 = 金色左条 + 金色渐变底 + 右侧条目数；行 = 白底细金边圆角 + hover。 */
 .cat-group { margin-bottom: 10px; }
-.cat-group-head, .list-view-header {
+/* 只有分组头用金色底；页面标题（今日待办/追踪任务…）保持原来的轻量样式 */
+.cat-group-head {
   display: flex; align-items: center; gap: 6px;
   padding: 5px 9px; margin-bottom: 5px;
   background: linear-gradient(90deg, rgba(232, 203, 127, 0.34), rgba(232, 203, 127, 0.06));
@@ -2553,3 +2554,13 @@ body { background-color: var(--bg-paper); }
   border: 1px solid rgba(201, 162, 39, 0.28); cursor: pointer; transition: all 0.14s;
 }
 .dv-edit:hover { color: var(--gold-deep); border-color: var(--gold); background: #FFFDF5; }
+
+/* ===== v5.15.13：动作键配色（boss：追踪与完成都是绿色，分不清）=====
+   追踪 = 天蓝（开始跟踪）｜取消 = 灰蓝（停止）｜推进 = 金（向前）｜完成 = 沉玉青（收尾） */
+.act[data-act="track"] .b, .dva-b.track { background: linear-gradient(135deg, #7FB6E0, #3D7FA8); }
+.act[data-act="stop"] .b,  .dva-b.stop  { background: linear-gradient(135deg, #B4C4D4, #78909F); }
+.act.done .b,              .dva-b.done  { background: linear-gradient(135deg, #6FB894, #2F7D57); }
+.act[data-act="advance"] .b, .dva-b.adv { background: linear-gradient(135deg, #E0C177, #B98F2E); }
+
+/* 限时任务里被禁用的「不提醒」 */
+.rem-device-btn.banned { opacity: 0.4; cursor: not-allowed; }

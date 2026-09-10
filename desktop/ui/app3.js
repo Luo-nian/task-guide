@@ -538,8 +538,13 @@ function renderTodayView() {
   // 今日：所有 cat 任务（包括未完成 + 今日截止的 time-limited）
   const todayTasks = tasks.filter(t => !t.done && t.deleted !== 1);
   const grouped = { 'daily': [], 'time-limited': [], 'once': [], 'goal': [] };
+  // v5.15.13 P0：必须走 catOf()（它把 habit/repeat/note/milestone 和手机端的自定义
+  //   category 都映射到 4 类）。旧实现直接读 t.category —— 手机端同步过来的任务
+  //   category 是"学习/生活/工作"，不在 4 类里 → 整条被丢掉，boss 看到"24 项只显示 11 个"。
   todayTasks.forEach(t => {
-    if (grouped[t.category]) grouped[t.category].push(t);
+    const k = catOf(t);
+    if (grouped[k]) grouped[k].push(t);
+    else grouped.once.push(t);
   });
   const titleMap = { daily:'每日任务', 'time-limited':'限时任务', once:'次数任务', goal:'目标任务' };
   const iconMap = { daily:'daily', 'time-limited':'lim', once:'once', goal:'goal' };
@@ -1556,7 +1561,7 @@ function renderDdlRow(forCat) {
 function applyCatLayout() {
   const cat = draftCat;
   const ddlWrap = document.getElementById('addDdlWrap');
-  document.getElementById('addCatHint').textContent = CAT_TIP[cat] || '先选类型，下面的项目会按类型自动调整';
+  document.getElementById('addCatHint').textContent = CAT_TIP[cat] || '';
   if (cat === 'time-limited') renderDdlRow('time-limited');
   else if (cat === 'goal') renderDdlRow('goal');
   else ddlWrap.style.display = 'none';
@@ -1568,10 +1573,23 @@ function addSelectCat(cat) {
   draftCat = cat;
   document.querySelectorAll('#addCatRow .cat-btn').forEach(function (x) { x.classList.toggle('active', x.dataset.cat === cat); });
   document.getElementById('addSubmit').disabled = false;
+  // 限时任务：禁掉「不提醒」（按钮变淡 + 不可点）
+  const noneBtn = document.querySelector('#addOverlay .rem-device-btn[data-device="none"]');
+  if (noneBtn) {
+    const ban = (cat === 'time-limited');
+    noneBtn.classList.toggle('banned', ban);
+    noneBtn.title = ban ? '限时任务必须提醒' : '';
+  }
+  if (cat === 'time-limited' && draftDevice === 'none') _addRemSet('mobile');
   applyCatLayout();
 }
 
 function _addRemSet(dev) {
+  // v5.15.13：限时任务必须提醒（有时限却没人提醒就没意义）
+  if (dev === 'none' && draftCat === 'time-limited') {
+    showToast('限时任务需要提醒，已为你保留提醒设置');
+    return;
+  }
   draftDevice = dev;
   document.querySelectorAll('#addOverlay .rem-device-btn').forEach(function (x) { x.classList.toggle('active', x.dataset.device === dev); });
   const show = dev !== 'none';
@@ -1791,7 +1809,9 @@ function collectDailyDueAt() {
 
 document.getElementById('addSubmit').addEventListener('click', async function () {
   const title = document.getElementById('addTitle').value.trim();
-  if (!title || !draftCat) return;
+  // v5.15.13：缺标题/类型时给明确提示（原来点了没反应，用户不知道差什么）
+  if (!title) { showToast('给任务起个名字吧'); document.getElementById('addTitle').focus(); return; }
+  if (!draftCat) { showToast('请先选择任务类型'); return; }
   let deadlineKey = 'none';
   if (draftCat === 'time-limited' || draftCat === 'goal') deadlineKey = draftDdl;
   if (draftCat === 'time-limited' && deadlineKey === 'none') { showToast('限时任务必须选择限时时长'); return; }
