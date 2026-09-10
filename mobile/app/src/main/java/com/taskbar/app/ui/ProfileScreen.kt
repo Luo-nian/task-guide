@@ -77,19 +77,22 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         val scope = rememberCoroutineScope()
         var uploading by remember { mutableStateOf(false) }
         // v5.15.12：选完图先进「裁剪界面」，由用户自己拖动/缩放决定圆形范围（boss：不要自动裁）
-        var cropUri by remember { mutableStateOf<android.net.Uri?>(null) }
+        // v5.15.14：改用 rememberSaveable 存 uri 字符串 —— 部分 ROM 的文件选择器返回时会重建 Activity，
+        //   普通 remember 会丢状态 → 表现为"选完图什么都没发生"（实测踩到）
+        var cropUriStr by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
         val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.GetContent()
         ) { uri ->
-            if (uri != null) cropUri = uri
+            if (uri != null) cropUriStr = uri.toString()
         }
         // 裁剪确认 → 生成圆形 PNG → 走设置同步通道推给电脑端
-        cropUri?.let { u ->
+        cropUriStr?.let { us ->
+            val u = android.net.Uri.parse(us)
             AvatarCropDialog(
                 uri = u,
-                onCancel = { cropUri = null },
+                onCancel = { cropUriStr = null },
                 onConfirm = { dataUrl ->
-                    cropUri = null
+                    cropUriStr = null
                     uploading = true
                     scope.launch {
                         vm.setSyncedSetting("avatar_img", dataUrl)

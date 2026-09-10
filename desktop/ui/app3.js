@@ -306,11 +306,20 @@ function applySettingsToUi() {
       applySettingsToUi();
     };
   });
-  ['setAdvNotif','setAdvVibrate','setAdvSound','setAdvPop'].forEach((id, i) => {
+  // v5.15.14：默认提醒方式按端拆开 —— 手机端（通知栏/振动/响铃）｜电脑端（弹窗/全屏/应用内）
+  ['setAdvNotif','setAdvVibrate','setAdvSound'].forEach((id, i) => {
     const el = document.getElementById(id);
     if (!el) return;
-    const key = 'rem_adv_' + ['notif','vibrate','sound','pop'][i];
+    const key = 'rem_adv_' + ['notif','vibrate','sound'][i];
     el.checked = settings[key] !== false;
+    el.onchange = () => { settings[key] = el.checked; saveSettings(); };
+  });
+  ['setPcAdvPopup','setPcAdvFull','setPcAdvInApp'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const key = 'rem_pc_adv_' + ['popup','fullscreen','inapp'][i];
+    // 默认：弹窗 + 应用内 开，全屏 关
+    el.checked = (settings[key] !== undefined) ? !!settings[key] : (key !== 'rem_pc_adv_fullscreen');
     el.onchange = () => { settings[key] = el.checked; saveSettings(); };
   });
   const lead = String(settings[LEAD_KEY] !== undefined ? settings[LEAD_KEY] : 15);
@@ -527,6 +536,7 @@ function renderTrackingView() {
     </div>`;
   }
   lvEl.innerHTML = html;
+  if (typeof initIcons === 'function') initIcons(lvEl);   // v5.15.14：分组头等动态图标
   lvEl.style.display = '';
   const overviewEl = document.getElementById('overviewView');
   if (overviewEl) overviewEl.style.display = 'none';
@@ -567,6 +577,7 @@ function renderTodayView() {
     html += `<div class="empty-tip">今日所有任务都已完成 ✦</div>`;
   }
   lvEl.innerHTML = html;
+  if (typeof initIcons === 'function') initIcons(lvEl);   // v5.15.14：今日待办的分组头图标
   lvEl.style.display = '';   // v5.14d 修：原本 listView display:none，renderTodayView 写进去看不见
   // 同步隐藏 overviewView（中间列表区的 4 分类卡）
   const overviewEl = document.getElementById('overviewView');
@@ -616,6 +627,7 @@ function renderOverview() {
       if (card) card.style.display = '';
       if (cntEl) cntEl.textContent = arr.length;
       box.innerHTML = arr.map(t => catTaskHtml(t)).join('');
+      if (typeof initIcons === 'function') initIcons(box);   // v5.15.14：动态节点的 data-icon 需要重新注入
     }
   }
 }
@@ -695,6 +707,7 @@ function renderListView() {
         </div>
         ${rowActsHtml(t)}
       </div>`).join('');
+    if (typeof initIcons === 'function') initIcons(box);
   }
 }
 
@@ -1642,8 +1655,16 @@ function openAdd() {
   editingUuid = null;
   document.getElementById('addModalTitle').textContent = '新建任务';
   document.getElementById('addSubmit').textContent = '创建';
-  document.getElementById('addCatHint').textContent = '先选类型，下面的项目会按类型自动调整';
+  document.getElementById('addCatHint').textContent = '';
   document.getElementById('addSubmit').disabled = true;
+  // v5.15.14：按设置里的「手机端/电脑端默认提醒方式」预勾选（不再一律空着）
+  const _d = (k, def) => (settings[k] !== undefined ? !!settings[k] : def);
+  document.getElementById('addRemNotif').checked = _d('rem_adv_notif', true);
+  document.getElementById('addRemVibrate').checked = _d('rem_adv_vibrate', true);
+  document.getElementById('addRemSound').checked = _d('rem_adv_sound', true);
+  document.getElementById('addRemPopup').checked = _d('rem_pc_adv_popup', true);
+  document.getElementById('addRemFull').checked = _d('rem_pc_adv_fullscreen', false);
+  document.getElementById('addRemInApp').checked = _d('rem_pc_adv_inapp', true);
   _addRemSet(settings.reminder_default_range || 'none');
   addOverlay.style.display = '';
   setTimeout(function () { document.getElementById('addTitle').focus(); }, 50);
@@ -1987,18 +2008,21 @@ function openProfileModal() {
   // 头像：先用用户自定义图，没有再回退字符
   avatarIdx = (settings.avatar_idx != null) ? settings.avatar_idx : 0;
   renderProfileAvatar();
-  // v5.15.12：今日进度卡片填充（个人信息页）
-  call('get_progress').then(pr => {
+  // v5.15.14：直接用内存里的每日进度（progressInfo 来自 get_daily_progress，口径与总览一致）；
+  //   原来调 get_progress 只统计"近 24h 有截止时间的任务"，界面会显示 0 / 0
+  {
     const doneEl = document.getElementById('profileTodayDone');
     const fillEl = document.getElementById('profileTodayFill');
     const hintEl = document.getElementById('profileTodayHint');
-    if (!doneEl || !pr) return;
-    const dt = pr.done_today || 0, tt = pr.total_today || 0;
-    doneEl.textContent = dt + ' / ' + tt;
-    if (fillEl) fillEl.style.width = (tt > 0 ? Math.round(dt / tt * 100) : 0) + '%';
-    if (hintEl) hintEl.textContent = tt === 0 ? '今天还没有任务'
-      : (dt >= tt ? '今天的任务全部完成' : '还有 ' + (tt - dt) + ' 项待完成');
-  }).catch(() => {});
+    if (doneEl) {
+      const dt = (typeof progressInfo !== 'undefined' && progressInfo.done) || 0;
+      const tt = (typeof progressInfo !== 'undefined' && progressInfo.total) || 0;
+      doneEl.textContent = dt + ' / ' + tt;
+      if (fillEl) fillEl.style.width = (tt > 0 ? Math.round(dt / tt * 100) : 0) + '%';
+      if (hintEl) hintEl.textContent = tt === 0 ? '今天还没有任务'
+        : (dt >= tt ? '今天的任务全部完成' : '还有 ' + (tt - dt) + ' 项待完成');
+    }
+  }
   document.getElementById('profileOverlay').style.display = '';
 }
 function closeProfileModal() { document.getElementById('profileOverlay').style.display = 'none'; }
@@ -2336,7 +2360,8 @@ async function autoScanAndReconnect(rounds) {
           settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
           saveSettings();
           persistSettingsServer();
-          showToast('已自动连接手机端：' + (d.name || d.addr || ''));
+          const _nm = String(d.name || d.addr || '').split('._')[0].replace(/\.$/, '');
+          showToast('已自动连接手机端' + (_nm ? '：' + _nm : ''));
           const ps = document.getElementById('setPairingStatus');
           if (ps) ps.textContent = '已配对：' + d.url;
           return;
