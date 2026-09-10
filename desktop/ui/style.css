@@ -2350,3 +2350,83 @@ input::placeholder { color: var(--ink-faint); }
 .ph-avatar-picker { flex: 1 1 100%; order: 3; margin-top: 12px; }
 .ph-avatar-hint { white-space: nowrap; }
 .ph-nick-row { gap: 8px 10px; }
+
+/* ===== v5.15.11：按钮文字永不折行（boss：#「解除配对」被压成两行，很丑）=====
+   方案：① 所有按钮类 nowrap；② 小按钮横向 padding 加大、给出最小宽度；
+         ③ 在 setting-row 里按钮不参与压缩（宁可换行的是标签，不是按钮文字）。 */
+button, .small-btn, .ghost, .primary, .m-foot button, .ddl-btn, .cat-btn, .prio-btn, .rem-device-btn, .rem-time-btn {
+  white-space: nowrap;
+}
+.small-btn { padding: 5px 16px; min-width: 76px; text-align: center; }
+.small-btn.danger { min-width: 96px; }         /* 「解除配对」四个字给足宽度 */
+.setting-row > button, .setting-row > .small-btn, .setting-row > .ghost, .setting-row > .primary { flex-shrink: 0; }
+
+/* ===== v5.15.11：消除交互瞬间的"白屏闪"=====
+   WebView2 在重建合成层（弹窗/页面切换触发 backdrop-filter）时会瞬现一次底色。
+   把根节点底色写成不透明的主题底色，闪的那一帧就是米色而不是白。 */
+html { background-color: var(--bg-paper); }
+body { background-color: var(--bg-paper); }
+.app, .widget { background-color: var(--bg-paper); }
+
+/* ===== v5.15.11：任务行重做（任务名优先 / 单一时间表达 / 右侧三个圆形动作键）=====
+   boss：时间显示挤到看不见任务名；逾期不该再堆具体时间；按键要三个圆 + 下面写功能。 */
+.cat-task, .list-task {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 10px;
+  background: linear-gradient(90deg, rgba(255, 250, 225, 0.9), rgba(255, 246, 214, 0.6));
+  border: 1px solid rgba(201, 162, 39, 0.22);
+}
+.cat-task:hover, .list-task:hover { background: var(--bar-hover); border-color: rgba(201, 162, 39, 0.45); box-shadow: 0 2px 8px rgba(110, 80, 30, 0.12); }
+.cat-task.overdue, .list-task.overdue { border-color: rgba(184, 86, 56, 0.45); background: linear-gradient(90deg, rgba(255, 240, 235, 0.95), rgba(255, 248, 242, 0.7)); }
+.cat-task.overdue::before, .list-task.overdue::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; opacity: 1;
+  background: var(--crimson); border-radius: 10px 0 0 10px;
+}
+.lt-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.ct-title { font-size: 12.5px; color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-meta { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--ink-mute); white-space: nowrap; }
+.ct-over { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--crimson); font-weight: 600; white-space: nowrap; }
+/* 三个圆形按键 + 键下功能文字 */
+.acts { display: flex; align-items: flex-start; gap: 6px; flex: 0 0 auto; }
+.act { display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+.act .b { width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; color: #FFFDF5;
+  background: linear-gradient(135deg, #E0C177, #B98F2E);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 1px 3px rgba(120, 90, 30, 0.25);
+  transition: transform .12s, box-shadow .12s; }
+.act .l { font-size: 9px; color: var(--ink-faint); line-height: 1; }
+.act:hover .b { transform: scale(1.08); box-shadow: 0 2px 8px rgba(201, 162, 39, 0.45); }
+.act:active .b { transform: scale(0.92); }
+.act.disabled { cursor: default; }
+.act.disabled .b { opacity: 0.32; filter: grayscale(0.6); }
+.act[data-act="stop"] .b { background: linear-gradient(135deg, #B8D4E8, #7FA8C8); }
+.act[data-act="done"] .b { background: linear-gradient(135deg, #7FC9A0, #3F8A62); }
+
+/* ===== v5.15.11：历史任务「记账式流水」=====
+   按天分组：日期 + 当日小计（完成 N 项 · +X 分），下面一行行流水（时间 / 任务名 / 分类 / 得分）。 */
+.lg-day { margin-bottom: 10px; }
+.lg-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px; margin-bottom: 4px;
+  background: linear-gradient(90deg, rgba(232, 203, 127, 0.32), rgba(232, 203, 127, 0.06));
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+}
+.lg-date { font-size: 12px; font-weight: 700; color: var(--gold-deep); letter-spacing: 0.3px; }
+.lg-sum { font-size: 11px; color: var(--ink-soft); }
+.lg-sum b { color: var(--jade); font-weight: 700; }
+.lg-rows { display: flex; flex-direction: column; gap: 2px; }
+.lg-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  background: rgba(255, 254, 251, 0.7);
+  border: 1px solid rgba(201, 162, 39, 0.14);
+  transition: background .14s, border-color .14s;
+}
+.lg-row:hover { background: var(--bar-hover); border-color: rgba(201, 162, 39, 0.4); }
+.lg-time { flex: 0 0 38px; font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.lg-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-cat { flex: 0 0 auto; font-size: 10px; color: var(--ink-mute);
+  padding: 1px 6px; border-radius: 999px; background: rgba(201, 162, 39, 0.12); }
+.lg-pts { flex: 0 0 40px; text-align: right; font-size: 11px; font-weight: 700; color: var(--jade); }

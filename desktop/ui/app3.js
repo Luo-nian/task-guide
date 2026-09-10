@@ -399,6 +399,7 @@ async function fetchAll() {
     call('get_track_cards', {}).catch(() => null)
   ]);
   tasks = tasksResp || [];
+  catTasks = {};   // v5.15.11：数据变化后分类缓存失效，下次进分类页重新取
   archive = archiveResp || [];
   points = typeof pointsResp === 'number' ? pointsResp : (pointsResp && pointsResp.points) || 0;
   level = levelOf(points);   // v5.13g：忽略后端 get_level 硬编码旧 5 级曲线（Rust 端未同步升级），用前端新 10 级 LEVELS
@@ -591,32 +592,27 @@ function catMapId(cat) {
   return { 'daily':'Daily', 'goal':'Goal', 'time-limited':'Lim', 'once':'Once' }[cat];
 }
 function catTaskHtml(t) {
-  let meta = '', metaIcon = '';
-  if (t.due_at) { metaIcon = 'clock'; meta = fmtDue(t.due_at); }
-  else if (t.category === 'once' && t.count > 1) meta = '次数 ' + (t.done_count || 0) + '/' + t.count;
-  const metaHtml = meta ? `<span class="ct-meta">${metaIcon ? svgIcon(metaIcon,11,2.1) : ''}${esc(meta)}</span>` : '';
-  // v5.14c：时间段漏斗 + 开始-结束时间显示（boss：今天的事应显示开始时间-结束时间）
-  let timeBarHtml = '';
-  if (t.due_at) {
-    const start = t.due_at - 30 * 60 * 1000;   // 默认前置 30 分钟
-    const end = t.due_at;
-    timeBarHtml = `<div class="tc-time-bar">
-      <span class="tc-time-icon">${svgIcon('clock',11,2.1)}</span>
-      <span class="tc-time-range">${fmtTime(start)}<span class="tc-time-arrow">→</span>${fmtTime(end)}</span>
-      <span class="ct-meta">(${fmtDue(t.due_at)})</span>
-    </div>`;
-  }
-  // 追踪中：左侧不显示任何标识，右侧显示会动的涟漪菱形
-  const ri = isTracking(t) ? `<span class="ct-diamond"></span>` : '';
-  return `<div class="cat-task ${isTracking(t)?'tracking':''}" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')">
-    <span class="ct-title">${esc(t.title)}</span>
-    ${metaHtml}
-    ${timeBarHtml}
-    ${ri}
+  // v5.15.11：任务名优先（独占整行，超长省略号），时间只留一个胶囊，逾期换成"逾期 N"标记；
+  //   右侧三个圆形动作键（取消追踪/推进/完成），键下带功能文字
+  return `<div class="cat-task ${isTracking(t) ? 'tracking' : ''} ${isOverdue(t) ? 'overdue' : ''}" data-uuid="${t.uuid}">
+    <div class="lt-main" onclick="openDetail('${t.uuid}')">
+      <span class="ct-title">${esc(t.title)}</span>
+      ${timeMetaHtml(t)}
+    </div>
+    ${rowActsHtml(t)}
   </div>`;
 }
 
 // =============== 列表视图（每日任务 / 限时任务 / 次数任务） ===============
+// v5.15.11：分类页数据源 —— 旧实现从「今日任务」里筛，非今天的同分类任务在分类页里看不到
+//   （boss：点侧边栏某一类什么都没有，右侧详情却有这个任务）。改为后端按分类全量取，前端缓存。
+let catTasks = {};
+function prefetchCatTasks(cat) {
+  if (catTasks[cat]) return;
+  call('get_tasks_by_category', { category: cat })
+    .then(list => { catTasks[cat] = list || []; if (nav === cat) renderListView(); })
+    .catch(() => { catTasks[cat] = []; });
+}
 function isTodayTask(t) {
   if (t.category === 'daily' || t.category === 'once') return true;
   if (t.category === 'time-limited' && t.due_at) {
@@ -641,38 +637,105 @@ function renderListView() {
   if (titleEl) titleEl.textContent = titleMap[nav] || '任务';
   const hintEl = document.getElementById('listViewHint');
 
+  if (['daily', 'goal', 'time-limited', 'once'].includes(nav)) prefetchCatTasks(nav);
+  const catList = catTasks[nav];
   if (nav === 'daily') {
-    arr = tasks.filter(t => t.category === 'daily');
+    arr = catList || tasks.filter(t => t.category === 'daily');
     if (hintEl) hintEl.textContent = '每日 0 点自动刷新';
   } else if (nav === 'goal') {
-    arr = tasks.filter(t => t.category === 'goal');
+    arr = catList || tasks.filter(t => t.category === 'goal');
     if (hintEl) hintEl.textContent = '为目标坚持推进';
   } else if (nav === 'time-limited') {
-    arr = tasks.filter(t => t.category === 'time-limited');
+    arr = catList || tasks.filter(t => t.category === 'time-limited');
     if (hintEl) hintEl.textContent = '到期前记得完成';
   } else if (nav === 'once') {
-    arr = tasks.filter(t => t.category === 'once');
+    arr = catList || tasks.filter(t => t.category === 'once');
     if (hintEl) hintEl.textContent = '次数任务可重复完成';
   }
 
   if (arr.length === 0) {
-    box.innerHTML = `<div class="empty-line">暂无任务</div>`;
+    box.innerHTML = `<div class="empty-line">这一类暂时没有任务</div>`;
   } else {
-    box.innerHTML = arr.map(t => {
-      let meta = '', metaIcon = '';
-      if (t.due_at) { metaIcon = 'clock'; meta = fmtDue(t.due_at); }
-      else if (t.category === 'once' && t.count > 1) meta = '次数 ' + (t.done_count || 0) + '/' + t.count;
-      const metaHtml = meta ? `<span class="ct-meta">${metaIcon ? svgIcon(metaIcon,11,2.1) : ''}${esc(meta)}</span>` : '';
-      const ri = isTracking(t) ? `<span class="ct-diamond"></span>` : '';
-      return `
-      <div class="list-task ${isTracking(t)?'tracking':''}" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')">
-        <span class="ct-title">${esc(t.title)}</span>
-        ${metaHtml}
-        ${ri}
-      </div>`;
-    }).join('');
+    box.innerHTML = arr.map(t => `
+      <div class="list-task ${isTracking(t)?'tracking':''} ${isOverdue(t)?'overdue':''}" data-uuid="${t.uuid}">
+        <div class="lt-main" onclick="openDetail('${t.uuid}')">
+          <span class="ct-title">${esc(t.title)}</span>
+          ${timeMetaHtml(t)}
+        </div>
+        ${rowActsHtml(t)}
+      </div>`).join('');
   }
 }
+
+// =============== v5.15.11：任务行统一的时间/逾期表达 + 三个圆形动作键 ===============
+/** 是否逾期：未完成 且 已过 due_at/deadline */
+function isOverdue(t) {
+  if (!t || t.done || t.track_status === 'done') return false;
+  const d = (typeof t.deadline === 'number') ? t.deadline : t.due_at;
+  return typeof d === 'number' && d < Date.now();
+}
+/** 行上的时间区：逾期 → 只给"逾期 N 天/小时"（具体时间放 tooltip，不再挤任务名）；正常 → 一个时间胶囊 */
+function timeMetaHtml(t) {
+  const due = t.due_at || t.deadline;
+  if (isOverdue(t)) {
+    const diff = Date.now() - ((typeof t.deadline === 'number') ? t.deadline : t.due_at);
+    const txt = diff >= 86400000 ? ('逾期 ' + Math.floor(diff / 86400000) + ' 天')
+      : diff >= 3600000 ? ('逾期 ' + Math.floor(diff / 3600000) + ' 小时')
+        : '已逾期';
+    return `<span class="ct-over" title="原定 ${fmtDue(due)}">${svgIcon('alert', 10, 2.2)}${txt}</span>`;
+  }
+  if (due) return `<span class="ct-meta" title="${fmtDue(due)}">${svgIcon('clock', 10, 2.1)}${fmtDue(due)}</span>`;
+  if (t.category === 'once' && t.count > 1) return `<span class="ct-meta">${svgIcon('target', 10, 2.1)}次数 ${t.done_count || 0}/${t.count}</span>`;
+  return '';
+}
+/** 三个圆形动作键（下面带功能文字）：取消追踪 / 推进 / 完成 */
+function rowActsHtml(t) {
+  const tracking = isTracking(t);
+  return `<div class="acts">
+    <div class="act ${tracking ? '' : 'disabled'}" data-act="stop" title="${tracking ? '取消追踪' : '当前未追踪'}">
+      <span class="b">${svgIcon('stop', 11, 2.6)}</span><span class="l">取消</span>
+    </div>
+    <div class="act" data-act="advance" title="推进到下一步（没有步骤时可直接完成）">
+      <span class="b">${svgIcon('arrow', 12, 2.8)}</span><span class="l">推进</span>
+    </div>
+    <div class="act done" data-act="done" title="完成任务">
+      <span class="b">${svgIcon('check', 12, 3)}</span><span class="l">完成</span>
+    </div>
+  </div>`;
+}
+/** 行内三个键的点击处理（事件委托到 document，避免 innerHTML 重建后失效） */
+document.addEventListener('click', async function (ev) {
+  const actEl = ev.target.closest('.act[data-act]');
+  if (!actEl) return;
+  const row = actEl.closest('[data-uuid]');
+  if (!row) return;
+  ev.stopPropagation();
+  const uuid = row.dataset.uuid;
+  const what = actEl.dataset.act;
+  if (actEl.classList.contains('disabled')) {
+    if (what === 'stop') showToast('这个任务当前没有在追踪');
+    return;
+  }
+  try {
+    if (what === 'stop') {
+      await call('stop_tracking', { taskUuid: uuid });
+      showToast('已取消追踪');
+    } else if (what === 'advance') {
+      const d = await call('get_task_detail', { taskUuid: uuid });
+      const steps = (d && d.steps) || [];
+      const next = steps.find(s => s.status !== 'done');
+      if (!next) { showToast('这个任务还没有步骤，可直接点「完成」'); return; }
+      await call('advance_step', { stepUuid: next.uuid, taskUuid: uuid, status: 'done' });
+      showToast('已推进：' + next.title);
+    } else if (what === 'done') {
+      const r = await call('complete_task', { taskUuid: uuid });
+      if (typeof celebrateCompletion === 'function') celebrateCompletion(uuid, r);
+    }
+    await render();
+  } catch (e) {
+    showToast('操作失败：' + (e.message || e));
+  }
+});
 
 // =============== 历史任务弹窗（独立小窗口，不用原生界面） ===============
 // 注意：必须用函数声明（提升），因为脚本顶部第 208 行会立即引用 closeArchiveModal
@@ -701,29 +764,57 @@ function renderArchiveModal() {
     box.innerHTML = `<div class="empty-line">暂无历史任务</div>`;
     return;
   }
-  // v5.12 历史任务分层：全部视图按 4 类分组，每类一层（boss 要求"历史任务里也分层排放 每一类一层"）
-  const groups = [
-    { key: 'daily', label: '每日任务' },
-    { key: 'goal', label: '目标任务' },
-    { key: 'time-limited', label: '限时任务' },
-    { key: 'once', label: '次数任务' }
-  ];
-  let html = '';
-  if (archiveCat === 'all') {
-    html = groups.map(g => {
-      const items = arr.filter(t => catOf(t) === g.key);
-      if (items.length === 0) return '';
-      return `<div class="arc-group">
-        <div class="arc-group-title">${g.label}<span class="arc-group-count">${items.length}</span></div>
-        ${items.map(arcItemHtml).join('')}
-      </div>`;
-    }).join('');
-    if (!html) html = `<div class="empty-line">暂无历史任务</div>`;
-  } else {
-    html = arr.map(arcItemHtml).join('');
-  }
-  box.innerHTML = html;
+  // v5.15.11：历史改成**记账式流水**（boss 参考图：日历 or 记账 二选一，我选记账 ——
+  //   桌面窄栏里按天分组 + 当日小计最易读，也天然体现"每天完成了多少、拿了多少分"）。
+  const byDay = new Map();
+  arr.forEach(t => {
+    const ts = t.done_at || t.updated_at || t.created_at || 0;
+    const d = new Date(ts);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(t);
+  });
+  const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  box.innerHTML = days.map(([key, items]) => {
+    items.sort((a, b) => ((b.done_at || b.updated_at || 0) - (a.done_at || a.updated_at || 0)));
+    const pts = items.reduce((sum, t) => sum + (t.reward_points || 0), 0);
+    return `<div class="lg-day">
+      <div class="lg-head">
+        <span class="lg-date">${archiveDayLabel(key)}</span>
+        <span class="lg-sum">完成 ${items.length} 项 · <b>+${pts}</b> 分</span>
+      </div>
+      <div class="lg-rows">${items.map(ledgerRowHtml).join('')}</div>
+    </div>`;
+  }).join('');
 }
+
+/** 日期标题：今天 / 昨天 / 9月8日 周一 */
+function archiveDayLabel(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const pad = n => String(n).padStart(2, '0');
+  const todayK = (() => { const n = new Date(); return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()); })();
+  const yK = (() => { const n = new Date(Date.now() - 86400000); return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()); })();
+  const md = `${m}月${d}日`;
+  if (key === todayK) return `今天 · ${md}`;
+  if (key === yK) return `昨天 · ${md}`;
+  return `${md} 周${'日一二三四五六'[dt.getDay()]}`;
+}
+
+/** 记账式一行：完成时间 · 任务名 · 分类 · 得分 */
+function ledgerRowHtml(t) {
+  const ts = t.done_at || t.updated_at || 0;
+  const time = ts ? new Date(ts).toTimeString().slice(0, 5) : '';
+  const cat = CAT_LABEL[catOf(t)] || '';
+  return `<div class="lg-row" data-uuid="${t.uuid}" onclick="openDetail('${t.uuid}')">
+    <span class="lg-time">${time}</span>
+    <span class="lg-title" title="${esc(t.title)}">${esc(t.title)}</span>
+    <span class="lg-cat">${cat}</span>
+    <span class="lg-pts">${t.reward_points ? '+' + t.reward_points : ''}</span>
+  </div>`;
+}
+
+
 function arcItemHtml(t) {
   // 完成时间容错：后端可能只给 track_status=done 而 done_at 为空，退回 updated_at
   const doneTs = t.done_at || (t.track_status === 'done' ? t.updated_at : null);

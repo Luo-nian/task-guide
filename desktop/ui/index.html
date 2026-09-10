@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v54">
+<link rel="stylesheet" href="style.css?v=v56">
 </head>
 <body>
 <div class="widget" id="app">
@@ -530,6 +530,35 @@
       </div>
     </div>
   </div>
+  </div>
+
+  <!-- ===== v5.15.11 延迟任务 ===== -->
+  <div class="overlay" id="delayOverlay" style="display:none">
+    <div class="modal" style="max-width:360px">
+      <div class="m-head"><span>延迟任务</span><button class="m-close" data-close-overlay="delayOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
+      <div class="m-body">
+        <div class="hint" id="delayTaskName" style="margin-bottom:8px"></div>
+        <div class="ddl-row" id="delayPresetRow">
+          <button type="button" class="ddl-btn" data-delay="10">+10 分钟</button>
+          <button type="button" class="ddl-btn" data-delay="60">+1 小时</button>
+          <button type="button" class="ddl-btn" data-delay="1440">+1 天</button>
+          <button type="button" class="ddl-btn" data-delay="4320">+3 天</button>
+        </div>
+        <div class="ddl-custom" style="margin-top:10px">
+          <input type="number" id="delayCustomNum" min="1" max="99999" placeholder="自定义" style="width:110px" />
+          <select id="delayCustomUnit">
+            <option value="1">分钟</option>
+            <option value="60" selected>小时</option>
+            <option value="1440">天</option>
+          </select>
+          <button type="button" class="small-btn primary" id="delayCustomOk">确定</button>
+        </div>
+        <div class="m-foot" style="margin-top:12px">
+          <button class="ghost" data-close-overlay="delayOverlay">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== 新建任务抽屉 ===== -->
   <div class="overlay" id="addOverlay" style="display:none">
@@ -687,6 +716,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v55"></script>
+<script src="app3.js?v=v57"></script>
 </body>
 </html>

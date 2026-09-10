@@ -1054,9 +1054,54 @@ fn start_tracking(state: tauri::State<AppState>, task_uuid: String) -> Result<()
     Ok(())
 }
 
+/// v5.15.11：延迟任务 —— 把 due_at（没有则从现在起算）往后推 minutes 分钟，
+///   有 deadline 也一起顺延，delayed_count +1，然后推给手机。
+/// 死锁铁律：所有 db 锁用独立 scope 即时释放，push_change 必须在完全无锁时调用。
 #[tauri::command]
-fn stop_tracking(state: tauri::State<AppState>, task_uuid: String) {
+fn delay_task(state: tauri::State<AppState>, task_uuid: String, minutes: i64) -> Result<serde_json::Value, String> {
+    if minutes <= 0 { return Err("延迟时长必须大于 0".into()); }
     let now = chrono::Local::now().timestamp_millis();
+    let delta = minutes * 60_000;
+    let new_due: i64 = {
+        let db = state.db.lock().unwrap();
+        let row = db.query_row(
+            "SELECT due_at, deadline, COALESCE(delayed_count,0) FROM tasks WHERE uuid=?1 AND deleted=0",
+            params![&task_uuid],
+            |r| Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, Option<i64>>(1)?, r.get::<_, i64>(2)?)),
+        ).ok();
+        let (due, deadline, dc) = row.ok_or_else(|| "任务不存在".to_string())?;
+        let base = due.or(deadline).unwrap_or(now);
+        let nd = base + delta;
+        db.execute(
+            "UPDATE tasks SET due_at=?1, \
+             deadline=CASE WHEN deadline IS NULL THEN NULL ELSE deadline + ?2 END, \
+             delayed_count=?3, updated_at=?4 WHERE uuid=?5",
+            params![nd, delta, dc + 1, now, &task_uuid],
+        ).map_err(|e| e.to_string())?;
+        nd
+    }; // 锁释放
+    sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    Ok(serde_json::json!({ "status": "ok", "due_at": new_due, "delayed_minutes": minutes }))
+}
+
+/// v5.15.11：按分类取**全部**未完成任务（侧边栏分类页用）。
+///   旧实现是从「今日任务」里筛，非今天的同分类任务在分类页里看不到（boss："点侧边栏什么都没有"）。
+#[tauri::command]
+fn get_tasks_by_category(state: tauri::State<AppState>, category: String) -> Vec<Task> {
+    let db = state.db.lock().unwrap();
+    let mut stmt = match db.prepare(
+        "SELECT * FROM tasks WHERE category=?1 AND deleted=0 AND track_status!='done' \
+         ORDER BY COALESCE(due_at, deadline, created_at), CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END"
+    ) { Ok(s) => s, Err(_) => return vec![] };
+    let rows = stmt.query_map(params![&category], row_to_task);
+    match rows {
+        Ok(r) => r.filter_map(|x| x.ok()).collect(),
+        Err(_) => vec![],
+    }
+}
+
+#[tauri::command]
+fn stop_tracking(state: tauri::State<AppState>, task_uuid: String) {    let now = chrono::Local::now().timestamp_millis();
     {
         let db = state.db.lock().unwrap();
         db.execute("UPDATE tasks SET track_status='pending', updated_at=?1 WHERE uuid=?2",
@@ -1688,8 +1733,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,
             get_habits_status, get_task_detail, get_total_points,
+            get_tasks_by_category,
             get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
             advance_step, add_step, import_steps, complete_task, delete_task, add_task, start_tracking, stop_tracking,
+            delay_task,
             restore_task,
             set_display_mode, set_window_size,
             show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide, win_start_dragging,
