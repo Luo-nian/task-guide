@@ -222,9 +222,10 @@ body::after {
 }
 .nav-item {
   position: relative;
-  width: 44px; height: 44px;
+  /* v5.15.18 F2（boss）：侧边栏按键整体放大，44 → 50，图标也跟着更醒目 */
+  width: 50px; height: 50px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 11px; cursor: pointer;
+  border-radius: 13px; cursor: pointer;
   color: var(--ink-mute);
   background: transparent;
   border: 1px solid transparent;
@@ -280,12 +281,16 @@ body::after {
 }
 /* v5.14g：追踪任务数量角标（红色） */
 .nav-count {
-  position: absolute; right: 2px; top: 1px;
-  min-width: 16px; height: 14px;
-  padding: 0 4px;
+  position: absolute; right: 1px; top: 0;
+  /* v5.15.18 F1（boss）：角标数字"不够清晰" → 放大字号/尺寸 + 加描边提高对比 */
+  min-width: 19px; height: 17px;
+  padding: 0 5px;
   background: linear-gradient(160deg, #E06A5B, #C0392B);
   color: #fff;
-  font-size: 9px; font-weight: 800;
+  font-size: 11.5px; font-weight: 800;
+  line-height: 17px;
+  border: 1.5px solid #FFFDF5;
+  box-shadow: 0 1px 3px rgba(140, 30, 20, 0.45);
   border-radius: 999px;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid rgba(255,255,255,0.5);
@@ -293,12 +298,25 @@ body::after {
   line-height: 1;
   z-index: 4;
 }
+/* v5.15.18 A：把持续无限动画的元素隔离到自己的重绘范围，
+   避免每次动画帧都触发整窗重新合成（透明窗上会被肉眼看到成"闪"） */
+.cc-ico, .track-btn.tracking .ico, .pfill, .bless-levelup .bless-card { contain: paint; }
+
 .nav-count.zero { display: none; }
 .nav-spacer { flex: 1; }
 /* 历史项：只用间距分隔（原来的 padding-top 会把图标压低 7px，与其它 4 项不对齐） */
 .nav-item.repo { margin-top: 8px; }
 
 /* v5.14e：今日视图"添加"按钮（boss 反馈"追加任务应该在最上面"） */
+/* v5.15.18 A：内容区轻过渡 —— 只做 3px 上移，**刻意不动 opacity**
+   （透明窗上做透明度渐变会露出窗口底色，反而又变成一次闪）。
+   这是 boss 要的"改动画"方案：保留圆角/透明，不靠删东西解决闪。 */
+@keyframes viewEnterSlide {
+  from { transform: translateY(3px); }
+  to   { transform: none; }
+}
+.view-enter { animation: viewEnterSlide .13s ease-out; }
+
 .today-view-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .today-view-header .vh-add-btn {
   margin-left: auto;
@@ -416,7 +434,14 @@ body::after {
   flex: 0 0 auto;
 }
 .vh-title { color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 1.5px; }
-.vh-hint { color: var(--ink-mute); font-size: 10.5px; }
+/* v5.15.18 I1（boss）：今日待办头部"排版很有问题，弄得松散一点"。
+   原来 title/meta 一行 + hint 紧跟一行，和下面的分组横幅挤在一起。
+   给标题行加行高与下间距，hint 单独一行并留白。 */
+.vh-hint { color: var(--ink-mute); font-size: 11.5px; display: block; margin: 6px 0 12px; letter-spacing: .3px; }
+.list-view .list-view-header.today-view-header,
+.list-view .today-view-header { padding: 6px 2px 2px; align-items: baseline; }
+.list-view .today-view-header .vh-title { font-size: 17px; letter-spacing: .5px; }
+.list-view .today-view-header .vh-meta { margin-left: 2px; }
 .vh-spacer { flex: 1; }
 .search {
   background: rgba(255, 254, 251, 0.98);
@@ -471,6 +496,8 @@ body::after {
   animation: diamondPulse 2.6s ease-in-out infinite;
 }
 .cc-ico.daily { background: linear-gradient(135deg, #5BA3D0, #2E6FA0); }
+/* v5.15.18 K1：总览"正在追踪"置顶卡图标（灰紫，与追踪语义一致） */
+.cc-ico.tracking { background: linear-gradient(135deg, #A78BFA, #6B4FB8); }
 .cc-ico.goal  { background: linear-gradient(135deg, #A78BFA, #5B3FB0); }
 .cc-ico.lim   { background: linear-gradient(135deg, #D88A3F, #A55F1A); }
 .cc-ico.once  { background: linear-gradient(135deg, #4A8B6F, #2E6F58); }
@@ -1201,8 +1228,10 @@ body::after {
   min-width: 78px;
   box-shadow: var(--shadow-card);
 }
+/* v5.15.18 D1（boss）："+8 积分 / 推进进度"两张卡的图标太小 → 放大 */
 .reward-ico { font-size: 22px; }
-.reward-num { color: var(--ink); font-size: 11.5px; font-weight: 600; text-align: center; }
+.reward-ico svg { width: 21px; height: 21px; }
+.reward-num { color: var(--ink); font-size: 12.5px; font-weight: 600; text-align: center; }
 .reward-item.hl {
   background: linear-gradient(160deg, var(--gold-light), var(--gold));
   border-color: var(--border-mid);
@@ -1554,7 +1583,9 @@ input::placeholder { color: var(--ink-faint); }
   margin-bottom: 6px;
 }
 .bless-title { color: var(--gold-deep); font-size: 17px; font-weight: 700; letter-spacing: 2px; }
-.bless-sub { color: var(--ink-soft); font-size: 11px; margin-top: 2px; }
+/* v5.15.18 C1（boss）：完成任务的名字太小 → 调大并加重，让它成为视觉第二焦点 */
+.bless-sub { color: var(--ink); font-size: 14.5px; font-weight: 600; margin-top: 6px; letter-spacing: .2px; }
+.bless-title { font-size: 16px; }
 .bless-msg { padding: 8px 18px 18px; color: var(--ink); font-size: 13px; line-height: 1.7; }
 .bless-msg b { color: var(--gold-deep); }
 .bless-action { padding: 0 16px 18px; }
@@ -2449,15 +2480,21 @@ body { background-color: var(--bg-paper); }
 /* 只有分组头用金色底；页面标题（今日待办/追踪任务…）保持原来的轻量样式 */
 .cat-group-head {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 9px; margin-bottom: 5px;
+  padding: 6px 10px; margin-bottom: 6px;
   background: linear-gradient(90deg, rgba(232, 203, 127, 0.34), rgba(232, 203, 127, 0.06));
   border-left: 3px solid var(--gold);
   border-radius: 4px;
   font-size: 12px; font-weight: 700; color: var(--gold-deep); letter-spacing: 0.3px;
 }
+/* v5.15.18 J1（boss 认可方案）：数量不再是"最右边一个孤零零的绿字"，
+   改成紧贴分类名的圆角胶囊小标签，配色统一到金色系。 */
 .cat-group-head .gh-count {
-  margin-left: auto; padding: 0;
-  font-size: 11px; font-weight: 700; color: var(--jade); background: transparent;
+  margin-left: 4px; padding: 0 7px;
+  font-size: 11px; font-weight: 700; color: var(--gold-deep);
+  background: rgba(255, 253, 245, 0.9);
+  border: 1px solid rgba(154, 123, 26, 0.35);
+  border-radius: 999px;
+  line-height: 16px;
 }
 .cat-task, .list-task {
   display: flex; align-items: center; gap: 8px;

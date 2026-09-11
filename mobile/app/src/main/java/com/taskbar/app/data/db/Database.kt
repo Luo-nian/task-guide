@@ -48,17 +48,30 @@ interface TaskDao {
 
     /** 主列表（不含未来任务）：未来任务（due_at > dayEnd）由 FutureTasksSection 独占显示，
      *  避免主区和折叠区重复。dayEnd 通常是今天 23:59:59。
-     *  注意：追踪中的任务不受日期限制——追踪了=今天要做，无论 due_at 都显示在主页 */
+     *  注意：追踪中的任务不受日期限制——追踪了=今天要做，无论 due_at 都显示在主页
+     *
+     *  v5.15.18 P0（boss：「应该放在主页（今日）里的任务，为什么跑到所有任务里去了？」
+     *                 「手机端点了完任务，电脑端还显示没完成」）：
+     *    原先只过滤 `track_status != 'done'`，**完全没有每日重置** → 昨天完成的每日任务
+     *    永久卡在 done：从主页消失、只能去「所有任务」找，而且和电脑端（有重置）永久分歧。
+     *    （实测 7 条 daily 任务：手机 done=1 / 电脑已重置为 pending）
+     *    改为【读时归一】：category='daily' 且 done_at 早于今天 0 点的，仍然查出来
+     *    （当作今天的待办），由 Repository 折算成 pending 返回。
+     *    **刻意不写库** —— 写了会 bump updated_at 污染同步的 LWW，导致另一端改不动。 */
     @Query("""
         SELECT * FROM tasks
-        WHERE track_status != 'done' AND deleted = 0
+        WHERE deleted = 0
+          AND (
+                track_status != 'done'
+                OR (category = 'daily' AND (done_at IS NULL OR done_at < :dayStart))
+              )
           AND (track_status = 'tracking' OR due_at IS NULL OR due_at <= :dayEnd)
         ORDER BY
             CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END,
             CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
             due_at IS NULL, due_at ASC
     """)
-    fun observeMainListToday(dayEnd: Long): Flow<List<Task>>
+    fun observeMainListToday(dayStart: Long, dayEnd: Long): Flow<List<Task>>
 
     @Query("SELECT * FROM tasks WHERE track_status = 'tracking' AND deleted = 0 ORDER BY updated_at DESC")
     fun observeTracking(): Flow<List<Task>>

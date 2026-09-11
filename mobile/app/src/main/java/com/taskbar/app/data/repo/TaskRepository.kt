@@ -59,7 +59,30 @@ class TaskRepository(private val db: AppDatabase) {
         c.set(java.util.Calendar.MINUTE, 59)
         c.set(java.util.Calendar.SECOND, 59)
         c.set(java.util.Calendar.MILLISECOND, 0)
-        return taskDao.observeMainListToday(c.timeInMillis)
+        val dayEnd = c.timeInMillis
+        // v5.15.18 P0：今天 0 点。用于把"昨天完成的每日任务"在**读取时**折算回待办，
+        //   而不是写库重置（写库会 bump updated_at 污染同步 LWW）。
+        val dayStart = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return taskDao.observeMainListToday(dayStart, dayEnd).map { list ->
+            list.map { t -> normalizeDailyReset(t, dayStart) }
+        }
+    }
+
+    /** 跨天的每日任务：在返回给 UI 之前折算成"今天的待办"（不落库） */
+    private fun normalizeDailyReset(t: Task, dayStart: Long): Task {
+        if (t.category != "daily" || t.trackStatus != TrackStatus.DONE) return t
+        val doneToday = (t.doneAt ?: 0L) >= dayStart
+        if (doneToday) return t
+        return t.copy(
+            trackStatus = TrackStatus.PENDING,
+            done = 0,
+            doneAt = null
+        )
     }
     fun observeTracking(): Flow<List<Task>> = taskDao.observeTracking()
     fun observeArchive(): Flow<List<Task>> = taskDao.observeArchive()

@@ -329,6 +329,16 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
             .json(&body)
             .send();
     });
+
+    // v5.15.18 P2（boss：「在客户端里点追踪任务，挂件的同步有点慢；挂件上操作同步到客户端也有点慢」）：
+    //   本地任何一次变更（16 个 push_change 调用点全覆盖）都广播 widget-refresh，
+    //   让挂件窗口立刻刷新，而不是干等它自己的 5 秒轮询。
+    //   刻意**不**发 sync-applied —— 那个事件主窗会走 800ms 去抖 + 头像/昵称比对，
+    //   本地操作本来就会自己 render()，再发一次只会多一遍重绘（反而制造闪）。
+    if let Some(h) = APP_HANDLE.get() {
+        use tauri::Emitter;
+        let _ = h.emit("widget-refresh", ());
+    }
 }
 
 /// WS 监听循环：连接手机 ws，收变更写入本地；断连 5s 重试

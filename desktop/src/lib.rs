@@ -401,12 +401,24 @@ fn get_track_cards(state: tauri::State<AppState>) -> Vec<TrackCard> {
 #[tauri::command]
 fn get_today_tasks(state: tauri::State<AppState>) -> Vec<Task> {
     let db = state.db.lock().unwrap();
-    // v5.12 P0：daily 任务 lazy 重置 —— 昨日(或更早)完成的每日任务自动回到待办，
-    // 使"当日完成置 done → 次日自动挪回今日列表"成立（无定时器，读时惰性重置）
+    // v5.12 P0：daily 任务 lazy 重置 —— 昨日(或更早)完成的每日任务自动回到待办。
+    //
+    // v5.15.18 P0 重写（boss：「手机端点了很多任务完成，电脑端还显示未完成」）：
+    //   旧实现在这里执行 `UPDATE tasks SET ..., updated_at=now WHERE category='daily'
+    //   AND track_status='done' AND done_at < 今天0点` —— 跨天零点会把一批 daily 任务的
+    //   updated_at 批量刷成"现在"。而同步用 LWW(最新为主)，于是这些任务的桌面时间戳
+    //   比手机端真实操作更新（实测桌面 09-11 00:00:11 vs 手机 09-10 22:58）
+    //   → 同步时判"本地赢" → **永久拒绝手机端的完成状态**，桌面卡在未完成。
+    //   （实测 14 条任务中招）
+    //
+    //   改为【读时归一】：根本不写库，只在返回结果里把"跨天的 daily 完成态"折算成 pending。
+    //   好处：① 不污染 updated_at，LWW 不再被假时间戳抢占，手机端改动能正常同步；
+    //         ② 不再向手机端推送重置变更，杜绝同步回环；
+    //         ③ 两端各自按本地"今天"折算，天然一致。
     let (day_start, _) = today_range();
-    let now = Local::now().timestamp_millis();
     // v5.14h.13：daily 任务跨天重置时，其下步骤同步回滚为 todo
-    //   （此前只重置 task，昨日 done 的 steps 今天仍 done → widget/详情显示"全部已完成"）
+    //   （否则 widget/详情会显示"全部已完成"）
+    // v5.15.18：**刻意不更新 steps.updated_at** —— 避免同样的 LWW 污染问题。
     let stale: Vec<String> = {
         let mut s = db.prepare(
             "SELECT uuid FROM tasks WHERE category='daily' AND track_status='done' AND deleted=0 \
@@ -417,23 +429,35 @@ fn get_today_tasks(state: tauri::State<AppState>) -> Vec<Task> {
     };
     if !stale.is_empty() {
         let mut upd = db.prepare(
-            "UPDATE steps SET status='todo', updated_at=?1 WHERE task_uuid=?2 AND status='done' AND deleted=0"
+            "UPDATE steps SET status='todo' WHERE task_uuid=?1 AND status='done' AND deleted=0"
         ).unwrap();
-        for u in &stale { let _ = upd.execute(params![now, u]); }
+        for u in &stale { let _ = upd.execute(params![u]); }
     }
-    db.execute(
-        "UPDATE tasks SET track_status='pending', done=0, done_count=0, done_at=NULL, updated_at=?1 \
-         WHERE category='daily' AND track_status='done' AND deleted=0 \
-           AND (done_at IS NULL OR done_at < ?2)",
-        params![now, day_start]
-    ).ok();
     let mut stmt = db.prepare(
-        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total FROM tasks WHERE track_status!='done' AND deleted=0 ORDER BY \
+        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total \
+         FROM tasks WHERE tasks.deleted=0 AND ( \
+             tasks.track_status!='done' \
+             OR (tasks.category='daily' AND (tasks.done_at IS NULL OR tasks.done_at < ?1)) \
+         ) ORDER BY \
          CASE track_status WHEN 'tracking' THEN 0 ELSE 1 END, \
          CASE WHEN deadline IS NOT NULL THEN 0 ELSE 1 END, \
          deadline IS NULL, deadline ASC, due_at ASC"
     ).unwrap();
-    stmt.query_map([], row_to_task).unwrap().filter_map(|r| r.ok()).collect()
+    let mut list: Vec<Task> = stmt.query_map(params![day_start], row_to_task)
+        .unwrap().filter_map(|r| r.ok()).collect();
+    // 读时折算：跨天的 daily 完成态 → 今日待办里的 pending
+    for t in list.iter_mut() {
+        if t.category == "daily" && t.track_status == "done" {
+            let done_today = t.done_at.map(|d| d >= day_start).unwrap_or(false);
+            if !done_today {
+                t.track_status = "pending".to_string();
+                t.done = 0;
+                t.done_count = 0;
+                t.done_at = None;
+            }
+        }
+    }
+    list
 }
 
 #[tauri::command]
@@ -1540,6 +1564,7 @@ fn auto_reconnect_loop(
     use mdns_sd::{ServiceDaemon, ServiceEvent};
     std::thread::sleep(std::time::Duration::from_secs(6)); // 等 ws_loop 先跑一次
     let mut fail_count: i32 = 0;
+    let mut pull_tick: i32 = 0;   // v5.15.18：每 3 次 ping（15s）做一次兜底全量拉取
     loop {
         std::thread::sleep(std::time::Duration::from_secs(5));   // v5.14g：8→5s 更快响应
         let cur_url = { url.lock().unwrap().clone() };
@@ -1563,6 +1588,18 @@ fn auto_reconnect_loop(
                 fail_count = 0;
                 let conn = db.lock().unwrap();
                 let _ = conn.execute("UPDATE settings SET value='0' WHERE key='reconnect_fail'", []);
+            }
+            // v5.15.18 P0：周期性兜底拉取。
+            //   原先只有"WS 刚连上时补一次 full_sync"——若 WS 静默死掉（socket 没报错、
+            //   ping 仍通，比如 WiFi 漫游/手机休眠），桌面端就**永久不再同步**。
+            //   这里每 15s（3×5s）无条件拉一次全量，作为最终一致性兜底。
+            //   LWW 只在两端都改过同一条时才判定，正常情况是幂等的空操作。
+            pull_tick += 1;
+            if pull_tick >= 3 {
+                pull_tick = 0;
+                if !cur_url.is_empty() {
+                    if sync::full_sync(&db, &url).is_ok() { sync::notify_changed(); }
+                }
             }
             continue;
         }

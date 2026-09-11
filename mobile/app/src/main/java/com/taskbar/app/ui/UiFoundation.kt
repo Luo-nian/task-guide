@@ -383,58 +383,63 @@ fun CompletionCelebration(
                     translationY = slide
                 }
         ) {
-            // ── 顶部徽记：金色渐变圆环 + 光晕 ──
+            // ── 顶部徽记 ──
+            // v5.15.18 L2（boss：「现在的页面不好看，改好看点，不用滥用主题色」）：
+            //   原来是一整颗金色渐变球 + 很亮的金色光晕 → 金色到处都是。
+            //   改成"米白圆 + 一圈极细金边 + 深金图标"，金色只做点缀，主体留白。
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     Modifier
                         .size(96.dp)
-                        .graphicsLayer { this.alpha = haloAlpha }
+                        .graphicsLayer { this.alpha = haloAlpha * 0.45f }
                         .background(
                             Brush.radialGradient(
-                                listOf(TGColors.Gold.copy(alpha = 0.5f), Color.Transparent)
+                                listOf(TGColors.Gold.copy(alpha = 0.22f), Color.Transparent)
                             ),
                             androidx.compose.foundation.shape.CircleShape
                         )
                 )
                 Box(
                     Modifier
-                        .size(64.dp)
+                        .size(62.dp)
                         .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(TGColors.GoldLight, TGColors.Gold, TGColors.GoldDeep)
-                            )
-                        )
-                        .border(2.dp, Color(0xFFFFF6DA).copy(alpha = 0.85f), androidx.compose.foundation.shape.CircleShape),
+                        .background(Color(0xFFFFFCF2))
+                        .border(
+                            1.5.dp,
+                            TGColors.Gold.copy(alpha = 0.55f),
+                            androidx.compose.foundation.shape.CircleShape
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     TGIcon(
                         drawable = R.drawable.ic_coin,
                         contentDescription = null,
-                        tint = Color(0xFF2A1D06),
-                        size = 30.dp
+                        tint = TGColors.GoldDeep,
+                        size = 28.dp
                     )
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // ── 任务名（小字，克制） ──
+            // ── 任务名：改成这张弹窗的**主角**（boss：「也要突出一下任务名字」） ──
             Text(
                 title,
-                color = Color(0xFFEDE4D3).copy(alpha = 0.78f),
-                fontSize = 13.sp,
-                maxLines = 1,
-                letterSpacing = 0.7.sp,
-                modifier = Modifier.padding(horizontal = 40.dp)
+                color = Color(0xFFF5EFE2),
+                fontSize = 21.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                lineHeight = 29.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                if (isLevelUp) "任务完成 · 等级提升" else "任务完成",
-                color = TGColors.GoldLight,
+                if (isLevelUp) "已完成 · 等级提升" else "已完成",
+                color = TGColors.GoldLight.copy(alpha = 0.8f),
                 fontSize = 11.sp,
-                letterSpacing = 3.sp
+                letterSpacing = 4.sp
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(20.dp))
 
             // ── 积分卡：米白底 + 金色细描边 + 大数字 ──
             Row(
@@ -470,24 +475,31 @@ fun CompletionCelebration(
             }
 
             // ── 升级横幅（仅升级时出现） ──
+            // v5.15.18 L2：原来是大块金→橙渐变，同样属于"滥用主题色"。
+            //   改成深墨底 + 细金边 + 米白字，克制且仍然显眼。
             if (isLevelUp) {
                 Spacer(Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Brush.horizontalGradient(listOf(TGColors.Gold, TGColors.Orange)))
+                        .background(Color(0xFF2B2417))
+                        .border(
+                            1.dp,
+                            TGColors.Gold.copy(alpha = 0.6f),
+                            RoundedCornerShape(10.dp)
+                        )
                         .padding(horizontal = 18.dp, vertical = 9.dp)
                 ) {
-                    Text("Lv.$newLevel", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                    Text("Lv.$newLevel", color = TGColors.GoldLight, fontSize = 14.sp, fontWeight = FontWeight.Black)
                     Spacer(Modifier.width(8.dp))
-                    Box(Modifier.size(width = 1.dp, height = 13.dp).background(Color.White.copy(alpha = 0.55f)))
+                    Box(Modifier.size(width = 1.dp, height = 13.dp).background(TGColors.Gold.copy(alpha = 0.4f)))
                     Spacer(Modifier.width(8.dp))
-                    Text(newLevelName ?: "", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
+                    Text(newLevelName ?: "", color = Color(0xFFF0E8D8), fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Text("点击任意位置关闭", color = Color(0xFFEDE4D3).copy(alpha = 0.42f), fontSize = 10.sp, letterSpacing = 1.sp)
+            Text("点击任意位置关闭", color = Color(0xFFEDE4D3).copy(alpha = 0.5f), fontSize = 10.5.sp, letterSpacing = 1.sp)
         }
     }
 }

@@ -275,16 +275,34 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
     }
 }
 
-/** 列表分区标题（带色块引导） */
+/** 列表分区标题（带色块引导）
+ *  v5.15.18 J2（boss）：与电脑端 J1 同款 —— 标题末尾的「 (N)」不再混在文字里，
+ *    自动拆出来渲染成**紧贴标题的圆角胶囊小标签**（金色系），两端观感一致。
+ *    这里统一处理，6 个调用点不用逐个改。 */
 @Composable
 private fun SectionHeader(title: String, color: Color) {
+    val m = Regex("""^(.*?)\s*\((\d+)\)$""").find(title)
+    val name = m?.groupValues?.get(1) ?: title
+    val count = m?.groupValues?.get(2)
     Row(
         Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
         Spacer(Modifier.width(6.dp))
-        Text(title, color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(name, color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        if (count != null) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(TGColors.Gold.copy(alpha = 0.16f))
+                    .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 7.dp, vertical = 1.dp)
+            ) {
+                Text(count, color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 

@@ -208,6 +208,13 @@
         busy.v = false;
         lastKey = '';          // 强制刷新（状态可能没变但进度/按钮需要重算）
         await refresh();
+        // v5.15.18 P2（boss）：挂件上操作后立刻拉主窗刷新 —— 原来主窗要等自己最多 15s 的轮询，
+        //   老板感知就是"挂件上操作同步到客户端有点慢"。
+        try {
+          if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {
+            window.__TAURI__.event.emit('sync-applied');
+          }
+        } catch (e) {}
       }
       // 取消追踪
       stopBtn.addEventListener('click', (ev) => {
@@ -258,7 +265,17 @@
   });
 
   refresh();
-  setInterval(refresh, 5000);
+  // v5.15.18 P2（boss）：挂件原来只靠 5 秒轮询 → "客户端点追踪，挂件同步有点慢"。
+  //   现在同时监听两个事件，任一窗口改数据都立刻刷新：
+  //   · widget-refresh → 桌面端本地任何变更（push_change 统一广播）
+  //   · sync-applied   → 手机端推过来的变更（Rust ws_loop / 全量兜底拉取后广播）
+  try {
+    if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+      window.__TAURI__.event.listen('widget-refresh', () => { lastKey = ''; refresh(); }).catch(() => {});
+      window.__TAURI__.event.listen('sync-applied', () => { lastKey = ''; refresh(); }).catch(() => {});
+    }
+  } catch (e) {}
+  setInterval(refresh, 5000);   // 兜底轮询保留（事件丢了也不会长期不同步）
 })();
 </script>
 </div>

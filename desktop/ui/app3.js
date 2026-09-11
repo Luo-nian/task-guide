@@ -27,6 +27,11 @@ async function call(cmd, args) {
 
 // ================== 状态 ==================
 let nav = 'today';   // v5.14d：默认今日（boss 反馈：打开客户端默认看到今日待办）
+// v5.15.18 K1（boss）：追踪任务是否"整页置顶"。
+//   逻辑与手机端一致 —— 点追踪时**不当场**置顶（任务原位 + 追踪特效），
+//   等**下次进入该页面**（切回今日待办/总览）才把它挪到最上方，
+//   否则用户点完追踪键任务突然跳走，会以为任务不见了。
+let _pinTracking = true;
 let tasks = [];
 let archive = [];
 let points = 0;
@@ -469,42 +474,62 @@ function updateTrackingBadge() {
   cnt.textContent = n;
   cnt.classList.toggle('zero', n === 0);
 }
+/** v5.15.18 P0：渲染数据签名 —— 只有数据真的变了才重建 DOM。
+ *  背景：原先 `setInterval(render, 15000)` 每 15 秒**无条件**整页重建，
+ *  在 transparent 窗口上每次都是一次肉眼可见的闪
+ *  （boss：「现在就算我什么都没做也有闪屏问题」）。
+ *  有了签名，静止期不再触发任何 DOM 重建 = 空闲闪根治。 */
+function _dataSig() {
+  try {
+    return JSON.stringify([
+      (tasks || []).map(t => [t.uuid, t.trackStatus, t.done, t.doneCount, t.progress, t.updatedAt, t.title]),
+      (archive || []).length,
+      points,
+      level ? level.lv : 0,
+      (trackCards || []).length
+    ]);
+  } catch (e) {
+    return 'sig-err-' + Date.now();   // 出错就当"变了"，宁可多渲染也不要不刷新
+  }
+}
+
 async function render() {
-  // v5.13：render 期间加 .fading 过渡 class（CSS 0.18s opacity 0.55），避免
-  // 整页重绘时出现的"瞬间空白+重绘"闪烁（boss 反馈取消追踪/添加任务闪烁）
-  // 注：fade 时间与 CSS transition 同步，render 完成后立即 remove 触发淡入
-  const app = document.getElementById('app');
-  if (app && !app.classList.contains('fading')) {
-    app.classList.add('fading');
-    await new Promise(r => setTimeout(r, 30));   // 等 fade-out 起步
-    try {
-      await fetchAll();
-      document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
-      const tpEl = document.getElementById('totalPoints');
-      if (tpEl) tpEl.textContent = points;
-      renderLevelBadge();
-      renderSideNav();
-      updateTrackingBadge();   // v5.14h.9：每次 render 都更新追踪角标（不依赖 nav='tracking'）
-      if (nav === 'overview') renderOverview();
-      else if (nav === 'today') renderTodayView();
-      else if (nav === 'tracking') renderTrackingView();
-      else renderListView();
-      renderDashboard();
-      checkEmergency();
-    } catch (e) {
-      console.error('render 失败', e);
-      let dbg = document.getElementById('_dbg');
-      if (!dbg) {
-        dbg = document.createElement('div');
-        dbg.id = '_dbg';
-        dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#1A2336;border:1px solid #c0392b;color:#EDE7D8;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
-        document.body.appendChild(dbg);
-      }
-      dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
-    } finally {
-      // 触发淡入（CSS transition 接管）
-      setTimeout(() => app && app.classList.remove('fading'), 10);
+  // v5.15.18：删掉原来"给 #app 加 .fading + await 30ms"的写法。
+  //   那段是**死代码** —— style.css 里只有 `.widget.fading`，根本没有 `#app.fading` 规则，
+  //   所谓"防闪过渡"从未生效，只白白拖慢 30ms。
+  //   真正的闪来自"整块 DOM 重建"，改由下面的内容区过渡 + 上面的数据签名一起解决。
+  const lvEl = document.getElementById('listView');
+  try {
+    await fetchAll();
+    document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
+    const tpEl = document.getElementById('totalPoints');
+    if (tpEl) tpEl.textContent = points;
+    renderLevelBadge();
+    renderSideNav();
+    updateTrackingBadge();   // v5.14h.9：每次 render 都更新追踪角标（不依赖 nav='tracking'）
+    // 内容区轻过渡：只做 3px 上移，**刻意不动 opacity**
+    //   （透明窗上做透明度渐变会露出窗口底色，反而又变成一次闪）
+    if (lvEl) {
+      lvEl.classList.remove('view-enter');
+      void lvEl.offsetWidth;   // 强制重排，让动画能重放
+      lvEl.classList.add('view-enter');
     }
+    if (nav === 'overview') renderOverview();
+    else if (nav === 'today') renderTodayView();
+    else if (nav === 'tracking') renderTrackingView();
+    else renderListView();
+    renderDashboard();
+    checkEmergency();
+  } catch (e) {
+    console.error('render 失败', e);
+    let dbg = document.getElementById('_dbg');
+    if (!dbg) {
+      dbg = document.createElement('div');
+      dbg.id = '_dbg';
+      dbg.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;background:#1A2336;border:1px solid #c0392b;color:#EDE7D8;padding:6px 10px;border-radius:4px;font-size:11px;max-width:380px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:monospace;';
+      document.body.appendChild(dbg);
+    }
+    dbg.textContent = '[render err] ' + (e.message || e) + '  points=' + (typeof points!=='undefined'?points:'?') + ' level=' + (typeof level!=='undefined'?(level?level.name:'null'):'?');
   }
 }
 
@@ -555,7 +580,11 @@ function renderTodayView() {
   // v5.15.13 P0：必须走 catOf()（它把 habit/repeat/note/milestone 和手机端的自定义
   //   category 都映射到 4 类）。旧实现直接读 t.category —— 手机端同步过来的任务
   //   category 是"学习/生活/工作"，不在 4 类里 → 整条被丢掉，boss 看到"24 项只显示 11 个"。
+  // v5.15.18 K1：需要置顶时，把追踪中的任务从各分类里摘出来，单独放到页面最上方
+  const pinnedTasks = _pinTracking ? todayTasks.filter(t => isTracking(t)) : [];
+  const pinnedSet = new Set(pinnedTasks.map(t => t.uuid));
   todayTasks.forEach(t => {
+    if (pinnedSet.has(t.uuid)) return;   // 已置顶 → 不在分类里重复出现
     const k = catOf(t);
     if (grouped[k]) grouped[k].push(t);
     else grouped.once.push(t);
@@ -571,6 +600,12 @@ function renderTodayView() {
     </div>
     <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
+  if (pinnedTasks.length) {
+    html += `<div class="cat-group pinned-tracking">
+      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span></div>
+      ${pinnedTasks.map(catTaskHtml).join('')}
+    </div>`;
+  }
   ['daily','time-limited','once','goal'].forEach(cat => {
     const list = grouped[cat];
     if (list.length === 0) return;
@@ -596,6 +631,8 @@ document.querySelectorAll('.nav-item').forEach(n => {
     // 历史任务 = 独立弹窗（不占用主视图）
     if (n.dataset.nav === 'archive') { openArchiveModal(); return; }
     nav = n.dataset.nav;
+    // v5.15.18 K1：重新进入"今日待办/总览" → 恢复追踪置顶（当次点追踪的"不置顶"只影响那一次）
+    if (nav === 'today' || nav === 'overview') _pinTracking = true;
     selectedUuid = null;
     document.getElementById('detailView').style.display = 'none';
     render();   // v5.13：先 render() 触发 fetchAll 刷新 tasks 数据，再找 first
@@ -619,7 +656,24 @@ function renderOverview() {
   document.getElementById('overviewView').style.display = '';
   document.getElementById('listView').style.display = 'none';
   const groups = { 'daily': [], 'goal': [], 'time-limited': [], 'once': [] };
-  for (const t of tasks) groups[catOf(t)].push(t);
+  // v5.15.18 K1：置顶的追踪任务单独放最上面那张卡，不进分类卡
+  const ovPinned = _pinTracking ? tasks.filter(t => isTracking(t)) : [];
+  const ovPinnedSet = new Set(ovPinned.map(t => t.uuid));
+  for (const t of tasks) {
+    if (ovPinnedSet.has(t.uuid)) continue;
+    groups[catOf(t)].push(t);
+  }
+  const trCard = document.getElementById('catCardTracking');
+  const trBox = document.getElementById('listTracking');
+  if (trCard && trBox) {
+    if (ovPinned.length) {
+      trCard.style.display = '';
+      trBox.innerHTML = ovPinned.map(t => catTaskHtml(t)).join('');
+      if (typeof initIcons === 'function') initIcons(trBox);
+    } else {
+      trCard.style.display = 'none';
+    }
+  }
 
   for (const cat of Object.keys(groups)) {
     const arr = groups[cat];
@@ -742,8 +796,12 @@ function timeMetaHtml(t) {
 }
 /** 三个圆形动作键（下面带功能文字）：取消追踪 / 推进 / 完成 */
 function rowActsHtml(t) {
-  // v5.15.12：第一个键按追踪状态切换 —— 未追踪时是「追踪」（可点），追踪中才是「取消」；
-  //   推进键在没有步骤时淡化且不可点（boss 明确要求）。
+  // v5.15.18 P1（boss）：任务行里的三个小按键（追踪/推进/完成）**不再显示** ——
+  //   老板反馈列表里操作易误触，且和挂件/详情页的同步链路慢，"把按键留在任务详情和挂件就好了"。
+  //   详情页（.dva）与挂件（widget.html 自带 .acts）的按键**保留**。
+  //   要恢复旧行为：删掉下面这行 return 即可。
+  return '';
+  // eslint-disable-next-line no-unreachable
   const tracking = isTracking(t);
   const noStep = !(t.step_total > 0);
   const first = tracking
@@ -1129,7 +1187,7 @@ window.openDetail = async function(uuid) {
     <span class="chip prio-${(t.priority||'m').charAt(0)}">${PRIO_LABEL[t.priority] || ''}</span>
     ${isTrk ? '<span class="chip tracking">追踪中</span>' : ''}
     ${isOverdue(t) ? `<span class="chip overdue">${svgIcon('alert', 10, 2.2)}${overdueText(t)}</span>` : ''}
-    ${t.count > 1 ? `<span class="chip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
+    ${t.count > 1 ? `<span class="chip" id="dvCountChip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
   `;
 
   body.innerHTML = `
@@ -1143,7 +1201,7 @@ window.openDetail = async function(uuid) {
     <div class="goal-box">
       <div class="goal-head">
         <span>▶ 任务步骤</span>
-        <span class="gh-progress">${doneSteps} / ${totalSteps || 0} 已完成</span>
+        ${totalSteps > 0 ? `<span class="gh-progress">${doneSteps} / ${totalSteps} 已完成</span>` : ''}
       </div>
       ${totalSteps === 0 ? '<div id="goalAddEntry" class="goal-item" onclick="addStep(\'' + t.uuid + '\')"><span class="g-play">' + svgIcon('plus',13,2.2) + '</span><span class="g-text" style="opacity:0.7">（尚未拆解步骤 · 点此添加）</span></div>' :
         steps.map(s => `<div class="goal-item ${s.status==='done'?'done':''}" onclick="toggleStep('${t.uuid}','${s.uuid}','${s.status}')" title="点击切换完成状态">
@@ -1162,8 +1220,8 @@ window.openDetail = async function(uuid) {
 
     <div class="reward-title">完成任务可获得</div>
     <div class="reward-row">
-      <div class="reward-item hl"><span class="reward-ico">${svgIcon('coin',15,1.8)}</span><span class="reward-num">+${t.reward_points||10} 积分</span></div>
-      <div class="reward-item"><span class="reward-ico">${svgIcon('trend',15,1.9)}</span><span class="reward-num">推进进度</span></div>
+      <div class="reward-item hl"><span class="reward-ico">${svgIcon('coin',20,1.8)}</span><span class="reward-num">+${t.reward_points||10} 积分</span></div>
+      <div class="reward-item"><span class="reward-ico">${svgIcon('trend',20,1.9)}</span><span class="reward-num">推进进度</span></div>
     </div>
 
     <div class="dv-acts">
@@ -1224,6 +1282,7 @@ window.trackTask = async function(uuid) {
     return;
   }
   await call('start_tracking', { taskUuid: uuid });
+  _pinTracking = false;   // v5.15.18 K1：当次不置顶（下次进页面才挪上去）
   await render();
   openDetail(uuid);
 };
@@ -1241,15 +1300,21 @@ window.completeTask = async function(uuid) {
   // v5.14h.4：次数任务未满（partial=true）→ 不关详情页（boss：用户可能一次点多次完成，要能连续点）
   const isPartial = r && r.partial === true && r.done_count !== undefined && r.count && r.done_count < r.count;
   if (!isPartial) closeDetail();
-  // 刷新主面板（积分/进度/列表）
-  await render();
   if (isPartial) {
-    // v5.15.12：未满额的次数任务每次点完成都给一个即时小提示（boss：没有增加提示）
+    // v5.15.18 B1（boss）：「次数任务完成中间次数的时候，任务详情会刷新一下，不要这一下刷新，
+    //   弹个获得积分提示就行」。
+    //   原实现是 await render()（整页重建）+ openDetail()（再建一次详情）→ 详情肉眼可见地闪一下。
+    //   改为：只静默取数（不碰 DOM）+ 就地改详情里的「次数 N/M」文本 + 弹提示。
+    await fetchAll();
+    const tpEl2 = document.getElementById('totalPoints');
+    if (tpEl2) tpEl2.textContent = points;
+    const chipEl = document.getElementById('dvCountChip');
+    if (chipEl) chipEl.textContent = '次数 ' + (r.done_count || 0) + '/' + r.count;
     showToast('进度 +1 · 已完成 ' + r.done_count + ' / ' + r.count + ' 次');
-    // 刷新详情页显示新 done_count / 进度（仍停留在详情页可继续点完成）
-    openDetail(uuid);
     return;
   }
+  // 刷新主面板（积分/进度/列表）
+  await render();
   // v5.12 P0：今日已打卡（already_done=true，防刷分）→ 不弹奖励、不写今日奖励
   if (r && r.already_done) {
     showToast('今日已完成 ✓');
@@ -1605,6 +1670,12 @@ function applyCatLayout() {
   else ddlWrap.style.display = 'none';
   document.getElementById('addDailyWrap').style.display = (cat === 'daily') ? '' : 'none';
   document.getElementById('addCountWrap').style.display = (cat === 'once') ? '' : 'none';
+  // v5.15.18 G2（boss 确认）：每日任务已有"每天提醒时间"（固定点循环提醒），
+  //   下面那套通用「提醒」（选端/方式/提前量）语义重复 → 类型=每日任务时整块隐藏。
+  const remWrap = document.getElementById('addRemindWrap');
+  if (remWrap) remWrap.style.display = (cat === 'daily') ? 'none' : '';
+  // v5.15.18 G1：每天提醒时间的"可输入"绑定（只绑一次）
+  if (cat === 'daily' && typeof _bindDailyTimeInput === 'function') _bindDailyTimeInput();
 }
 
 function addSelectCat(cat) {
@@ -2660,7 +2731,19 @@ function startApp() {
   setTimeout(render, 1000);
   // v5.15.12：已配对但当前未连接 → 启动后短时间内自动扫描重连（不用手动点「扫描设备」）
   if (settings.pairing) setTimeout(() => autoScanAndReconnect(2), 3000);
-  setInterval(render, 15000);
+  // v5.15.18 P0：15s 轮询改为"**数据变了才重绘**"。
+  //   原先是无条件 render() → 每 15 秒整块 DOM 重建一次，透明窗上就是一次可见的闪
+  //   （boss：「就算我什么都没做也有闪屏问题」—— 就是这里）。
+  //   现在先只取数据、比对签名；没变化直接返回，静止期零 DOM churn = 空闲闪根治。
+  setInterval(async () => {
+    try {
+      if (typeof fetchAll !== 'function') return;
+      const before = _dataSig();
+      await fetchAll();                 // 只读数据，不碰 DOM
+      if (_dataSig() === before) return; // 数据没变 → 什么都不做
+      render();
+    } catch (e) { /* 单次轮询失败不打扰用户，下轮再来 */ }
+  }, 15000);
   // v5.15.7：手机端改了数据 → Rust ws_loop 落库后 emit "sync-applied" → 立刻刷新
   //   （否则要等上面 15s 轮询；同时把手机端选的 emoji 头像映射成桌面 avatar_idx 实现头像互见）
   if (isTauriEnv && window.__TAURI__.event && window.__TAURI__.event.listen) {
