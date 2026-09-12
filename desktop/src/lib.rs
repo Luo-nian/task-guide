@@ -1566,7 +1566,10 @@ fn auto_reconnect_loop(
     let mut fail_count: i32 = 0;
     let mut pull_tick: i32 = 0;   // v5.15.18：每 3 次 ping（15s）做一次兜底全量拉取
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(5));   // v5.14g：8→5s 更快响应
+        // v5.15.19：断连期把轮询间隔从 5s 收到 2s —— 手机刚连上 WiFi 时要尽快抓到，
+        //   不能让用户等七八秒。连上后（fail_count==0）回落到 5s 省电。
+        let sleep_secs: u64 = if fail_count > 0 { 2 } else { 5 };
+        std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
         let cur_url = { url.lock().unwrap().clone() };
         if cur_url.is_empty() {
             // 未配对：清 fail（避免旧状态误导）
@@ -1576,10 +1579,13 @@ fn auto_reconnect_loop(
         let did = { device_id.lock().unwrap().clone() };
 
         // 1) ping 当前 url：通 → 清计数
+        // v5.15.19：连续失败时把 ping 超时从 3s 收到 1.5s —— 目标 IP 已失效时，
+        //   等待 3s 超时纯属浪费（每轮 5s 间隔 + 3s 超时 = 8s 才有一次扫描机会）。
+        let ping_timeout = if fail_count >= 3 { 1500 } else { 3000 };
         let base = sync::server_base(&cur_url);
         let alive = reqwest::blocking::Client::new()
             .get(format!("{}/api/ping", base))
-            .timeout(std::time::Duration::from_secs(3))
+            .timeout(std::time::Duration::from_millis(ping_timeout))
             .send()
             .map(|r| r.status().is_success())
             .unwrap_or(false);
@@ -1611,13 +1617,21 @@ fn auto_reconnect_loop(
         }
 
         // 2) ping 不通 → mDNS 重新发现（同一 network 自动连）
-        log::info!("配对目标不可达({}), 尝试 mDNS 重发现 deviceId={}", base, did);
+        //
+        // v5.15.19 根因修复（boss：「连上网后应短时间内自动扫描并连上，而不是等我手动点扫描设备」）：
+        //   旧实现每轮只扫 4s 就放弃，且失败后要再等 5s(ping超时)+4s 下一轮 ——
+        //   而 Android NSD 注册/广播有 1~5s 延迟，手机刚连上 WiFi 时那 4s 窗口极容易空手而归，
+        //   于是连续几轮扫不到 → 前端持续弹「手机不在网络」→ 用户以为坏了只能手动点。
+        //   改法：扫描窗口按失败轮次自适应放大（4s → 8s → 12s 封顶），
+        //   一旦发现过设备就回落到最短窗口（说明 mDNS 通道正常，不用长扫）。
+        let scan_secs: u64 = if fail_count >= 8 { 12 } else if fail_count >= 3 { 8 } else { 4 };
+        log::info!("配对目标不可达({}), 尝试 mDNS 重发现 deviceId={} (扫描 {}s)", base, did, scan_secs);
         let Ok(daemon) = ServiceDaemon::new() else { continue };
         let Ok(receiver) = daemon.browse("_taskguide._tcp.local.") else {
             let _ = daemon.shutdown();
             continue;
         };
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(scan_secs);
         let mut found: Option<String> = None;         // 候选 url（含 deviceId 匹配的优先）
         let mut found_no_id: Option<String> = None;    // 兜底：没有 deviceId 但服务存在
         while std::time::Instant::now() < deadline {

@@ -276,7 +276,9 @@ function applySettingsToUi() {
         const connected = await call('is_ws_connected');
         const peer = await call('get_ws_peer');
         if (connected) ps.textContent = '已配对 · 实时连接中：' + (peer || settings.pairing?.url || '');
-        else if (settings.pairing) ps.textContent = '已配对（缓存）· 当前未连接 — 点击下方"扫描设备"重连';
+        // v5.15.19：不再写"点击下方扫描设备重连" —— 现在会自动扫描重连，
+        //   提示改成"正在自动重连"，避免 boss 以为必须手点（旧文案正是误解来源）。
+        else if (settings.pairing) ps.textContent = '已配对（缓存）· 当前未连接 — 正在自动扫描重连…';
         else ps.textContent = '未配对';
       } catch(e) { /* 启动期 ignore */ }
     }, 3000);
@@ -2441,33 +2443,60 @@ document.getElementById('setPairBtn').addEventListener('click', async () => {
 
 // mDNS 自动发现手机
 /** v5.15.12：连上网后短时间内自动扫描并重连（boss：「应该有连上网后短时间内自动扫描的功能」）
- *  已配对 + 当前未连接时：每 2.5s 扫一次，发现即自动配对；最多 rounds 轮。 */
+ *  已配对 + 当前未连接时：每 2.5s 扫一次，发现即自动配对；最多 rounds 轮。
+ *  v5.15.19：rounds 语义放宽 —— 传 0/负数表示无限重试（由 autoConnectWatchdog 常驻调用）。 */
 async function autoScanAndReconnect(rounds) {
   if (window._autoScanBusy) return;
   window._autoScanBusy = true;
+  const infinite = !(rounds > 0);
   try {
-    for (let i = 0; i < rounds; i++) {
-      try { if (await call('is_ws_connected')) return; } catch (e) { }
+    for (let i = 0; infinite || i < rounds; i++) {
+      try { if (await call('is_ws_connected')) return true; } catch (e) { }
       try {
         const list = await call('discover_devices', { timeoutMs: 2500 });
         if (list && list.length) {
-          const d = list[0];
+          // v5.15.19：优先匹配已配对的 deviceId（同一台手机换了 IP 也能连回原配对的）
+          const wantDid = (settings.pairing && settings.pairing.deviceId) || '';
+          const d = (wantDid && list.find(x => x.deviceId === wantDid)) || list[0];
           await call('connect_server', { url: d.url, deviceId: d.deviceId || '' });
           settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
           saveSettings();
           persistSettingsServer();
-          const _nm = String(d.name || d.addr || '').split('._')[0].replace(/\.$/, '');
+          const _nm = String(d.deviceName || d.name || d.addr || '').split('._')[0].replace(/\.$/, '');
           showToast('已自动连接手机端' + (_nm ? '：' + _nm : ''));
           const ps = document.getElementById('setPairingStatus');
           if (ps) ps.textContent = '已配对：' + d.url;
-          return;
+          return true;
         }
       } catch (e) { }
       await new Promise(function (r) { setTimeout(r, 2500); });
     }
   } finally { window._autoScanBusy = false; }
+  return false;
 }
 window.autoScanAndReconnect = autoScanAndReconnect;
+
+// v5.15.19 根因修复（boss：「连上网后短时间自动扫描，手机也连上同一 WiFi 就自动连上；
+//   现在反而弹提示要我手动点扫描设备」）：
+//   旧实现的自动扫描只在【启动后 3s】和【打开设置页】两个时机各跑一轮，跑完就彻底不跑了。
+//   于是「启动时手机还没连上 WiFi / 电脑中途断网再恢复 / 手机WiFi重连」这些场景
+//   —— 也就是 boss 遇到的全部场景 —— 都不在扫描时机内，只剩一句「正在后台自动重连」的空提示。
+//   改为常驻看门狗：只要【已配对 && 未连接】，就持续自动扫描重连，直到连上为止（连上即静默停手）。
+//   注意：不与 Rust 侧 auto_reconnect_loop 冲突 —— autoScan 只用 mDNS 改 URL，
+//   真正连不上的判定仍由 Rust ping 决定，这里只是把「发现」这一步补上并前置。
+let _autoScanWatchTimer = null;
+async function autoScanWatchdog() {
+  // 没配对 / 已连上 → 什么都不做（避免无谓的 mDNS 组播打扰网络）
+  if (!settings.pairing) return;
+  try { if (await call('is_ws_connected')) return; } catch (e) { return; }
+  // 未连接 → 拿起扫描（autoScanAndReconnect 内部有 busy 锁，不会叠加）
+  autoScanAndReconnect(1);
+}
+function startAutoScanWatchdog() {
+  if (_autoScanWatchTimer) return;
+  _autoScanWatchTimer = setInterval(autoScanWatchdog, 5000);   // 每 5s 检查一次
+  autoScanWatchdog();                                          // 启动立即查一次
+}
 
 document.getElementById('setScanBtn').addEventListener('click', async () => {
   const wrap = document.getElementById('setDeviceListWrap');
@@ -2731,6 +2760,10 @@ function startApp() {
   setTimeout(render, 1000);
   // v5.15.12：已配对但当前未连接 → 启动后短时间内自动扫描重连（不用手动点「扫描设备」）
   if (settings.pairing) setTimeout(() => autoScanAndReconnect(2), 3000);
+  // v5.15.19：常驻自动扫描看门狗 —— 只要"已配对且未连接"就持续自动扫描，
+  //   覆盖「启动时手机还没上网 / 中途断网恢复 / 手机 WiFi 重连」等全部场景。
+  //   这是 boss 要的"连上网后短时间内自动扫描并自动连接"的真正落点。
+  startAutoScanWatchdog();
   // v5.15.18 P0：15s 轮询改为"**数据变了才重绘**"。
   //   原先是无条件 render() → 每 15 秒整块 DOM 重建一次，透明窗上就是一次可见的闪
   //   （boss：「就算我什么都没做也有闪屏问题」—— 就是这里）。
@@ -2803,14 +2836,15 @@ function onRemoteSyncApplied() {
 }
 
 // v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
+// v5.15.19：文案改为"正在自动重连"（不再暗示需要手动操作），并把提示间隔放宽到 60s。
 async function checkReconnectFail() {
   try {
     const v = await call('get_setting', { key: 'reconnect_fail' });
     if (v === '1') {
       const now = Date.now();
-      if (now - _lastReconnectToast > 30000) {   // 30s 提示一次防刷屏
+      if (now - _lastReconnectToast > 60000) {   // 60s 提示一次防刷屏（原来 30s）
         _lastReconnectToast = now;
-        showToast('⚠ 配对手机不在网络，正在后台自动重连…');
+        showToast('⚠ 手机暂时不在网络，正在自动扫描重连…');
       }
     }
   } catch (e) { /* 忽略 */ }
