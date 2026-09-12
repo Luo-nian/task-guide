@@ -49,7 +49,9 @@
     </button>
     <!-- v5.14g：boss 要求侧边栏显示追踪任务 -->
     <button class="nav-item" data-nav="tracking" title="追踪任务">
-      <span class="ico ico-tracking" data-icon="crosshair" data-icon-size="15"></span>
+      <!-- v5.15.21 R3（boss：把侧边栏上"追踪中任务"和"目标任务"的图标对调一下）——
+           原先追踪用 crosshair、目标用 goal，现在互换。 -->
+      <span class="ico ico-tracking" data-icon="goal" data-icon-size="15"></span>
       <span class="nav-tip">追踪</span>
       <span class="nav-count" id="trackingCount">0</span>
     </button>
@@ -58,7 +60,8 @@
       <span class="nav-tip">每日任务</span>
     </button>
     <button class="nav-item" data-nav="goal" title="目标任务">
-      <span class="ico ico-goal" data-icon="goal" data-icon-size="15"></span>
+      <!-- v5.15.21 R3：与「追踪」图标对调（原 goal → 现 crosshair） -->
+      <span class="ico ico-goal" data-icon="crosshair" data-icon-size="15"></span>
       <span class="nav-tip">目标任务</span>
     </button>
     <button class="nav-item" data-nav="time-limited" title="限时任务">

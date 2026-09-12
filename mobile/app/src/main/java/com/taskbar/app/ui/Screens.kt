@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,7 +72,8 @@ private val dateFmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 // 分区顺序：正在追踪 → 今日任务（待办）→ 习惯（放最下面）
 // 全部完成（普通任务清空 + 习惯都打卡）→ 主页显示随机语录
 /** v5.15.16：今日任务分组标题（与电脑端 titleMap 同口径） */
-private val CAT_FILTER_LABEL = mapOf(
+// v5.15.21 R4：改为 internal —— 日历视图组件（TaskCalendar.kt，独立文件）也要用这份分类中文名映射
+internal val CAT_FILTER_LABEL = mapOf(
     "daily" to "每日任务", "goal" to "目标任务",
     "time-limited" to "限时任务", "once" to "次数任务"
 )
@@ -816,31 +819,32 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
             }
         }
         // v5.15.16（M11）：追踪页也要有「取消追踪 / 推进」两个键
+        // v5.15.21 M9（boss：追踪页的取消追踪键和完成键还是以前的版本，改）——
+        //   旧实现是 TextButton + 灰色 ✕（ic_close），与主页/详情页早已统一的
+        //   「朱砂红实心靶心 = 取消追踪」「玉青勾 = 完成」「金箭头 = 推进」不一致。
+        //   这里改成同款圆形图标键（PressIcon），三处观感一致。
         val remaining = steps.count { it.status != StepStatus.DONE }
         Row(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // v5.15.21 M9b（boss：追踪键和完成键一列对齐一下，不然看着难受）——
+            //   旧版是 TextButton + 长度不同的文字（"取消追踪" vs "完成"），图标起点参差；
+            //   现在两个键都是 40dp 圆形（PressIcon 内 IconButton）+ 固定间距 + 整体右对齐，
+            //   图标自然落在同一条竖线上。左端 Spacer 不再需要（改用 End 对齐）。
+            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Spacer(Modifier.weight(1f))
-            // 取消追踪（灰蓝，与追踪键的天蓝区分）
-            TextButton(onClick = { vm.stopTracking(task.uuid) }) {
-                TGIcon(R.drawable.ic_close, contentDescription = null, tint = TGColors.InkMute, size = 16.dp)
-                Spacer(Modifier.width(4.dp))
-                Text("取消追踪", color = TGColors.InkMute, fontSize = 13.sp)
+            // 取消追踪：朱砂红实心靶心（追踪键镂空处填满）——与主页 TaskRow / HabitRow 一致
+            PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
+                TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 24.dp)
             }
-            // 推进 / 完成（只剩最后一步时变「完成」）
+            // 推进 / 完成：只剩最后一步（或无步骤）时直接变「完成」，与主页规则一致
             if (total == 0 || remaining <= 1) {
-                TextButton(onClick = { vm.completeTask(task.uuid) }) {
-                    TGIcon(R.drawable.ic_check_circle, contentDescription = null, tint = TGColors.Jade, size = 16.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("完成", color = TGColors.Jade, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 24.dp)
                 }
             } else {
-                TextButton(onClick = { vm.advanceStepByTask(task.uuid) }) {
-                    TGIcon(R.drawable.ic_forward, contentDescription = null, tint = TGColors.GoldDeep, size = 16.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("推进", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                PressIcon(onClick = { vm.advanceStepByTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 24.dp)
                 }
             }
         }
@@ -1091,6 +1095,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     var catFilter by remember { mutableStateOf("all") }
     var searchOn by remember { mutableStateOf(false) }
     var keyword by remember { mutableStateOf("") }
+    // v5.15.21 R4：列表 / 日历 切换
+    var calView by remember { mutableStateOf(false) }
     fun match(t: Task) = (keyword.isBlank() || t.title.contains(keyword, ignoreCase = true))
     fun byCat(list: List<Task>) = list.filter { catFilter == "all" || catKeyOf(it) == catFilter }
     val trackingF = byCat(tracking).filter(::match)
@@ -1113,6 +1119,22 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             Spacer(Modifier.width(4.dp))
             Text("所有任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
+            // v5.15.21 R4（boss：手机端要能日历形式查看所有任务）—— 列表 / 日历 切换
+            PressPill(onClick = { calView = !calView; if (calView) searchOn = false }) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(TGColors.Gold.copy(alpha = 0.16f))
+                        .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        if (calView) "列表" else "日历",
+                        color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Spacer(Modifier.width(6.dp))
             // 右上角搜索键（点开/收起搜索框）
             PressIcon(onClick = { searchOn = !searchOn; if (!searchOn) keyword = "" }) {
                 TGIcon(
@@ -1137,6 +1159,21 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
         CategoryFilterRow(catFilter, { catFilter = it })
         if (trackingF.isEmpty() && todoF.isEmpty() && futureF.isEmpty() && todayCheckedList.isEmpty()) {
             EmptyState(if (keyword.isNotBlank()) "没有匹配「" + keyword + "」的任务" else "还没有任何任务", Modifier.fillMaxSize())
+        } else if (calView) {
+            // v5.15.21 R4：日历视图（按截止/期限时间铺开，无时间则用创建时间）
+            val allForCal = (trackingF + todoF + futureF + todayCheckedList).distinctBy { it.uuid }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                TaskCalendarView(
+                    tasks = allForCal,
+                    dateOf = { it.dueAt ?: it.deadline ?: it.createdAt },
+                    onTaskClick = { navController.navigate("detail/${it.uuid}") },
+                    emptyHint = "这一天没有任务"
+                )
+            }
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1216,6 +1253,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
 @Composable
 fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     val archive by vm.archive.collectAsState()
+    // v5.15.21 R4：false=列表（记账式流水）｜true=日历视图
+    var calView by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
@@ -1226,9 +1265,39 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
             }
             Spacer(Modifier.width(4.dp))
             Text("历史任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            // v5.15.21 R4（boss：手机端要能日历形式查看历史任务）—— 列表 / 日历 切换
+            PressPill(onClick = { calView = !calView }) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(TGColors.Gold.copy(alpha = 0.16f))
+                        .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        if (calView) "列表" else "日历",
+                        color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
         if (archive.isEmpty()) {
             EmptyState("还没有已完成的任务\n完成的任务会自动收进这里", Modifier.fillMaxSize())
+        } else if (calView) {
+            // v5.15.21 R4：日历视图（按完成日期铺开）
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                TaskCalendarView(
+                    tasks = archive,
+                    dateOf = { it.doneAt ?: it.updatedAt },
+                    onTaskClick = { navController.navigate("detail/${it.uuid}") },
+                    emptyHint = "这一天没有完成的任务"
+                )
+            }
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),

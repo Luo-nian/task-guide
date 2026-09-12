@@ -399,6 +399,9 @@ body::after {
   box-shadow: 0 0 8px var(--gem-glow, rgba(201,162,39,0.8));
   flex-shrink: 0;
 }
+/* v5.15.21 修复：这里原本丢了选择器（属性裸露 → 整条规则被浏览器丢弃，
+   dash-greet-avatar 圆形底+金渐变失效）。补回。 */
+.dash-greet-avatar {
   border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
@@ -446,8 +449,13 @@ body::after {
    原来 title/meta 一行 + hint 紧跟一行，和下面的分组横幅挤在一起。
    给标题行加行高与下间距，hint 单独一行并留白。 */
 /* v5.15.21 D6（boss：每一栏的分类名称和旁边标语位置不对，标语应该是小字放下面）：
-   用 flex-basis:100% 强制换到第二行 → 变成"标题在上、小字标语在下"的层次。 */
-.vh-hint { color: var(--ink-mute); font-size: 11.5px; flex: 0 0 100%; margin: 1px 0 4px; letter-spacing: .3px; }
+   ⚠️ 不能在全局 .vh-hint 上写 flex-basis:100% ——
+   今日待办的 .vh-hint 位于 .lv-body（flex-direction:column）里，
+   column 方向下 100% 指**整列高度**，会把后面的任务全部挤出可视区
+   （即 boss 反馈的"待办任务栏一个任务都看不见"）。
+   所以只对 .view-head（行方向容器）内的 .vh-hint 做换行。 */
+.vh-hint { color: var(--ink-mute); font-size: 11.5px; display: block; margin: 1px 0 4px; letter-spacing: .3px; }
+.view-head .vh-hint { flex: 0 0 100%; margin: 1px 0 4px; }
 .list-view .list-view-header.today-view-header,
 .list-view .today-view-header { padding: 6px 2px 2px; align-items: baseline; }
 .list-view .today-view-header .vh-title { font-size: 17px; letter-spacing: .5px; }
@@ -974,7 +982,7 @@ body::after {
   box-shadow: inset 0 1px 0 rgba(255,220,140,0.25), 0 0 22px rgba(216,180,90,0.55), 0 5px 16px rgba(0,0,0,0.6); border-color: rgba(216,180,90,0.6); }
 .level-character.rank-lv10 { --rank-from: #0A0518; --rank-to: #000; --rank-ico: #FFE68A;
   box-shadow: inset 0 1px 0 rgba(255,220,140,0.32), 0 0 26px rgba(255,220,140,0.65), 0 5px 18px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
-}
+/* v5.15.21 修复：此处原本多一个 '}'（括号不平衡） */
 .level-info { flex: 1; min-width: 0; }
 .level-name { color: var(--ink-black); font-size: 19px; font-weight: 700; letter-spacing: 1px; }  /* v5.15.21 D1：16→19 深字，浅底上清晰 */
 .level-title { color: var(--ink-soft); font-size: 12.5px; margin-top: 6px; line-height: 1.5; }        /* v5.15.21 D1：副标同步加大 */
@@ -2605,8 +2613,11 @@ body { background-color: var(--bg-paper); }
 
 /* ===== v5.15.12：侧边栏数量角标更清晰（原来 9px 太小发虚）===== */
 .nav-count {
-  min-width: 18px; height: 16px;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.2px;
+  /* v5.15.21 D4 修复（boss：追踪中数量没加大）——
+     **这一处才是最终生效的定义**（在文件后段，覆盖了前面 284 行的同名规则）。
+     之前只改了前面那处 → 被这里覆盖 → 看起来"没变化"。现在两处同步放大。 */
+  min-width: 22px; height: 20px;
+  font-size: 13px; font-weight: 800; letter-spacing: 0.2px;
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow: 0 1px 2px rgba(90, 30, 20, 0.35);
   transform: translateZ(0);          /* 落在整数像素，减轻子像素模糊 */
