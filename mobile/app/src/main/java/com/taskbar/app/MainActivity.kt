@@ -243,13 +243,22 @@ fun MainApp() {
     // 完成庆祝弹层（游戏化正反馈：完成任务弹道具式积分/升级）
     val completion by vm.completion.collectAsState()
     completion?.let { ev ->
-        CompletionCelebration(
-            title = ev.title,
-            points = ev.points,
-            newLevel = ev.newLevel,
-            newLevelName = ev.newLevelName,
-            onDismiss = { vm.consumeCompletion() }
-        )
+        // v5.15.21 P1：次数任务 → 轻量自动消失提示；其余任务 → 原来的整屏庆祝
+        if (ev.lightweight) {
+            CompletionToast(
+                title = ev.title,
+                points = ev.points,
+                onDismiss = { vm.consumeCompletion() }
+            )
+        } else {
+            CompletionCelebration(
+                title = ev.title,
+                points = ev.points,
+                newLevel = ev.newLevel,
+                newLevelName = ev.newLevelName,
+                onDismiss = { vm.consumeCompletion() }
+            )
+        }
     }
 }
 

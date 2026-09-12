@@ -222,8 +222,9 @@ body::after {
 }
 .nav-item {
   position: relative;
-  /* v5.15.18 F2（boss）：侧边栏按键整体放大，44 → 50，图标也跟着更醒目 */
-  width: 50px; height: 50px;
+  /* v5.15.18 F2：44 → 50 */
+  /* v5.15.21 D4（boss：侧边栏按键还是有点小，再加大一点点）→ 50 → 54 */
+  width: 54px; height: 54px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 13px; cursor: pointer;
   color: var(--ink-mute);
@@ -282,13 +283,14 @@ body::after {
 /* v5.14g：追踪任务数量角标（红色） */
 .nav-count {
   position: absolute; right: 1px; top: 0;
-  /* v5.15.18 F1（boss）：角标数字"不够清晰" → 放大字号/尺寸 + 加描边提高对比 */
-  min-width: 19px; height: 17px;
-  padding: 0 5px;
+  /* v5.15.18 F1：放大字号/尺寸 + 描边 */
+  /* v5.15.21 D4（boss：追踪任务数量还是有点小）→ 19x17 → 22x20，字号 11.5→13 */
+  min-width: 22px; height: 20px;
+  padding: 0 6px;
   background: linear-gradient(160deg, #E06A5B, #C0392B);
   color: #fff;
-  font-size: 11.5px; font-weight: 800;
-  line-height: 17px;
+  font-size: 13px; font-weight: 800;
+  line-height: 20px;
   border: 1.5px solid #FFFDF5;
   box-shadow: 0 1px 3px rgba(140, 30, 20, 0.45);
   border-radius: 999px;
@@ -429,15 +431,23 @@ body::after {
 }
 .view-head {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px 6px;
-  border-bottom: 1px solid var(--border-soft);
+  /* v5.15.21 D6：允许换行，让标语落到标题下方（不再和标题挤同一行） */
+  flex-wrap: wrap;
+  padding: 9px 11px 7px;
+  /* v5.15.21 D2（boss：配色比重、各层分隔有问题）—— 标题区提亮成近白，
+     与下方米色分组头拉开层次；底边加重成明确的分隔线 */
+  background: rgba(255, 254, 250, 0.78);
+  border-bottom: 1px solid rgba(160, 128, 55, 0.42);
+  border-radius: 8px 8px 0 0;
   flex: 0 0 auto;
 }
 .vh-title { color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: 1.5px; }
 /* v5.15.18 I1（boss）：今日待办头部"排版很有问题，弄得松散一点"。
    原来 title/meta 一行 + hint 紧跟一行，和下面的分组横幅挤在一起。
    给标题行加行高与下间距，hint 单独一行并留白。 */
-.vh-hint { color: var(--ink-mute); font-size: 11.5px; display: block; margin: 6px 0 12px; letter-spacing: .3px; }
+/* v5.15.21 D6（boss：每一栏的分类名称和旁边标语位置不对，标语应该是小字放下面）：
+   用 flex-basis:100% 强制换到第二行 → 变成"标题在上、小字标语在下"的层次。 */
+.vh-hint { color: var(--ink-mute); font-size: 11.5px; flex: 0 0 100%; margin: 1px 0 4px; letter-spacing: .3px; }
 .list-view .list-view-header.today-view-header,
 .list-view .today-view-header { padding: 6px 2px 2px; align-items: baseline; }
 .list-view .today-view-header .vh-title { font-size: 17px; letter-spacing: .5px; }
@@ -479,6 +489,16 @@ body::after {
 .cat-card::before { left: 0; background: linear-gradient(90deg, var(--gold-light), transparent); }
 .cat-card::after  { right: 0; background: linear-gradient(270deg, var(--gold-light), transparent); }
 .cat-card:hover { box-shadow: var(--shadow-hover); }
+/* v5.15.21 D3（boss：把追踪中的任务和其他任务隔开，放个框框住）——
+   给追踪卡一个专属的天蓝描边 + 冷调底，与普通分类卡（米金）明确区分。 */
+#catCardTracking {
+  border: 1.5px solid rgba(112, 158, 208, 0.62);
+  background: linear-gradient(180deg, rgba(238, 247, 255, 0.96), rgba(252, 250, 243, 0.90));
+  box-shadow: 0 0 0 1px rgba(112, 158, 208, 0.16), var(--shadow-card);
+  margin-bottom: 10px;
+}
+#catCardTracking .cc-head { background: transparent; }
+#catCardTracking .cc-title { color: #35688F; }
 .cc-head {
   display: flex; align-items: center; gap: 5px;
   padding: 4px 8px 4px 10px;          /* 上下 padding 减 20% */
@@ -521,7 +541,8 @@ body::after {
   display: flex;
   align-items: center; gap: 5px;
   background: linear-gradient(90deg, rgba(255, 250, 225, 0.85), rgba(255, 245, 205, 0.55));
-  border: 1px solid var(--border-soft);
+  /* v5.15.21 M6（boss：任务栏要有边框，有边框了就加重一点点）—— 0.30 → 0.55 */
+  border: 1px solid rgba(160, 128, 55, 0.55);
   border-radius: 5px;
   padding: 4px 6px;                    /* 行高压矮 25% */
   cursor: pointer;
@@ -586,7 +607,8 @@ body::after {
 .list-task {
   display: flex; gap: 5px; align-items: center;
   background: linear-gradient(90deg, rgba(255, 250, 225, 0.85), rgba(255, 245, 205, 0.55));
-  border: 1px solid var(--border-soft);
+  /* v5.15.21 M6：边框加重，与 .cat-task 一致 */
+  border: 1px solid rgba(160, 128, 55, 0.55);
   border-radius: 6px; padding: 5px 7px;
   cursor: pointer;
   transition: all .15s;
@@ -910,10 +932,12 @@ body::after {
   background: linear-gradient(135deg, #FFFFFF, #F0E8D6);  /* 浅米底，破浪骑士 4 字清楚可见 */
   border: 1px solid var(--border-mid);
   border-radius: 10px;
-  padding: 12px 14px;
+  /* v5.15.21 D1（boss：等级图标那一栏太扁了，宽一点吧）—— 12→18 padding + 最小高度，整体加厚 */
+  padding: 18px;
+  min-height: 96px;
   box-shadow: var(--shadow-card);
   margin-bottom: 12px;
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 14px;
   position: relative;
   overflow: hidden;
 }
@@ -924,16 +948,17 @@ body::after {
   opacity: 0.6;
 }
 .level-character {
-  width: 52px; height: 52px;
+  /* v5.15.21 D1：52 → 64，配合加厚后的卡片 */
+  width: 64px; height: 64px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 30px;
+  font-size: 36px;
   --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
   background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
   color: var(--rank-ico);
   border-radius: 50%;
   box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.4), 0 4px 10px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 244, 208, 0.35);
-  flex: 0 0 52px;
+  flex: 0 0 64px;
 }
 /* v5.13j：level-character 10 档分档 */
 .level-character.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; }
@@ -951,8 +976,8 @@ body::after {
   box-shadow: inset 0 1px 0 rgba(255,220,140,0.32), 0 0 26px rgba(255,220,140,0.65), 0 5px 18px rgba(0,0,0,0.65); border-color: rgba(255,220,140,0.7); }
 }
 .level-info { flex: 1; min-width: 0; }
-.level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }  /* 深字，浅底上清晰 */
-.level-title { color: var(--ink-soft); font-size: 11.5px; margin-top: 3px; }
+.level-name { color: var(--ink-black); font-size: 19px; font-weight: 700; letter-spacing: 1px; }  /* v5.15.21 D1：16→19 深字，浅底上清晰 */
+.level-title { color: var(--ink-soft); font-size: 12.5px; margin-top: 6px; line-height: 1.5; }        /* v5.15.21 D1：副标同步加大 */
 /* 灰色问号图标（设计过：圆圈 + ？） */
 .level-q {
   width: 24px; height: 24px;
@@ -2417,14 +2442,14 @@ body { background-color: var(--bg-paper); }
   background: linear-gradient(90deg, rgba(255, 250, 225, 0.9), rgba(255, 246, 214, 0.6));
   border: 1px solid rgba(201, 162, 39, 0.22);
 }
-.cat-task:hover, .list-task:hover { background: var(--bar-hover); border-color: rgba(201, 162, 39, 0.45); box-shadow: 0 2px 8px rgba(110, 80, 30, 0.12); }
+.cat-task:hover, .list-task:hover { background: var(--bar-hover); border-color: rgba(201, 162, 39, 0.68); box-shadow: 0 2px 8px rgba(110, 80, 30, 0.12); }
 .cat-task.overdue, .list-task.overdue { border-color: rgba(184, 86, 56, 0.45); background: linear-gradient(90deg, rgba(255, 240, 235, 0.95), rgba(255, 248, 242, 0.7)); }
 .cat-task.overdue::before, .list-task.overdue::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; opacity: 1;
   background: var(--crimson); border-radius: 10px 0 0 10px;
 }
 .lt-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
-.ct-title { font-size: 12.5px; color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-title { font-size: 14px; color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* v5.15.21 M7：任务名放大，标签保持小字 */
 .ct-meta { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--ink-mute); white-space: nowrap; }
 .ct-over { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--crimson); font-weight: 600; white-space: nowrap; }
 /* 三个圆形按键 + 键下功能文字 */
@@ -2540,6 +2565,26 @@ body { background-color: var(--bg-paper); }
 .dva.disabled { cursor: default; }
 .dva.disabled .dva-b { opacity: 0.32; filter: grayscale(0.55); }
 .dva.disabled .dva-l { opacity: 0.5; }
+
+/* ===== v5.15.21 D8（boss：无步骤的任务直接舍弃中间的推进键，但其他两个键位置不变）=====
+   用不可见占位保住中间那一格 → 左右两键不会因少一个键而位移。 */
+.dva.ghost { visibility: hidden; pointer-events: none; }
+
+/* ===== v5.15.21 D7（boss：推进到最后一个步骤时，「推进」和「完成」合成一个椭圆按键，
+   按键范围和大小采用两个按键本来的位置）=====
+   宽度 126px = 48(键宽) × 2 + 30(容器 gap)，正好覆盖原来两个键占的位置，三键总宽不变。 */
+.dva-merged { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
+.dva-merged .dva-b {
+  width: 126px; height: 48px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: #FFFDF5;
+  background: linear-gradient(135deg, #F0A87A, #CE6A2B);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3), 0 2px 8px rgba(120, 90, 30, 0.22);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.dva-merged:hover .dva-b { transform: scale(1.03); box-shadow: 0 4px 14px rgba(201, 162, 39, 0.42); }
+.dva-merged:active .dva-b { transform: scale(0.96); }
+.dva-merged .dva-l { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
 /* 行内「追踪」键（未追踪状态）—— 玉青，与「取消」的淡蓝区分开 */
 .act[data-act="track"] .b { background: linear-gradient(135deg, #8FD3B4, #3F8A62); }

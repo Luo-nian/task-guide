@@ -335,6 +335,42 @@ fun RewardItem(icon: Int, label: String, highlight: Boolean = false) {
  * - 升级用冰川蓝→赤陶撞色横条（柔和高亮而非刺眼金色）
  * - 弹出/关闭 280ms 平滑缩放，2.8s 自动消失
  */
+/* 注：上面这段 KDoc 属于下方的 CompletionCelebration
+   （v5.15.21 在它前面插入了 CompletionToast，故此处不再重复 @Composable）。 */
+/** v5.15.21 P1（boss：次数任务完成后应该只弹出一个**不用点击**的积分获得提示）——
+ *  次数任务每次都弹整屏庆祝会打断操作，这里给一个轻量提示条：
+ *  无遮罩（不挡操作）、不需点击、约 1.6s 自动消失，位置贴底部操作区上方。 */
+@Composable
+fun CompletionToast(title: String, points: Int, onDismiss: () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+        kotlinx.coroutines.delay(1600)
+        onDismiss()
+    }
+    val a by animateFloatAsState(if (visible) 1f else 0f, tween(200))
+    val slide by animateFloatAsState(if (visible) 0f else 22f, tween(240))
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Row(
+            Modifier
+                .padding(bottom = 130.dp)
+                .graphicsLayer { alpha = a; translationY = slide }
+                .clip(RoundedCornerShape(14.dp))
+                .background(TGColors.Ink.copy(alpha = 0.94f))
+                .border(1.dp, TGColors.Gold.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("✓", color = TGColors.Jade, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(9.dp))
+            Column {
+                Text(title, color = Color(0xFFF6F1E6), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                Text("+$points 积分", color = TGColors.GoldLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @Composable
 fun CompletionCelebration(
     title: String,
@@ -498,6 +534,23 @@ fun CompletionCelebration(
                     Text(newLevelName ?: "", color = Color(0xFFF0E8D8), fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
                 }
             }
+            // v5.15.21 M2（boss：获得积分界面太单薄，加点东西但不能太繁杂）——
+            //   细金分隔线 + 一句短激励语，补"完成感"但不去抢任务名/积分的视觉主次。
+            //   用 remember 固定随机值，避免重组时文字乱跳。
+            Spacer(Modifier.height(18.dp))
+            Box(
+                Modifier
+                    .width(52.dp)
+                    .height(1.dp)
+                    .background(TGColors.Gold.copy(alpha = 0.32f))
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                remember { listOf("又清掉一件，节奏不错", "稳扎稳打，继续保持", "这一下很值", "干净利落").random() },
+                color = TGColors.GoldLight.copy(alpha = 0.8f),
+                fontSize = 12.sp,
+                letterSpacing = 1.sp
+            )
             Spacer(Modifier.height(14.dp))
             Text("点击任意位置关闭", color = Color(0xFFEDE4D3).copy(alpha = 0.5f), fontSize = 10.5.sp, letterSpacing = 1.sp)
         }

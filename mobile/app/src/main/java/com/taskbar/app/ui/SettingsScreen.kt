@@ -73,8 +73,8 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
     var reminderScope by remember { mutableStateOf(ReminderStrength.SCOPE_MOBILE) }
     var vibratePattern by remember { mutableStateOf(prefs.getString("reminder_vibrate_pattern", "0,300,200,300,200,300") ?: "0,300,200,300,200,300") }
     var ringUri by remember { mutableStateOf(prefs.getString("reminder_ring_uri", "") ?: "") }
-    var escalateOn by remember { mutableStateOf(prefs.getBoolean("reminder_escalate_enabled", true)) }
-    var escalateMinutes by remember { mutableIntStateOf(prefs.getInt("reminder_escalate_minutes", 5)) }
+    // v5.15.21 M3：已移除「未处理自动升级」功能 → 对应的 escalateOn / escalateMinutes
+    //   两个 state 与 saveEscalate() 一并删除（prefs 里的旧键保留，不主动清理，避免影响回退）。
 
     // 初始化：读 prefs 里的配置（兼容旧单值）
     LaunchedEffect(Unit) {
@@ -100,10 +100,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         vibratePattern = s
         prefs.edit().putString("reminder_vibrate_pattern", s).apply()
     }
-    fun saveEscalate(on: Boolean, mins: Int) {
-        escalateOn = on; escalateMinutes = mins
-        prefs.edit().putBoolean("reminder_escalate_enabled", on).putInt("reminder_escalate_minutes", mins).apply()
-    }
+    // v5.15.21 M3：saveEscalate() 已随「未处理自动升级」功能一并移除
 
     // 铃声选择器（系统 RingtonePicker → 回调拿 Uri）
     val ringtonePicker = rememberLauncherForActivityResult(
@@ -251,38 +248,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 }
             }
 
-            // 升级机制（按最高档只升一级）
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = TGColors.BorderSoft)
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("未处理自动升级", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Switch(checked = escalateOn, onCheckedChange = { saveEscalate(it, escalateMinutes) }, colors = SwitchDefaults.colors(checkedThumbColor = TGColors.Gold))
-            }
-            Text("提醒发出后 X 分钟你没处理，就按最高档升一级（如通知→振动）", color = TGColors.InkMute, fontSize = 11.sp)
-            if (escalateOn) {
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(5, 10, 30).forEach { m ->
-                        // 升级分钟 chip：深色背景确保开关打开后按键不消失
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(if (escalateMinutes == m) TGColors.Ink else TGColors.Selected.copy(alpha = 0.85f))
-                                .border(1.dp, if (escalateMinutes == m) TGColors.Gold else TGColors.GoldDeep.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-                                .clickable { saveEscalate(true, m) }
-                                .padding(horizontal = 18.dp, vertical = 10.dp)
-                        ) {
-                            Text(
-                                "$m 分钟",
-                                color = if (escalateMinutes == m) TGColors.GoldLight else TGColors.Ink,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
+            // v5.15.21 M3（boss：设置界面取消未处理自动升级功能）—— 整段已移除。
+            //   相关 state（escalateOn / escalateMinutes / saveEscalate）已不再渲染。
+            //   要恢复：从 git 历史取回本段 UI + 下面注释里的 state 声明。
         }
 
         Spacer(Modifier.height(10.dp))

@@ -721,9 +721,9 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 }
 
                 Spacer(Modifier.height(8.dp))
-                // 完成积分预览
+                // 完成积分预览（v5.15.21 P2：次数任务按降分规则显示真实可得积分）
                 Text(
-                    "完成任务可得 ${com.taskbar.app.data.model.RewardRules.forTask(type, priority)} 积分",
+                    "完成任务可得 ${com.taskbar.app.data.model.RewardRules.forTask(type, priority, milestoneTarget.toIntOrNull() ?: 1)} 积分",
                     color = TGColors.GoldDeep,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium

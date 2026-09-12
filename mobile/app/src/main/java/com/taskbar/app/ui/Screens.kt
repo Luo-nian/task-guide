@@ -181,7 +181,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                 TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
-                                    onJustTracked = { showPinSection = false })
+                                    onJustTracked = { showPinSection = false },
+                                    onJustStopped = { showPinSection = false })   // v5.15.21 P3
                             }
                         }
                         // 今日任务：按分类分组渲染（每日/目标/限时/次数）
@@ -191,12 +192,16 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                             }
                             items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
                                 if (task.type == TaskType.HABIT) {
-                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits, streak = streaksMap[task.uuid] ?: 0)
+                                    // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
+                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits, streak = streaksMap[task.uuid] ?: 0,
+                                        tracking = task.trackStatus == TrackStatus.TRACKING,
+                                        onJustStopped = { showPinSection = false })   // v5.15.21 P3
                                 } else {
                                     TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                         onClick = { navController.navigate("detail/${task.uuid}") },
                                         onEdit = { navController.navigate("edit/${task.uuid}") },
-                                        onJustTracked = { showPinSection = false })
+                                        onJustTracked = { showPinSection = false },
+                                    onJustStopped = { showPinSection = false })   // v5.15.21 P3
                                 }
                             }
                         }
@@ -210,7 +215,10 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 /** 习惯行：完成=今日打卡（卡片沉底显示"今日已完成"，明天自动重新出现） */
 // v5.15.2：streak 由父级聚合 Map 传入（原函数内每行 remember{vm.observeHabitStreak} 独立 Flow → 卡顿）
 @Composable
-private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0) {
+private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0, tracking: Boolean = false,
+                     /* v5.15.21 P3：取消追踪当次不重排（与追踪对称） */
+                     onJustStopped: () -> Unit = {}) {
+    val ctx = LocalContext.current
     val bg = if (checkedToday) TGColors.Jade.copy(alpha = 0.10f) else TGColors.Card
     Row(
         Modifier
@@ -219,7 +227,8 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             .background(bg)
             .border(
                 width = if (checkedToday) 1.dp else 1.dp,
-                color = if (checkedToday) TGColors.Jade.copy(alpha = 0.4f) else TGColors.BorderSoft,
+                /* v5.15.21 M6：任务行边框加重（BorderSoft → BorderMid） */
+                color = if (checkedToday) TGColors.Jade.copy(alpha = 0.45f) else TGColors.BorderMid,
                 shape = RoundedCornerShape(12.dp)
             )
             .padding(12.dp),
@@ -242,7 +251,7 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             Text(
                 task.title,
                 color = if (checkedToday) TGColors.InkMute else TGColors.Ink,
-                fontSize = 15.sp,
+                fontSize = 17.sp,   // v5.15.21 M7：15 → 17sp，比标签(11sp)明显更大
                 fontWeight = FontWeight.Medium,
                 textDecoration = if (checkedToday) TextDecoration.LineThrough else null
             )
@@ -259,18 +268,29 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                 Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         } else {
-            // 未完成：打卡按钮（自家风格：绿底白字圆角）。
-            // 必须用 PressPill（PressIcon 内部的 IconButton 会强制 40dp 宽 → 文字被裁成只剩提手旁「扌」）
-            PressPill(onClick = { vm.completeTask(task.uuid) }) {
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(TGColors.Jade)
-                        .padding(horizontal = 16.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("打卡", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            // v5.15.21 M1（boss：取消打卡键，每日任务也变成追踪键和推进/完成键）：
+            //   习惯任务没有步骤 → 按"无步骤"规则给两个键（追踪 + 完成），与 TaskRow 无步骤分支一致。
+            //   完成键就是原来的"打卡"语义（habit 的 completeTask 会写 habit_log），只是不再单独做一个绿胶囊。
+            // v5.15.21 M1：去掉 else 分支里重复声明的 ctx（已提到函数顶部）
+            PressIcon(onClick = {
+                if (tracking) {
+                    vm.stopTracking(task.uuid)
+                    onJustStopped()   // v5.15.21 P3
+                } else {
+                    vm.startTracking(task.uuid) { ok ->
+                        if (!ok) ToastHelper.show(ctx, "追踪已达上限，先取消别的追踪或在设置里调高上限")
+                    }
                 }
+            }) {
+                if (tracking) {
+                    TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 22.dp)
+                } else {
+                    TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
             }
         }
     }
@@ -316,6 +336,9 @@ private fun TaskRow(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onJustTracked: () -> Unit = {},
+    /* v5.15.21 P3（boss：取消追踪时不要一下放到其他位置）—— 与 onJustTracked 对称，
+       取消当次不重排，等下次进入主页再归位。 */
+    onJustStopped: () -> Unit = {},
     onPin: (() -> Unit)? = null,
     onUnpin: (() -> Unit)? = null
 ) {
@@ -351,7 +374,8 @@ private fun TaskRow(
             .background(TGColors.Card)
             .border(
                 width = if (tracking) 1.5.dp else 1.dp,
-                color = if (tracking) TGColors.Azure.copy(alpha = 0.65f) else TGColors.BorderSoft,
+                /* v5.15.21 M6：任务行边框加重 */
+                color = if (tracking) TGColors.Azure.copy(alpha = 0.65f) else TGColors.BorderMid,
                 shape = RoundedCornerShape(12.dp)
             )
             // v5.15.12：长按 320ms 触发编辑（系统默认 ~500ms，boss 觉得太久）
@@ -389,7 +413,8 @@ private fun TaskRow(
                 Text(
                     task.title,
                     color = TGColors.Ink,
-                    fontSize = 15.sp,
+                    /* v5.15.21 M7（boss：任务标签和任务名字比重不对，任务名应该大一点）15 → 17sp */
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -397,7 +422,7 @@ private fun TaskRow(
                 )
                 // 操作：停止追踪 + 推进/完成
                 // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
-                PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
+                PressIcon(onClick = { vm.stopTracking(task.uuid); onJustStopped() }) {   // v5.15.21 P3
                     TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
                 }
                 if (hasSteps) {
@@ -552,7 +577,7 @@ private fun TaskRow(
                 // 右侧操作：追踪 + 主操作（完成/推进）
                 if (tracking) {
                     // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
-                    PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
+                    PressIcon(onClick = { vm.stopTracking(task.uuid); onJustStopped() }) {   // v5.15.21 P3
                         TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
                     }
                 } else {
@@ -1009,7 +1034,7 @@ fun HabitScreen(vm: TaskViewModel) {
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(TGColors.Card)
-                            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(12.dp))
+                            .border(1.dp, TGColors.BorderMid, RoundedCornerShape(12.dp))   // v5.15.21 M6
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1225,7 +1250,7 @@ private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card.copy(alpha = 0.7f))
-            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(12.dp))
+            .border(1.dp, TGColors.BorderMid, RoundedCornerShape(12.dp))   // v5.15.21 M6
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -140,7 +140,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        if (uploading) "处理中…" else "选择头像",
+                        // v5.15.21 M4（boss：头像旁边的按键改为"上传头像"）
+                        if (uploading) "处理中…" else "上传头像",
                         color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
                     )
                 }

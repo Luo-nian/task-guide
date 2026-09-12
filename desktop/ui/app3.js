@@ -699,12 +699,16 @@ function catMapId(cat) {
 function catTaskHtml(t) {
   // v5.15.11：任务名优先（独占整行，超长省略号），时间只留一个胶囊，逾期换成"逾期 N"标记；
   //   右侧三个圆形动作键（取消追踪/推进/完成），键下带功能文字
+  // v5.15.21 P4（boss："任务栏右侧放一个小型动态的东西 星星 或者涟漪 现在怎么没有了"）：
+  //   菱形 .ct-diamond 的**渲染代码在某次重构时丢了**（CSS 一直在，元素没人生成 → 空转）。
+  //   这里补回来：仅 `.tracking` 时由 CSS 显示蓝色菱形 + rippleBreath 涟漪呼吸。
   return `<div class="cat-task ${isTracking(t) ? 'tracking' : ''} ${isOverdue(t) ? 'overdue' : ''}" data-uuid="${t.uuid}">
     <div class="lt-main" onclick="openDetail('${t.uuid}')">
       <span class="ct-title">${esc(t.title)}</span>
       ${timeMetaHtml(t)}
     </div>
     ${rowActsHtml(t)}
+    <span class="ct-diamond" aria-hidden="true"></span>
   </div>`;
 }
 
@@ -713,10 +717,18 @@ function catTaskHtml(t) {
 //   （boss：点侧边栏某一类什么都没有，右侧详情却有这个任务）。改为后端按分类全量取，前端缓存。
 let catTasks = {};
 function prefetchCatTasks(cat) {
-  if (catTasks[cat]) return;
+  // v5.15.21 D5 修复（boss 第二次反馈）：旧实现 `if (catTasks[cat]) return;` —— 空数组是 truthy，
+  //   于是"请求失败被 catch 写成 []"或"首次返回空"之后**永远不再重试**，分类页永久空白。
+  //   现在：只在拿到**非空**结果时才缓存；失败/空一律不写缓存 → 下次进入该分类会重新拉取。
+  const cached = catTasks[cat];
+  if (cached && cached.length) return;
   call('get_tasks_by_category', { category: cat })
-    .then(list => { catTasks[cat] = list || []; if (nav === cat) renderListView(); })
-    .catch(() => { catTasks[cat] = []; });
+    .then(list => {
+      if (list && list.length) catTasks[cat] = list;   // 只缓存有数据的结果
+      else delete catTasks[cat];                       // 空结果不缓存（可能是瞬时/后端未就绪）
+      if (nav === cat) renderListView();
+    })
+    .catch(() => { delete catTasks[cat]; });           // 失败不缓存，允许重试
 }
 function isTodayTask(t) {
   if (t.category === 'daily' || t.category === 'once') return true;
@@ -743,18 +755,20 @@ function renderListView() {
   const hintEl = document.getElementById('listViewHint');
 
   if (['daily', 'goal', 'time-limited', 'once'].includes(nav)) prefetchCatTasks(nav);
-  const catList = catTasks[nav];
+  // v5.15.21 D5：空数组视为"没数据"→ 回退到本地筛；且必须用 catOf()（会把自定义分类按 type
+  //   推断归类，与总览页同口径），不能再读 t.category 字段（自定义分类会被漏掉）。
+  const catList = (catTasks[nav] && catTasks[nav].length) ? catTasks[nav] : null;
   if (nav === 'daily') {
-    arr = catList || tasks.filter(t => t.category === 'daily');
+    arr = catList || tasks.filter(t => catOf(t) === 'daily');
     if (hintEl) hintEl.textContent = '每日 0 点自动刷新';
   } else if (nav === 'goal') {
-    arr = catList || tasks.filter(t => t.category === 'goal');
+    arr = catList || tasks.filter(t => catOf(t) === 'goal');
     if (hintEl) hintEl.textContent = '为目标坚持推进';
   } else if (nav === 'time-limited') {
-    arr = catList || tasks.filter(t => t.category === 'time-limited');
+    arr = catList || tasks.filter(t => catOf(t) === 'time-limited');
     if (hintEl) hintEl.textContent = '到期前记得完成';
   } else if (nav === 'once') {
-    arr = catList || tasks.filter(t => t.category === 'once');
+    arr = catList || tasks.filter(t => catOf(t) === 'once');
     if (hintEl) hintEl.textContent = '次数任务可重复完成';
   }
 
@@ -770,6 +784,7 @@ function renderListView() {
           ${timeMetaHtml(t)}
         </div>
         ${rowActsHtml(t)}
+        <span class="ct-diamond" aria-hidden="true"></span>
       </div>`).join('');
     if (typeof initIcons === 'function') initIcons(box);
   }
@@ -872,7 +887,15 @@ document.addEventListener('click', async function (ev) {
         showToast('进度 +1 · 已完成 ' + r.done_count + ' / ' + r.count + ' 次');
       } else {
         const pts = (r && r.habit && !r.final_exp) ? 5 : ((r && r.final_exp) || basePts);
-        showBless({ mode: 'reward', title: (before && before.title) || '任务完成', points: pts, isCritical: !!(r && r.is_critical) });
+        // v5.15.21 P1（boss：次数任务完成后应该只弹出一个**不用点击**的积分获得提示）——
+        //   次数任务（category=once 且 count>1）每次完成都很频繁，弹需要点击/带遮罩的
+        //   大弹窗会打断操作；改用自动消失的轻提示条。
+        const isCountTask = !!(before && before.category === 'once' && (before.count || 1) > 1);
+        if (isCountTask) {
+          showToast('✓ ' + ((before && before.title) || '任务') + ' 完成 · +' + pts + ' 积分');
+        } else {
+          showBless({ mode: 'reward', title: (before && before.title) || '任务完成', points: pts, isCritical: !!(r && r.is_critical) });
+        }
       }
     }
     await render();
@@ -1233,16 +1256,42 @@ window.openDetail = async function(uuid) {
         : `<div class="dva ${canTrack ? 'disabled' : ''}" data-dva="track" ${canTrack ? '' : `onclick="trackTask('${t.uuid}')"`}>
              <span class="dva-b track">${svgIcon('play', 19, 2.1)}</span>
              <span class="dva-l">${canTrack ? '追踪已满' : '追踪任务'}</span></div>`}
-      <div class="dva ${hasStep ? '' : 'disabled'}" data-dva="advance" ${hasStep ? `onclick="advanceFromDetail('${t.uuid}')"` : ''}>
-        <span class="dva-b adv">${svgIcon('arrow', 19, 2.3)}</span>
-        <span class="dva-l">${hasStep ? '推进步骤' : '无步骤'}</span></div>
+      ${!hasStep
+        /* v5.15.21 D8（boss：无步骤的任务直接舍弃中间的推进键，但其他两个键的位置不变）
+           —— 用不可见占位保住中间那一格，左右两键不会因少一个键而位移。 */
+        ? `<div class="dva ghost" aria-hidden="true"></div>`
+        : remainingSteps === 1
+          /* v5.15.21 D7（boss：点推进到最后一个步骤时，「推进」和「完成」合成一个椭圆按键，
+             按键范围和大小采用两个按键本来的位置）——
+             宽度 126px = 48(键) × 2 + 30(gap)，占位与原来两键完全一致，总宽不变。
+             点击 = 推进最后一步 + 直接完成任务（一步到位，不用点两次）。 */
+          ? `<div class="dva-merged" data-dva="done" onclick="advanceAndComplete('${t.uuid}')" title="这是最后一步：点此推进并完成任务">
+               <span class="dva-b">${svgIcon('arrow', 17, 2.4)}${svgIcon('check', 17, 2.8)}</span>
+               <span class="dva-l">推进并完成</span></div>`
+          : `<div class="dva" data-dva="advance" onclick="advanceFromDetail('${t.uuid}')">
+               <span class="dva-b adv">${svgIcon('arrow', 19, 2.3)}</span>
+               <span class="dva-l">推进步骤</span></div>`}
+      ${(hasStep && remainingSteps === 1) ? '' : `
       <div class="dva ${(hasStep && !allStepDone) ? 'disabled' : ''}" data-dva="done"
            ${(hasStep && !allStepDone) ? '' : `onclick="completeTask('${t.uuid}')"`}
            title="${(hasStep && !allStepDone) ? '还有 ' + remainingSteps + ' 个步骤未完成' : '完成任务'}">
         <span class="dva-b done">${svgIcon((hasStep && !allStepDone) ? 'lock' : 'check', 19, 2.6)}</span>
-        <span class="dva-l">${(hasStep && !allStepDone) ? '还需 ' + remainingSteps + ' 步' : '完成任务'}</span></div>
+        <span class="dva-l">${(hasStep && !allStepDone) ? '还需 ' + remainingSteps + ' 步' : '完成任务'}</span></div>`}
     </div>
   `;
+};
+
+/** v5.15.21 D7：合并键「推进并完成」—— 先把最后一步标记完成，再完成整个任务。
+ *  分成两步是因为后端 advance_step 只改步骤状态、不结算任务；
+ *  即便推进失败也继续尝试完成任务（避免卡死）。 */
+window.advanceAndComplete = async function (uuid) {
+  try {
+    const d = await call('get_task_detail', { taskUuid: uuid });
+    const steps = (d && d.steps) || [];
+    const next = steps.find(s => s.status !== 'done');
+    if (next) await call('advance_step', { stepUuid: next.uuid, taskUuid: uuid, status: 'done' });
+  } catch (e) { /* 推进失败不阻断完成 */ }
+  await completeTask(uuid);
 };
 
 /** 详情页「推进步骤」：把第一个未完成步骤置为 done */
@@ -1290,6 +1339,10 @@ window.trackTask = async function(uuid) {
 };
 window.untrackTask = async function(uuid) {
   await call('stop_tracking', { taskUuid: uuid });
+  // v5.15.21 P3（boss）：取消追踪也**不要当场把它挪回分类区** ——
+  //   与 trackTask 的"当次不置顶"对称：这一下只让它脱离置顶卡（视觉上消失追踪态），
+  //   位置保持到**下次进入该页面**才重排，否则用户点完取消，任务突然跳到别处会以为丢了。
+  _pinTracking = false;
   await render();
   openDetail(uuid);
 };

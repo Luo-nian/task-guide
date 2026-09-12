@@ -844,7 +844,8 @@ fn add_task(
     // 次数任务：前端传 count（如「喝水 8 次」），默认 1
     let cnt = count.unwrap_or(1).max(1);
     // 积分规则与手机端 RewardRules 对齐：类型基础分 + 优先级加成
-    let rp = reward_points_for(&typ, &prio);
+    // v5.15.21 P2：次数任务（cnt>1）降分
+    let rp = reward_points_for(&typ, &prio, cnt);
     {
         let db = state.db.lock().unwrap();
         // 限时任务同时写 deadline 与 due_at：前端渲染读 due_at，跨端同步用 deadline，
@@ -914,19 +915,27 @@ fn update_task(
     serde_json::json!({ "uuid": task_uuid, "status": "ok" })
 }
 
-fn reward_points_for(task_type: &str, priority: &str) -> i64 {
-    let base = match task_type {
+fn reward_points_for(task_type: &str, priority: &str, count: i64) -> i64 {
+    let mut base = match task_type {
         "repeat" => 10,
         "goal" => 15,
         "habit" => 5,
         "note" => 2,
         _ => 8, // once
     };
-    let bonus = match priority {
+    let mut bonus = match priority {
         "high" => 7,
         "low" => 1,
         _ => 4, // medium
     };
+    // v5.15.21 P2（boss：「次数任务的积分应该少一点」）：
+    //   次数任务（count > 1，如「喝水 8 次」）**可重复完成、每次都给分**，
+    //   若与单次型任务同分，累计收益过高不合理。
+    //   规则：基础分减半 + 优先级加成减半（中优先级 once: 8+4=12 → 4+2=6）。
+    if count > 1 {
+        base = (base / 2).max(1);
+        bonus = bonus / 2;
+    }
     base + bonus
 }
 
@@ -1167,8 +1176,28 @@ fn delay_task(state: tauri::State<AppState>, task_uuid: String, minutes: i64) ->
 #[tauri::command]
 fn get_tasks_by_category(state: tauri::State<AppState>, category: String) -> Vec<Task> {
     let db = state.db.lock().unwrap();
+    // v5.15.21 D5 根因修复（boss 第二次反馈："点侧边栏只看某个分类，没显示任何任务，
+    //   但详情/总览里其实有"）：
+    //   前端 catOf() 对**自定义分类**（如"工作"/"生活"）会按 type 推断归类
+    //   （habit→daily / goal→goal / repeat→time-limited / note|once→once），
+    //   而这里原先只 `WHERE category=?1` 精确匹配字段 → 自定义分类的任务永远查不到，
+    //   于是总览能看到（前端推断）、分类页却是"这一类暂时没有任务"。
+    //   现在 SQL 与前端 catOf 完全等价：字段命中 OR（字段不在白名单 且 type 推断命中）。
     let mut stmt = match db.prepare(
-        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total FROM tasks WHERE category=?1 AND deleted=0 AND track_status!='done' \
+        "SELECT tasks.*, (SELECT COUNT(*) FROM steps s WHERE s.task_uuid=tasks.uuid AND s.deleted=0) AS step_total \
+         FROM tasks WHERE deleted=0 AND track_status!='done' AND ( \
+             category = ?1 \
+             OR ( \
+                 COALESCE(category,'') NOT IN ('daily','goal','time-limited','once') \
+                 AND ?1 = CASE type \
+                     WHEN 'habit' THEN 'daily' \
+                     WHEN 'goal' THEN 'goal' \
+                     WHEN 'repeat' THEN 'time-limited' \
+                     WHEN 'note' THEN 'once' \
+                     WHEN 'once' THEN 'once' \
+                     ELSE 'once' END \
+             ) \
+         ) \
          ORDER BY COALESCE(due_at, deadline, created_at), CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END"
     ) { Ok(s) => s, Err(_) => return vec![] };
     let rows = stmt.query_map(params![&category], row_to_task);
@@ -1340,7 +1369,10 @@ fn seed_default_tasks(state: tauri::State<AppState>) -> serde_json::Value {
         let mut n = 0usize;
         for (title, cat, typ, prio, deadline, cnt, rp) in &items {
             let uuid = uuid::Uuid::new_v4().to_string();
-            let rp_v = rp.unwrap_or_else(|| reward_points_for(typ, prio));
+            let rp_v = {
+                let cv = cnt.unwrap_or(1);
+                rp.unwrap_or_else(|| reward_points_for(typ, prio, cv))
+            };
             let cnt_v = cnt.unwrap_or(1);
             let deadline_v = deadline.unwrap_or(now);
             // daily：due_at 与 deadline 都置 None；repeat：deadline = due_at 都置 deadline

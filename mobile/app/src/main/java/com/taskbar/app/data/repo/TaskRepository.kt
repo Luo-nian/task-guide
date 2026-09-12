@@ -144,15 +144,20 @@ class TaskRepository(private val db: AppDatabase) {
         target: Int = 1
     ): Task {
         val t = now()
-        // 积分按类型+优先级规则计算（RewardRules）
+        // v5.15.21 P2：次数任务（category=once）与里程碑共用 target 承载"次数"。
+        //   旧实现 `if (type == MILESTONE)` 只给里程碑保留 target → **次数任务的次数被丢掉**
+        //   （手机端新建「喝水 8 次」存进去只剩 1 次，与电脑端不一致）。
+        val cnt = if (type == com.taskbar.app.data.model.TaskType.MILESTONE || category == "once")
+            target.coerceAtLeast(1) else 1
+        // 积分按类型+优先级规则计算（RewardRules）；次数任务（cnt>1）按 v5.15.21 P2 降分
         val task = Task(
             uuid = newUuid(), type = type, title = title, desc = desc,
             category = category, priority = priority, dueAt = dueAt,
             repeatRule = repeatRule, deadline = deadline,
             trackStatus = TrackStatus.PENDING,
-            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(type, priority),
+            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(type, priority, cnt),
             reminderStrength = reminderStrength,
-            progress = 0, target = if (type == com.taskbar.app.data.model.TaskType.MILESTONE) target.coerceAtLeast(1) else 1,
+            progress = 0, target = cnt,
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
@@ -161,9 +166,9 @@ class TaskRepository(private val db: AppDatabase) {
     }
 
     suspend fun updateTask(task: Task) {
-        // 编辑时同步按当前类型/优先级重算积分，保证规则一致
+        // 编辑时同步按当前类型/优先级重算积分，保证规则一致；次数任务（target>1）按 P2 降分
         val recalculated = task.copy(
-            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(task.type, task.priority),
+            rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(task.type, task.priority, task.target),
             updatedAt = now()
         )
         taskDao.upsert(recalculated)

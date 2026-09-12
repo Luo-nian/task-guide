@@ -47,10 +47,29 @@ data class Task(
     @ColumnInfo(name = "deleted") val deleted: Int = 0,
     /** 提醒强度：null=跟随设置默认；standard=普通；repeat=5分钟重复3次；alarm=闹钟式 */
     @ColumnInfo(name = "reminder_strength") val reminderStrength: String? = null,
-    /** 里程碑任务当前进度（完成 N 次推进） */
-    @ColumnInfo(name = "progress") val progress: Int = 0,
-    /** 里程碑任务目标次数（progress >= target 才算真正完成） */
-    @ColumnInfo(name = "target") val target: Int = 1
+    /**
+     * v5.15.21 P2：**次数任务**语义对齐（电脑端叫 count / done_count）。
+     *
+     * 背景：手机端「次数」输入（TaskDetailScreen 次数框）与里程碑共用这两个字段，
+     * 电脑端同样用 `count` 承载"次数/目标次数"、`done_count` 承载"已完成次数"。
+     * **语义一致，只是 JSON 字段名不同** —— 电脑端是
+     * `serialize=snake_case, deserialize=camelCase`，且靠 `alias` 兜手机端的 target/progress。
+     *
+     * 问题：手机端序列化发 `target`/`progress`，电脑端能靠 alias 收下；
+     * 但**电脑端发的 `count`/`done_count` 手机端收不到**（Kotlin 属性名不匹配）→
+     * 次数任务的次数同步不过来，手机端算积分时也拿不到次数（双端积分不一致）。
+     *
+     * 修法：给这两个字段指定 `@SerialName`，使 JSON 名与电脑端**双向一致**。
+     * 数据库列名保持 target/progress 不变 → **无需 DB 迁移**。
+     */
+    /** 里程碑任务当前进度 / 次数任务已完成次数（JSON: done_count） */
+    @ColumnInfo(name = "progress")
+    @kotlinx.serialization.SerialName("done_count")
+    val progress: Int = 0,
+    /** 里程碑目标次数 / 次数任务总次数（JSON: count） */
+    @ColumnInfo(name = "target")
+    @kotlinx.serialization.SerialName("count")
+    val target: Int = 1
 )
 
 // ==================== 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 未受理升级） ====================
@@ -316,8 +335,19 @@ object RewardRules {
         else -> 4    // MEDIUM
     }
 
-    /** 完成任务可得积分 = 类型基础分 + 优先级加成 */
-    fun forTask(type: String, priority: String): Int = base(type) + bonus(priority)
+    /** 完成任务可得积分 = 类型基础分 + 优先级加成
+     *  v5.15.21 P2（boss：「次数任务的积分应该少一点」）：
+     *  次数任务（count > 1）可重复完成、每次都给分 → 基础分与优先级加成各减半
+     *  （中优先级 once: 8+4=12 → 4+2=6），避免累计收益过高。 */
+    fun forTask(type: String, priority: String, count: Int = 1): Int {
+        var b = base(type)
+        var p = bonus(priority)
+        if (count > 1) {
+            b = (b / 2).coerceAtLeast(1)
+            p /= 2
+        }
+        return b + p
+    }
 }
 
 // ==================== 法定节假日（中国，内置表；用于提醒顺延） ====================

@@ -62,7 +62,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         val title: String,
         val points: Int,
         val newLevel: Int? = null,
-        val newLevelName: String? = null
+        val newLevelName: String? = null,
+        /** v5.15.21 P1（boss：次数任务完成后只弹一个**不用点击**的积分提示）——
+         *  次数任务完成频繁，用无遮罩、自动消失的轻提示取代大弹窗。 */
+        val lightweight: Boolean = false
     )
     private val _completion = MutableStateFlow<CompletionEvent?>(null)
     val completion: StateFlow<CompletionEvent?> = _completion.asStateFlow()
@@ -124,7 +127,13 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             val before = com.taskbar.app.data.model.Levels.of(pointsBefore)
             val after = com.taskbar.app.data.model.Levels.of(points)
             val lv = if (after.lv > before.lv) after.lv to after.name else null
-            _completion.value = CompletionEvent(task.title, task.rewardPoints, lv?.first, lv?.second)
+            // v5.15.21 P1：次数任务（target>1，且不是里程碑）→ 轻量自动消失提示
+            val isCountTask = task.target > 1 &&
+                task.type != com.taskbar.app.data.model.TaskType.MILESTONE
+            _completion.value = CompletionEvent(
+                task.title, task.rewardPoints, lv?.first, lv?.second,
+                lightweight = isCountTask
+            )
         }
         refreshWidget()
     }
