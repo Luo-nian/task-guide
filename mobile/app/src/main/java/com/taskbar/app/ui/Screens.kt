@@ -58,6 +58,7 @@ import com.taskbar.app.data.model.StepStatus
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackStatus
+import com.taskbar.app.data.repo.LinkState
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1250,6 +1251,8 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
             "home" -> {
                 val points by vm.totalPoints.collectAsState()
                 val trackingCount by vm.tracking.collectAsState()
+                // v5.15.19：主页顶部也显示电脑端连接状态（boss「手机端没有显示已连接」）
+                val linked by LinkState.flow.collectAsState()
                 Row(
                     Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1262,6 +1265,14 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                         color = TGColors.Ink,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    // 连接状态小圆点：连上=鼠尾草绿，未连=极淡（不打扰，只做状态提示）
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (linked) TGColors.Jade else TGColors.InkFaint)
                     )
                     Spacer(Modifier.weight(1f))
                     // 积分 pill：米底深金字（克制，不抢眼）

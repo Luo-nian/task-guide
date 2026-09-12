@@ -9,6 +9,24 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub static WS_CONNECTED: AtomicBool = AtomicBool::new(false);
 // v5.15.7：主窗口 AppHandle（收到手机端变更后 emit 事件，前端立即重渲染而不是等 15s 轮询）
 pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+// v5.15.19：已配对的手机 deviceId（进程级）—— ws_loop 连上后要反 POST /api/pair，
+//   但 sync.rs 拿不到 AppState，故用 OnceLock 由 lib.rs 启动时写入。
+pub static PAIRED_DEVICE_ID: std::sync::OnceLock<Mutex<String>> = std::sync::OnceLock::new();
+
+/// 写入已配对手机的 deviceId（lib.rs 在加载/保存配对时调用）
+pub fn set_paired_device_id(id: &str) {
+    let cell = PAIRED_DEVICE_ID.get_or_init(|| Mutex::new(String::new()));
+    if let Ok(mut g) = cell.lock() {
+        *g = id.to_string();
+    }
+}
+
+/// 读取已配对手机的 deviceId（可能为空）
+fn read_device_id() -> Option<String> {
+    PAIRED_DEVICE_ID
+        .get()
+        .and_then(|cell| cell.lock().ok().map(|g| g.clone()))
+}
 use std::time::Duration;
 
 fn now_ms() -> i64 { chrono::Local::now().timestamp_millis() }
@@ -358,6 +376,28 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
             Ok((mut socket, _)) => {
                 log::info!("WS 已连接: {}", ws_url);
                 WS_CONNECTED.store(true, Ordering::Relaxed);
+                // v5.15.19：每次 WS 连上后都补一次 /api/pair —— 让手机端 settings.paired_device
+                //   有值。旧实现只在「手动配对那一刻」发一次，导致自动重连后手机端
+                //   paired_device 为空 → 手机端显示"未配对"（boss：手机端没显示已连接）。
+                //   同时补 deviceName —— 手机端 ApiRoutes 读的是 deviceName。
+                {
+                    let base2 = base.clone();
+                    std::thread::spawn(move || {
+                        if base2.is_empty() { return; }
+                        let pc_name = std::env::var("COMPUTERNAME")
+                            .unwrap_or_else(|_| "BOOS PC".to_string());
+                        let did = read_device_id().unwrap_or_default();
+                        let _ = reqwest::blocking::Client::new()
+                            .post(format!("{}/api/pair", base2))
+                            .timeout(std::time::Duration::from_secs(4))
+                            .json(&serde_json::json!({
+                                "name": pc_name,
+                                "deviceName": pc_name,
+                                "deviceId": did
+                            }))
+                            .send();
+                    });
+                }
                 // v5.15.7：刚连上时补一次全量拉取 —— ws 断开期间手机端的改动不会补发，
                 //   靠这次 pull 收敛（LWW 保证本地更新的不会被覆盖）
                 {

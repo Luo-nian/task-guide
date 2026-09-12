@@ -33,6 +33,7 @@ import com.taskbar.app.R
 import com.taskbar.app.TaskBarApp
 import com.taskbar.app.data.model.Levels
 import com.taskbar.app.data.model.ReminderStrength
+import com.taskbar.app.data.repo.LinkState
 import com.taskbar.app.notify.DailyReminderScheduler
 import com.taskbar.app.server.SyncService
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -318,10 +319,15 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
 
         Spacer(Modifier.height(10.dp))
         // 配对状态（桌面端 mDNS 自动发现后点配对即记录在此）
+        // v5.15.19：boss「手机端没有显示已连接」—— 新增【实时连接状态】。
+        //   原先只有"已配对"这一个历史记录，电脑端断开后依旧显示"已配对"，
+        //   用户无法判断当前到底连没连上。现在真值来源是 WS 连接本身（LinkState）。
         TGCard(Modifier.fillMaxWidth()) {
             Text("配对", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             var pairedDevice by remember { mutableStateOf("") }
+            // 实时连接状态：直接订阅 WS 连接状态流，电脑端连上/断开即时反映
+            val connected by LinkState.flow.collectAsState()
             val lifecycleOwner = LocalLifecycleOwner.current
             val coScope = rememberCoroutineScope()
             DisposableEffect(lifecycleOwner) {
@@ -349,16 +355,62 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     lifecycleOwner.lifecycle.removeObserver(observer)
                 }
             }
-            if (pairedDevice.isNotEmpty()) {
+            if (connected) {
+                // v5.15.19：以【实时连接】为准（不再依赖 paired_device 这条历史记录）。
+                //   电脑端连上 = 已连接；即便 paired_device 还没写进来也能正确显示。
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("已配对：$pairedDevice", color = TGColors.Jade, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(TGColors.Jade)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "已连接",
+                        color = TGColors.Jade,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
                     TextButton(onClick = {
                         vm.setSetting("paired_device", "")
                         pairedDevice = ""
                     }) { Text("解除配对", color = TGColors.Crimson) }
                 }
+                Text(
+                    if (pairedDevice.isNotEmpty()) "已配对：$pairedDevice · 实时同步中"
+                    else "电脑端已连上本机 · 实时同步中",
+                    color = TGColors.InkMute, fontSize = 11.sp
+                )
+            } else if (pairedDevice.isNotEmpty()) {
+                // 配对过但当前没连上 → 明确告诉用户"未连接"（旧版这里仍显示"已配对"，误导）
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(TGColors.InkFaint)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "未连接",
+                        color = TGColors.InkMute,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = {
+                        vm.setSetting("paired_device", "")
+                        pairedDevice = ""
+                    }) { Text("解除配对", color = TGColors.Crimson) }
+                }
+                Text(
+                    "已配对：$pairedDevice — 电脑端未连接，等待自动重连…",
+                    color = TGColors.InkMute, fontSize = 11.sp
+                )
             } else {
-                Text("未配对", color = TGColors.InkMute, fontSize = 13.sp)
+                Text("未连接", color = TGColors.InkMute, fontSize = 13.sp)
                 Spacer(Modifier.height(4.dp))
                 Text("电脑端在设置里点「扫描设备」即可自动发现本机并配对，无需手动输地址", color = TGColors.InkMute, fontSize = 11.sp)
             }

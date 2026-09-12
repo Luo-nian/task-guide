@@ -17,7 +17,10 @@ import com.taskbar.app.data.model.TrackCardItem
 import com.taskbar.app.data.model.TrackStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -26,6 +29,27 @@ object ChangeBus {
     private val _events = MutableSharedFlow<ChangeOp>(extraBufferCapacity = 128)
     val events = _events.asSharedFlow()
     fun tryEmit(op: ChangeOp) { _events.tryEmit(op) }
+}
+
+/**
+ * v5.15.19：电脑端实时连接状态（boss：「手机端没有显示已连接」）。
+ *
+ * 修复的问题：手机端原先只有"已配对（曾经配过谁）"这一个**历史记录**，
+ * 电脑端断开后依旧显示"已配对"，用户无法判断当前到底连没连上。
+ *
+ * WS 服务端（ApiRoutes 的 webSocket("/ws")）在电脑端连上/断开时会改动这里，
+ * 设置页订阅 [flow] 实时刷新。真值来源是 WS 连接本身，而不是缓存设置。
+ */
+object LinkState {
+    private val _flow = MutableStateFlow(false)
+
+    /** true = 至少有一个电脑端正通过 WS 连着本机 */
+    val flow: StateFlow<Boolean> = _flow.asStateFlow()
+
+    val isConnected: Boolean get() = _flow.value
+
+    /** 电脑端连接建立/断开时调用（由 WS 服务端维护引用计数） */
+    fun set(connected: Boolean) { _flow.value = connected }
 }
 
 class TaskRepository(private val db: AppDatabase) {

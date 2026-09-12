@@ -6,6 +6,7 @@ import com.taskbar.app.data.model.ChangesRequest
 import com.taskbar.app.data.model.IncrementalPayload
 import com.taskbar.app.data.model.WsMessage
 import com.taskbar.app.data.repo.ChangeBus
+import com.taskbar.app.data.repo.LinkState
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -31,6 +32,9 @@ import kotlinx.serialization.json.jsonPrimitive
 
 val appJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+/** v5.15.19：当前连接本机的电脑端 WS 数量（引用计数，归零才算"未连接"） */
+private val WS_CLIENT_COUNT = java.util.concurrent.atomic.AtomicInteger(0)
+
 /** Ktor 插件 + 路由配置 */
 fun Application.configureServer() {
     install(WebSockets)
@@ -42,10 +46,14 @@ fun Application.configureServer() {
         }
 
         // 配对状态：手机端记录已配对的电脑
+        // v5.15.19：额外返回 connected（WS 实时连接状态）—— 电脑在线 ≠ 曾经配对过
         get("/api/pair/status") {
             val app = TaskBarApp.instance
             val device = app.repo.getSetting("paired_device", "")
-            call.respondText { """{"paired":${if (device.isEmpty()) "false" else "true"},"device":"$device"}""" }
+            val connected = LinkState.isConnected
+            call.respondText {
+                """{"paired":${if (device.isEmpty()) "false" else "true"},"connected":$connected,"device":"$device"}"""
+            }
         }
 
         // 电脑端发起配对：记录配对设备名（桌面端名字）
@@ -110,6 +118,11 @@ fun Application.configureServer() {
         // WebSocket 实时推送
         webSocket("/ws") {
             val app = TaskBarApp.instance
+            // v5.15.19：电脑端连上 → 标记"已连接"。
+            //   用引用计数是因为可能同时有多个 WS（主窗 + 挂件重连瞬间的旧连接未完全释放），
+            //   直接置 true/false 会被后断开的那条错误覆盖成"未连接"。
+            WS_CLIENT_COUNT.incrementAndGet()
+            LinkState.set(true)
             // 子协程：接收电脑端上报的变更
             val incomingJob = launch {
                 for (frame in incoming) {
@@ -137,6 +150,11 @@ fun Application.configureServer() {
                 }
             } finally {
                 incomingJob.cancel()
+                // v5.15.19：连接结束 → 计数减一，归零才标记"未连接"
+                if (WS_CLIENT_COUNT.decrementAndGet() <= 0) {
+                    WS_CLIENT_COUNT.set(0)
+                    LinkState.set(false)
+                }
             }
         }
     }

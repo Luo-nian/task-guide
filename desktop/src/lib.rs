@@ -1004,7 +1004,9 @@ fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<
     // 手机 IP 变化后 auto_reconnect 靠它重新识别同一台手机。
     if let Some(did) = device_id {
         if !did.is_empty() {
-            *state.device_id.lock().unwrap() = did;
+            *state.device_id.lock().unwrap() = did.clone();
+            // v5.15.19：同步到进程级，供 ws_loop 反 POST /api/pair 时带上
+            sync::set_paired_device_id(&did);
         }
     }
     *state.server_url.lock().unwrap() = url.clone();
@@ -1452,7 +1454,9 @@ fn push_avatar_emoji(state: tauri::State<AppState>, emoji: String) {
 fn save_pairing(state: tauri::State<AppState>, url: String, device_id: String) {
     // v5.15 P0：持久化配对时把手机 deviceId 也存上（旧实现忽略了 device_id 参数）
     if !device_id.is_empty() {
-        *state.device_id.lock().unwrap() = device_id;
+        *state.device_id.lock().unwrap() = device_id.clone();
+        // v5.15.19：同步到进程级，供 ws_loop 反 POST /api/pair 时带上
+        sync::set_paired_device_id(&device_id);
     }
     *state.server_url.lock().unwrap() = url;
     save_pairing_to_disk(&state);
@@ -1545,6 +1549,8 @@ fn load_pairing_from_disk(state: &AppState) -> Option<String> {
     if let Some(d) = v.get("deviceId").and_then(|x| x.as_str()) {
         if !d.is_empty() {
             *state.device_id.lock().unwrap() = d.to_string();
+            // v5.15.19：同步到进程级，供 ws_loop 反 POST /api/pair 时带上
+            sync::set_paired_device_id(d);
         }
     }
     Some(url)
@@ -1664,15 +1670,23 @@ fn auto_reconnect_loop(
             fail_count = 0;
             { let conn = db.lock().unwrap(); let _ = conn.execute("UPDATE settings SET value='0' WHERE key='reconnect_fail'", []); }
             // 反 POST 手机 /api/pair（手机端 settings.paired_device 记录，让手机显示"已配对"）
+            // v5.15.19：① 补发 deviceName —— 手机端 ApiRoutes 读的是 deviceName，旧实现只发
+            //   name + deviceId → 手机端收到 null → 记成默认"电脑"（boss：手机端不显示已连接）。
+            //   ② 自动重连后也必须补发，否则手机端 paired_device 为空 → 显示"未配对"。
             let url_arc2 = url.clone();
             let did_arc2 = device_id.clone();
             let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
+            let pc_name2 = pc_name.clone();
             std::thread::spawn(move || {
                 let base = { sync::server_base(&url_arc2.lock().unwrap()) };
                 let _ = reqwest::blocking::Client::new()
                     .post(format!("{}/api/pair", base))
                     .timeout(std::time::Duration::from_secs(4))
-                    .json(&serde_json::json!({ "name": pc_name, "deviceId": did_arc2.lock().unwrap().clone() }))
+                    .json(&serde_json::json!({
+                        "name": pc_name2,
+                        "deviceName": pc_name2,
+                        "deviceId": did_arc2.lock().unwrap().clone()
+                    }))
                     .send();
             });
             // full_sync 拉手机数据到本地（last-write-wins 在 sync::full_sync 内做）
