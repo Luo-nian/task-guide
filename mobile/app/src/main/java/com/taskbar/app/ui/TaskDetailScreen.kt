@@ -1211,7 +1211,21 @@ private fun HabitCycleEditor(rule: String?, onChange: (String?) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(selected = mode == "daily", onClick = { mode = "daily"; onChange("daily") }, label = { Text("每天") })
         FilterChip(selected = mode == "every", onClick = { mode = "every"; onChange("every${everyN.coerceToInt(2)}d") }, label = { Text("隔天") })
-        FilterChip(selected = mode == "weekly", onClick = { mode = "weekly"; onChange(serializeWeekly(selectedDays)) }, label = { Text("每周") })
+        FilterChip(
+            selected = mode == "weekly",
+            onClick = {
+                mode = "weekly"
+                // v5.15.22 M8 修复（boss：每天→隔天→每周 会被重置回"每天"）——
+                //   根因：selectedDays 为空时 serializeWeekly() 返回 null，rule 变成 null；
+                //   而 parseRule(null) 是 "daily"，加上下面的 state 都是 remember(rule)，
+                //   key 从 "every2d" 变成 null → 三个 state 全部重建 → mode 被重置成 "daily"。
+                //   （所以"从每天直接点每周"看起来正常 —— 那时 rule 本来就是 null，key 没变。）
+                //   修法：空集时先填空一个默认选择（一/三/五），保证 rule 真变成 weekly:…
+                if (selectedDays.isEmpty()) selectedDays = setOf(1, 3, 5)
+                onChange(serializeWeekly(selectedDays))
+            },
+            label = { Text("每周") }
+        )
     }
     if (mode == "every") {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -158,28 +158,30 @@ fun TaskCalendarView(
                                 .clickable { selectedKey = key },
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "$dayNum",
-                                    color = if (isSel || n > 0) TGColors.Ink else TGColors.InkMute,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSel || isToday) FontWeight.Bold else FontWeight.Normal
-                                )
-                                if (n > 0) {
-                                    Spacer(Modifier.height(1.dp))
-                                    Box(
-                                        Modifier
-                                            .clip(RoundedCornerShape(999.dp))
-                                            .background(TGColors.GoldDeep.copy(alpha = if (isSel) 0.92f else 0.5f))
-                                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            "$n",
-                                            color = Color.White,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                            // 日期数字（格子居中）
+                            Text(
+                                "$dayNum",
+                                color = if (isSel || n > 0) TGColors.Ink else TGColors.InkMute,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSel || isToday) FontWeight.Bold else FontWeight.Normal
+                            )
+                            // v5.15.22 M2（boss：日期对应的任务数量有点小而且位置偏下）——
+                            //   角标从"日期下方居中"改到**格子右上角**，字号 9→10.5，颜色加深更醒目。
+                            if (n > 0) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 1.dp, end = 1.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(TGColors.GoldDeep.copy(alpha = if (isSel) 0.95f else 0.72f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        "$n",
+                                        color = Color.White,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }

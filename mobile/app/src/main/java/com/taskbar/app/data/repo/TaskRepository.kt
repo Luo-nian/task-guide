@@ -97,6 +97,14 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
+    /** v5.15.22：今天 0 点（毫秒）—— 每日任务跨天折算的基准（completeTask 也要用同一基准） */
+    private fun todayStart(): Long = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     /** 跨天的每日任务：在返回给 UI 之前折算成"今天的待办"（不落库） */
     private fun normalizeDailyReset(t: Task, dayStart: Long): Task {
         if (t.category != "daily" || t.trackStatus != TrackStatus.DONE) return t
@@ -214,8 +222,15 @@ class TaskRepository(private val db: AppDatabase) {
      *  habit 走"今日打卡 + 加积分"逻辑，不归档任务（明天继续在今日栏）。
      *  milestone 走"进度+1"逻辑，达到 target 才归档；未达到继续留在主页。 */
     suspend fun completeTask(uuid: String) {
-        val task = taskDao.getByUuid(uuid) ?: return
+        val raw = taskDao.getByUuid(uuid) ?: return
         val t = now()
+        // v5.15.22 M10 修复（boss：「学英语10分钟」点完成只弹积分、任务还挂着）——
+        //   根因：每日任务（category=daily）跨天后，normalizeDailyReset 只在**读取时**把它折算回
+        //   "今天的待办"（不落库），所以 DB 里它仍是 DONE；直接走下面的
+        //   `if (trackStatus == DONE) return` 会**静默提前返回**（不加积分、不改状态），
+        //   而 VM 的弹窗是无条件设置的 → 用户看到"弹了积分但任务没动"。
+        //   这里先把 daily 任务按同一条规则折算回未完成，再走正常完成流程。
+        val task = normalizeDailyReset(raw, todayStart())
         if (task.type == TaskType.HABIT) {
             // 习惯：今日已打卡则不再处理；写 habit_log + 加积分，任务保持非 done
             val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(t))

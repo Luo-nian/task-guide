@@ -121,9 +121,13 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         val task = repo.getTask(uuid)
         val pointsBefore = repo.getTotalPoints()
         repo.completeTask(uuid)
+        val points = repo.getTotalPoints()
         // 完成庆祝：弹层显示获得积分 + 升级信息（层层递进正反馈）
-        if (task != null) {
-            val points = repo.getTotalPoints()
+        // v5.15.22 M10（boss：点完成只弹积分、任务还挂着）——
+        //   原先是**无条件**弹窗（只要 task 不为 null），于是点一个"其实已完成/今日已打卡"的任务，
+        //   repo 内部静默 return 不加分，界面却照样弹"获得积分"，让人以为完成了。
+        //   现在只有积分**真的增加**才弹，并且显示的是实际增量而非任务标称值。
+        if (task != null && points > pointsBefore) {
             val before = com.taskbar.app.data.model.Levels.of(pointsBefore)
             val after = com.taskbar.app.data.model.Levels.of(points)
             val lv = if (after.lv > before.lv) after.lv to after.name else null
@@ -131,7 +135,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             val isCountTask = task.target > 1 &&
                 task.type != com.taskbar.app.data.model.TaskType.MILESTONE
             _completion.value = CompletionEvent(
-                task.title, task.rewardPoints, lv?.first, lv?.second,
+                task.title, points - pointsBefore, lv?.first, lv?.second,
                 lightweight = isCountTask
             )
         }

@@ -1254,7 +1254,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
 fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     val archive by vm.archive.collectAsState()
     // v5.15.21 R4：false=列表（记账式流水）｜true=日历视图
-    var calView by remember { mutableStateOf(false) }
+    // v5.15.22 M1（boss：历史任务应该是默认日历形式）→ 初值改 true
+    var calView by remember { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
