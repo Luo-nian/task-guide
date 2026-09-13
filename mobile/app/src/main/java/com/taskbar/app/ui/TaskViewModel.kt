@@ -7,6 +7,7 @@ import com.taskbar.app.TaskBarApp
 import com.taskbar.app.data.model.HabitLog
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.repo.HabitStat
 import com.taskbar.app.data.repo.TaskRepository
 import com.taskbar.app.widget.TrackWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -127,6 +128,15 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    /**
+     * v5.15.24 F11：撤销批量删除（Undo 用）。
+     * 只恢复传入的这一批 uuid —— 不读"最近删除"，避免撤销误伤其他任务。
+     */
+    fun undeleteTasks(uuids: List<String>) = viewModelScope.launch {
+        repo.undeleteTasks(uuids)
+        refreshWidget()
+    }
+
     /** 开始追踪；已达上限返回 false（UI 据此弹提示） */
     fun startTracking(uuid: String, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
         val ok = repo.startTracking(uuid)
@@ -237,6 +247,13 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     /** v5.15.2：全习惯 streak 聚合 map（HabitScreen/TaskListScreen 一次订阅，替代每行独立 Flow） */
     val allHabitStreaks: StateFlow<Map<String, Int>> = repo.observeAllHabitStreaks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /**
+     * v5.15.24 F1/F6：习惯统计（连续天数 + 强度分）。
+     * 强度分 = Loop Habit Score 式指数衰减，纯计算不落库 → 双端无 schema/同步风险。
+     */
+    val allHabitStats: StateFlow<Map<String, HabitStat>> = repo.observeAllHabitStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     suspend fun habitStreak(taskUuid: String) = repo.habitStreak(taskUuid)

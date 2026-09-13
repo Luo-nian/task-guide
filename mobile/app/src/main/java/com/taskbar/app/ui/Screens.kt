@@ -54,6 +54,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -144,7 +149,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 // 今日已打卡的习惯 uuid 集合（订阅 habit_logs Flow，点完卡后 UI 立刻更新）
                 val checkedHabits by vm.todayCheckedHabits.collectAsState()
                 // v5.15.2：聚合 streak（HabitRow 不再每行独立 Flow → 切换卡顿优化）
-                val streaksMap by vm.allHabitStreaks.collectAsState()
+                val habitStats by vm.allHabitStats.collectAsState()
                 // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时追踪任务混在列表里
                 // v5.15.16（boss）：每日任务打完卡当天就不再留在主页（明天自动重新出现）
                 val todo = (if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING } else tasks)
@@ -201,7 +206,9 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                             items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
                                 if (task.type == TaskType.HABIT) {
                                     // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
-                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits, streak = streaksMap[task.uuid] ?: 0,
+                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
+                                        streak = (habitStats[task.uuid]?.streak ?: 0),
+                                        strength = (habitStats[task.uuid]?.strength ?: 0),
                                         tracking = task.trackStatus == TrackStatus.TRACKING,
                                         onJustStopped = { showPinSection = false })   // v5.15.21 P3
                                 } else {
@@ -225,6 +232,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0, tracking: Boolean = false,
+                     /* v5.15.24 F1：习惯强度分（0..100） */
+                     strength: Int = 0,
                      /* v5.15.21 P3：取消追踪当次不重排（与追踪对称） */
                      onJustStopped: () -> Unit = {},
                      // v5.15.23 M11：多选支持
@@ -279,10 +288,15 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
         Column(Modifier.weight(1f)) {
             // v5.15.23 V2：把「习惯」小标签 + 连续天数合并成一句话，减少每行的小元素
             Text(
-                if (checkedToday) "习惯 · 今日已打卡 · 连续 $streak 天" else "习惯 · 连续 $streak 天",
+                // v5.15.24 F1b：加了强度分后整行会超宽换行（"81%"被挤到第二行）——
+                //   去掉"今日已打卡"（状态已由左侧绿方块 + 右侧绿勾 + 玉青描边表达），
+                //   并强制单行，极端天数也不会撑破卡片。
+                "习惯 · 连续 $streak 天 · 强度 $strength%",
                 color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -1090,7 +1104,7 @@ fun HabitScreen(vm: TaskViewModel) {
     val ctx = LocalContext.current
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     // v5.15.2：切换卡顿优化 —— 整页只订阅 2 个聚合 Flow（原每行独立 observeHabitStreak Flow + DB 查询）
-    val streaks by vm.allHabitStreaks.collectAsState()
+    val habitStats by vm.allHabitStats.collectAsState()
     val checkedSet by vm.todayCheckedHabits.collectAsState()
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
@@ -1100,7 +1114,9 @@ fun HabitScreen(vm: TaskViewModel) {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(habits, key = { it.uuid }) { habit ->
-                    val streak = streaks[habit.uuid] ?: 0
+                    val stat = habitStats[habit.uuid]
+                    val streak = stat?.streak ?: 0
+                    val strength = stat?.strength ?: 0
                     val checkedToday = habit.uuid in checkedSet
                     val scope = rememberCoroutineScope()
                     Row(
@@ -1115,9 +1131,12 @@ fun HabitScreen(vm: TaskViewModel) {
                         Column(Modifier.weight(1f)) {
                             Text(habit.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                             Text(
-                                if (checkedToday) "今日已打卡 · 连续 $streak 天" else "连续 $streak 天",
+                                // v5.15.24 F1b：同样去掉"今日已打卡"避免换行（状态已用绿勾表达）
+                                "连续 $streak 天 · 强度 $strength%",
                                 color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Button(
@@ -1155,7 +1174,7 @@ fun HabitScreen(vm: TaskViewModel) {
 fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val ctx = LocalContext.current
     val stepsByUuid by vm.stepsByUuid.collectAsState()
-    val streaks by vm.allHabitStreaks.collectAsState()
+    val habitStats by vm.allHabitStats.collectAsState()
     // v5.15.23 M6/M7（boss：点"目标/限时"分类日历就没了；每日任务也有点乱）——
     //   数据源换成"仓库视图"：全部未删除任务（含逾期/未来/自定义分类的目标限时，
     //   以及今天已打卡的习惯），并逐行做过每日型折算。
@@ -1184,6 +1203,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val ms = remember { MultiSelectState() }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
+    // v5.15.24 F11（调研 3.2）：批量操作后的滑入式撤销快照（只记这一批 uuid，避免撤销误伤）
+    var undoSnap by remember { mutableStateOf<UndoSnap?>(null) }
     fun match(t: Task) = (keyword.isBlank() || t.title.contains(keyword, ignoreCase = true))
     fun byCat(list: List<Task>) = list.filter { catFilter == "all" || catKeyOf(it) == catFilter }
     val trackingF = byCat(tracking).filter(::match)
@@ -1202,6 +1223,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
         if (futureF.isNotEmpty()) { add(null); futureF.forEach { add(it.uuid) } }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // 顶栏：返回 + 标题 + 右上角搜索
         Row(
@@ -1212,7 +1234,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
             Spacer(Modifier.width(4.dp))
-            // v5.15.23 M11b：多选时标题位让给计数（顶栏窄，按钮才不会被挤成两行）
+            // v5.15.23 M11b：多选时标题位给计数（顶栏窄，按钮才不会被挤成两行）
             Text(
                 if (ms.selecting) "已选 ${ms.ids.size}" else "所有任务",
                 color = TGColors.Ink,
@@ -1292,8 +1314,19 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     // v5.15.22 M9：日历点任务 → 只读详情（boss：不能有任何功能按键，防刷分）
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
                     // v5.15.23 M6c：日历下方的当日清单要能一眼分清"已完成/未完成"
-                    //   （之前只显示任务名 + 分类，混在一起看不出状态）
-                    statusOf = { t -> if (t.trackStatus == TrackStatus.DONE) "已完成" else "未完成" },
+                    // v5.15.24 F3b（真 bug）：习惯打卡后 trackStatus 仍是 pending ——
+                    //   之前只看 trackStatus，导致今天已打卡的习惯在日历清单里被标成"未完成"
+                    //   （列表页显示的是绿勾"已完成"，两处矛盾），且"整日清空 → 玉青"永远不亮。
+                    //   现在与列表页统一走 todayCheckedHabits。
+                    statusOf = { t ->
+                        if (t.trackStatus == TrackStatus.DONE ||
+                            (t.type == TaskType.HABIT && t.uuid in todayCheckedHabits)
+                        ) "已完成" else "未完成"
+                    },
+                    doneOf = { t ->
+                        t.trackStatus == TrackStatus.DONE ||
+                            (t.type == TaskType.HABIT && t.uuid in todayCheckedHabits)
+                    },
                     emptyHint = "这一天没有任务"
                 )
             }
@@ -1332,7 +1365,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     items(trackingF, key = { "t-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
-                                streak = streaks[task.uuid] ?: 0, tracking = true,
+                                streak = (habitStats[task.uuid]?.streak ?: 0),
+                                strength = (habitStats[task.uuid]?.strength ?: 0), tracking = true,
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },
@@ -1351,7 +1385,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (todayCheckedList.isNotEmpty()) {
                     item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
                     items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
-                        HabitRow(task, vm, checkedToday = true, streak = streaks[task.uuid] ?: 0,
+                        HabitRow(task, vm, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
+ strength = (habitStats[task.uuid]?.strength ?: 0),
                             selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                             onToggleSelect = { ms.toggle(task.uuid) },
                             onLongSelect = { ms.begin(task.uuid) },
@@ -1365,7 +1400,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             // v5.15.23 M7/M8：每日任务在仓库页也按习惯行渲染（今日打卡/连续天数），
                             //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
-                                streak = streaks[task.uuid] ?: 0,
+                                streak = (habitStats[task.uuid]?.streak ?: 0),
+                                strength = (habitStats[task.uuid]?.strength ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },
@@ -1386,7 +1422,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     items(futureF, key = { "f-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
-                                streak = streaks[task.uuid] ?: 0,
+                                streak = (habitStats[task.uuid]?.streak ?: 0),
+                                strength = (habitStats[task.uuid]?.strength ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },
@@ -1407,17 +1444,59 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
         }
     }
 
+    // v5.15.24 F11：撤销条 —— 从底部滑入，6s 未操作自动消失
+    AnimatedVisibility(
+        visible = undoSnap != null,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp, start = 16.dp, end = 16.dp),
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut()
+    ) {
+        val snap = undoSnap
+        if (snap != null) {
+            LaunchedEffect(snap) {
+                kotlinx.coroutines.delay(6000)
+                if (undoSnap === snap) undoSnap = null
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(TGColors.Ink.copy(alpha = 0.94f))
+                    .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    snap.text,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = {
+                    if (snap.wasDelete) vm.undeleteTasks(snap.uuids) else vm.deleteTasks(snap.uuids)
+                    undoSnap = null
+                }) {
+                    Text("撤销", color = TGColors.Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { undoSnap = null }) {
+                    Text("知道了", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                }
+            }
+        }
+    }
+    }
+
     // v5.15.23 M11：批量【取消（删除）】/【恢复】的二次确认弹窗
     if (confirmDelete) {
         TGConfirmDialog(
             title = "取消这 ${ms.ids.size} 个任务？",
-            message = "将删除选中的任务（两端一起移除），此操作不可撤销。",
+            message = "将删除选中的任务（两端一起移除）；操作后底部会出现「撤销」。",
             confirmText = "确认取消",
             confirmColor = TGColors.Crimson,
             onConfirm = {
                 val list = ms.ids.toList()
                 vm.deleteTasks(list)
-                ToastHelper.show(ctx, "已取消 " + list.size + " 个任务")
+                // v5.15.24 F11：不再用 Toast，改为底部撤销条（撤销 = 恢复这批 uuid）
+                undoSnap = UndoSnap(list, wasDelete = true, text = "已取消 " + list.size + " 个任务")
                 confirmDelete = false
                 ms.exit()
             },
@@ -1434,7 +1513,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 val list = ms.ids.toList()
                 val overdue = all.filter { it.uuid in list && it.trackStatus != TrackStatus.DONE }
                 vm.restoreTasks(list, overdueHalf = overdue.isNotEmpty())
-                ToastHelper.show(ctx, "已恢复 " + list.size + " 个任务")
+                undoSnap = UndoSnap(list, wasDelete = false, text = "已恢复 " + list.size + " 个任务")
                 confirmRestore = false
                 ms.exit()
             },
@@ -1551,6 +1630,7 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
                     emptyHint = "这一天没有完成的任务",
                     statusOf = { t -> if (t.done == 1) "已完成" else "未完成" },
+                    doneOf = { it.done == 1 },   // v5.15.24 F3b：历史页以归档标记为准（逾期未完成不算）
                     selecting = ms.selecting,
                     isSelected = { t -> ms.isSelected(t.uuid) },
                     onToggleSelect = { t -> ms.toggle(t.uuid) },
@@ -1938,3 +2018,10 @@ fun catKeyOf(t: com.taskbar.app.data.model.Task): String = when {
     t.type == com.taskbar.app.data.model.TaskType.REPEAT -> "time-limited"
     else -> "once"
 }
+
+/**
+ * v5.15.24 F11：批量操作撤销快照。
+ * wasDelete=true → 撤销 = 恢复这批 uuid；false → 撤销 = 重新删除这批 uuid。
+ * 只携带**这一批** uuid，撤销不会牵连其他任务。
+ */
+data class UndoSnap(val uuids: List<String>, val wasDelete: Boolean, val text: String)

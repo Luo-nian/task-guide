@@ -208,6 +208,21 @@ class TaskRepository(private val db: AppDatabase) {
         emitWithData(ChangeOp("delete", "task", uuid))
     }
 
+    /**
+     * v5.15.24 F11（调研 3.2 可考虑：批量操作后滑入式撤销）——
+     * 撤销批量删除：把刚软删掉的任务/步骤原样恢复。
+     * 只恢复**传入的这一批 uuid**（不牵连其他），保证撤销不会误伤。
+     */
+    suspend fun undeleteTasks(uuids: List<String>) {
+        if (uuids.isEmpty()) return
+        val t = now()
+        for (u in uuids) {
+            taskDao.undelete(u, t)
+            stepDao.getByTask(u).forEach { stepDao.undelete(it.uuid, t) }
+            emitWithData(ChangeOp("upsert", "task", u))
+        }
+    }
+
     // ==================== 追踪状态机 ====================
     /**
      * 开始追踪：
@@ -327,31 +342,89 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
-    /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新） */
-    fun observeHabitStreak(taskUuid: String): Flow<Int> {
-        return habitDao.observeCheckDatesByTask(taskUuid).map { dates ->
-            if (dates.isEmpty()) return@map 0
-            val parsed = dates.mapNotNull { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
-                .distinct().sortedDescending()
-            if (parsed.isEmpty()) return@map 0
-            val today = java.time.LocalDate.now()
-            // v5.15.23 F5（boss：「我完成了习惯，为什么显示还是连续 0 天」）——
-            //   旧算法强制从"今天"起算：今天还没打卡时，哪怕昨天之前连打 7 天也显示 0，
-            //   看起来像"完成没生效"。改为锚点 = 今天（今天打了）或昨天（今天还没打）；
-            //   更早断档才算真的断了。
-            var cursor = when (parsed.first()) {
-                today -> today
-                today.minusDays(1) -> today.minusDays(1)
-                else -> return@map 0
-            }
-            var streak = 0
-            for (d in parsed) {
-                if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
-                else if (d.isBefore(cursor)) break
-            }
-            streak
+    // ==================== v5.15.24 F1/F6：习惯统计（连续天数 + 强度分） ====================
+    /**
+     * v5.15.24 F6（调研专题三：streak 边界规则必须**显式化**）——
+     * 全项目**唯一**的连续天数算法，三处调用点共用这一份。
+     * 旧代码有 3 份各自实现且规则不同（只有 1 份在 v5.15.23 修过）→ 同一习惯在
+     * 主页/所有任务页/我的页可能显示不同数字，属真实 bug 面。
+     *
+     * 规则（写死，不再各处自由发挥）：
+     *  1. 锚点 = 今天（今天已打卡）或 昨天（今天还没打卡 → **今天没打卡不算断链**）；
+     *     连昨天都没有 → 0（真断了）。
+     *  2. 从锚点往前逐日递减计数，遇到缺失日立即停止。
+     *  3. 跨日以本机本地日期 0 点为界（跨午夜未打卡按"当天尚未结算"处理）。
+     */
+    private fun streakOf(
+        dateStrs: List<String>,
+        today: java.time.LocalDate = java.time.LocalDate.now()
+    ): Int {
+        val dates = dateStrs
+            .mapNotNull { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            .distinct()
+            .sortedDescending()
+        if (dates.isEmpty()) return 0
+        var cursor = when (dates.first()) {
+            today -> today
+            today.minusDays(1) -> today.minusDays(1)
+            else -> return 0
         }
+        var streak = 0
+        for (d in dates) {
+            if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
+            else if (d.isBefore(cursor)) break
+        }
+        return streak
     }
+
+    /**
+     * v5.15.24 F1（调研 3.1 强烈建议：Loop Habit Tracker 的 Habit Score）——
+     * 习惯**强度分** 0..100（指数衰减累计）：
+     *   每打卡一次 +1；两次打卡之间每空一天 ×0.9；到今天仍未打卡也结算一次。
+     * 与 streak 并列展示：断一天只让强度缓降，不会像 streak 那样直接归零，
+     * 缓解"一次失误就放弃"的心理崩塌（调研原文的动机）。
+     *
+     * 纯计算、**不落库、不加同步字段** → 零 schema / 零同步协议风险。
+     * 极限 1/(1-0.9) = 10 → 映射 100%。
+     */
+    fun habitStrength(
+        dateStrs: List<String>,
+        today: java.time.LocalDate = java.time.LocalDate.now()
+    ): Int {
+        val dates = dateStrs
+            .mapNotNull { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            .distinct()
+            .sorted()
+        if (dates.isEmpty()) return 0
+        val decay = 0.9
+        var score = 0.0
+        var prev: java.time.LocalDate? = null
+        for (d in dates) {
+            if (prev != null) {
+                val gap = java.time.temporal.ChronoUnit.DAYS.between(prev, d).coerceAtLeast(1)
+                if (gap > 1) score *= Math.pow(decay, (gap - 1).toDouble())
+            }
+            score += 1.0
+            prev = d
+        }
+        val gapToToday = java.time.temporal.ChronoUnit.DAYS.between(prev!!, today)
+        if (gapToToday > 0) score *= Math.pow(decay, gapToToday.toDouble())
+        return ((score / 10.0) * 100).toInt().coerceIn(0, 100)
+    }
+
+    /** 全部习惯的 连续天数 + 强度分（一次订阅全部日志 → 每行不再各自建 Flow） */
+    fun observeAllHabitStats(): Flow<Map<String, HabitStat>> =
+        habitDao.observeAllHabitLogs().map { logs ->
+            val today = java.time.LocalDate.now()
+            logs.groupBy { it.taskUuid }.mapValues { (_, l) ->
+                val ds = l.map { it.checkDate }
+                HabitStat(streak = streakOf(ds, today), strength = habitStrength(ds, today))
+            }
+        }
+
+    /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新；算法统一走 streakOf） */
+    fun observeHabitStreak(taskUuid: String): Flow<Int> =
+        habitDao.observeCheckDatesByTask(taskUuid).map { streakOf(it) }
 
     // ==================== 步骤推进 ====================
     /**
@@ -491,27 +564,9 @@ class TaskRepository(private val db: AppDatabase) {
         return true
     }
 
-    /** v5.15.2：聚合版 —— 一次订阅所有 habit_logs → 每习惯 streak（HabitScreen 每行不再各自 Flow） */
-    fun observeAllHabitStreaks(): Flow<Map<String, Int>> {
-        return habitDao.observeAllHabitLogs().map { logs ->
-            val byTask = logs.groupBy { it.taskUuid }
-            byTask.mapValues { (_, taskLogs) ->
-                val dates = taskLogs.map { it.checkDate }.sortedDescending()
-                if (dates.isEmpty()) 0
-                else {
-                    val today = java.time.LocalDate.now()
-                    var streak = 0
-                    var cursor = today
-                    for (dateStr in dates) {
-                        val d = try { java.time.LocalDate.parse(dateStr) } catch (_: Exception) { continue }
-                        if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
-                        else if (d.isBefore(cursor)) break
-                    }
-                    streak
-                }
-            }
-        }
-    }
+    /** v5.15.2：聚合版 —— 一次订阅所有 habit_logs → 每习惯 streak（算法统一走 streakOf） */
+    fun observeAllHabitStreaks(): Flow<Map<String, Int>> =
+        observeAllHabitStats().map { m -> m.mapValues { it.value.streak } }
 
     /** 同步查询某天是否已打卡（用于 UI 进入时初始化状态） */
     suspend fun isHabitCheckedToday(taskUuid: String, date: String): Boolean =
@@ -526,20 +581,8 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
-    suspend fun habitStreak(taskUuid: String): Int {
-        val logs = habitDao.getByTask(taskUuid).map { it.checkDate }.sortedDescending()
-        if (logs.isEmpty()) return 0
-        // 从今天往前数连续
-        val today = java.time.LocalDate.now()
-        var streak = 0
-        var cursor = today
-        for (dateStr in logs) {
-            val d = try { java.time.LocalDate.parse(dateStr) } catch (_: Exception) { continue }
-            if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
-            else if (d.isBefore(cursor)) break
-        }
-        return streak
-    }
+    suspend fun habitStreak(taskUuid: String): Int =
+        streakOf(habitDao.getByTask(taskUuid).map { it.checkDate })
 
     /** 所有习惯里最长的连续坚持天数（"我的"页展示用） */
     suspend fun maxHabitStreak(): Int {
@@ -755,3 +798,9 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 }
+
+/**
+ * v5.15.24 F1：习惯统计（连续天数 + 强度分）。
+ * 顶层数据类，仅用于仓库层 → UI 的传递，**不落库**。
+ */
+data class HabitStat(val streak: Int, val strength: Int)

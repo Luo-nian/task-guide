@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskbar.app.R
 import com.taskbar.app.data.model.Task
+import com.taskbar.app.data.model.TrackStatus
 
 /**
  * v5.15.21 R4（boss：手机端要能「日历形式」查看历史任务和所有任务）——
@@ -57,6 +58,13 @@ fun TaskCalendarView(
     emptyHint: String = "这一天没有任务",
     // v5.15.22 M3：可选状态文案（历史页把每日任务按天展开后，用来标"未完成"）
     statusOf: ((Task) -> String)? = null,
+    /**
+     * v5.15.24 F3b：「这条算不算完成」——**必须由调用方给**。
+     * 根因：习惯任务打卡后 trackStatus 仍是 pending（打卡记在 habit_logs，不动 trackStatus），
+     * 所以内部默认的 `trackStatus == done` 会把今天已打卡的习惯误判成"未完成"，
+     * 连带"整日清空 → 玉青"也永远不亮。调用方需要把"今日已打卡"一并算进来。
+     */
+    doneOf: (Task) -> Boolean = { it.trackStatus == TrackStatus.DONE },
     // v5.15.23 M11：多选（日历形式也要能多选）
     selecting: Boolean = false,
     isSelected: (Task) -> Boolean = { false },
@@ -158,7 +166,13 @@ fun TaskCalendarView(
                         Spacer(Modifier.weight(1f).height(46.dp))
                     } else {
                         val key = "%04d-%02d-%02d".format(year, monthIdx + 1, dayNum)
-                        val n = byDay[key]?.size ?: 0
+                        val dayTasks = byDay[key].orEmpty()
+                        val n = dayTasks.size
+                        // v5.15.24 F3（调研 3.1 强烈建议：日历按"完成密度"表达）——
+                        //   底色三档继续表示"忙闲"（1~3 / 4~10 / 10+）；
+                        //   这里再补一层"清空"信号：当天任务全部完成 → 日期数字转玉青。
+                        //   **不加任何新元素**，避免破坏 boss 已经认可的简洁观感。
+                        val allDone = n > 0 && dayTasks.all { doneOf(it) }
                         val isSel = key == selectedKey
                         val isToday = key == todayKey
                         Box(
@@ -198,6 +212,7 @@ fun TaskCalendarView(
                                     "$dayNum",
                                     // v5.15.23 M6：无任务的日期半透明；有任务的保持深色清晰可读
                                     color = when {
+                                        allDone -> TGColors.Jade       // v5.15.24 F3：整日清空
                                         n > 0 -> TGColors.Ink
                                         isSel || isToday -> TGColors.InkSoft
                                         else -> TGColors.InkMute.copy(alpha = 0.45f)
@@ -212,7 +227,7 @@ fun TaskCalendarView(
                                         Modifier
                                             .size(4.dp)
                                             .clip(RoundedCornerShape(999.dp))
-                                            .background(TGColors.GoldDeep)
+                                            .background(if (allDone) TGColors.Jade else TGColors.GoldDeep)
                                     )
                                 }
                             }

@@ -144,6 +144,10 @@ interface TaskDao {
     @Query("UPDATE tasks SET deleted = 1, updated_at = :now WHERE uuid = :uuid")
     suspend fun softDelete(uuid: String, now: Long)
 
+    /** v5.15.24 F11：撤销删除 —— 把软删任务恢复（配合 Undo 条） */
+    @Query("UPDATE tasks SET deleted = 0, updated_at = :now WHERE uuid = :uuid")
+    suspend fun undelete(uuid: String, now: Long)
+
     @Query("UPDATE tasks SET track_status = :status, updated_at = :now WHERE uuid = :uuid")
     suspend fun updateTrackStatus(uuid: String, status: String, now: Long)
 
@@ -196,6 +200,10 @@ interface StepDao {
 
     @Query("UPDATE steps SET deleted = 1, updated_at = :now WHERE uuid = :uuid")
     suspend fun softDelete(uuid: String, now: Long)
+
+    /** v5.15.24 F11：撤销删除（步骤跟随任务一起恢复） */
+    @Query("UPDATE steps SET deleted = 0, updated_at = :now WHERE uuid = :uuid")
+    suspend fun undelete(uuid: String, now: Long)
 
     @Query("SELECT * FROM steps WHERE updated_at > :since")
     suspend fun getChangedSince(since: Long): List<Step>
