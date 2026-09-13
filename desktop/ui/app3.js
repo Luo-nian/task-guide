@@ -2546,7 +2546,13 @@ async function autoScanAndReconnect(rounds) {
           saveSettings();
           persistSettingsServer();
           const _nm = String(d.deviceName || d.name || d.addr || '').split('._')[0].replace(/\.$/, '');
-          showToast('已自动连接手机端' + (_nm ? '：' + _nm : ''));
+          // v5.15.23 D1（boss：「连接成功弹一次就行了，现在一直弹出来很烦」）——
+          //   一次运行只提示一次；之后连接状态变化交给角落的常驻指示胶囊。
+          if (!window._autoConnectToastShown) {
+            window._autoConnectToastShown = true;
+            showToast('已自动连接手机端' + (_nm ? '：' + _nm : ''));
+          }
+          updateLinkPill(true, _nm || '');
           const ps = document.getElementById('setPairingStatus');
           if (ps) ps.textContent = '已配对：' + d.url;
           return true;
@@ -2568,16 +2574,44 @@ window.autoScanAndReconnect = autoScanAndReconnect;
 //   注意：不与 Rust 侧 auto_reconnect_loop 冲突 —— autoScan 只用 mDNS 改 URL，
 //   真正连不上的判定仍由 Rust ping 决定，这里只是把「发现」这一步补上并前置。
 let _autoScanWatchTimer = null;
+/** v5.15.23 D2（boss：现在很卡，怀疑一直扫描连手机）——
+ *  看门狗加**退避 + 后台不扫**：前 3 次失败每轮扫；之后每 3 轮扫一次；连败 8 次后每 8 轮扫一次。
+ *  窗口不可见（最小化/切到别的应用）时完全不扫 —— 这套 mDNS 扫描是最主要的 CPU/网络开销源。 */
+let _scanFailStreak = 0;
+let _scanTick = 0;
+/** v5.15.23 D1：角落常驻「已连接/未连接」胶囊（弹窗只弹一次，状态看这里） */
+function updateLinkPill(connected, peer) {
+  const pill = document.getElementById('linkPill');
+  if (!pill) return;
+  pill.classList.toggle('on', !!connected);
+  pill.title = connected
+    ? ('已连接手机端' + (peer ? '：' + peer : '') + (settings.pairing ? '\n' + settings.pairing.url : ''))
+    : (settings.pairing ? '未连接 — 正在自动重连\n' + settings.pairing.url : '未配对（去设置里配对手机端）');
+  const t = pill.querySelector('.lp-text');
+  if (t) t.textContent = connected ? '已连接' : '未连接';
+}
+window.updateLinkPill = updateLinkPill;
+
 async function autoScanWatchdog() {
-  // 没配对 / 已连上 → 什么都不做（避免无谓的 mDNS 组播打扰网络）
-  if (!settings.pairing) return;
-  try { if (await call('is_ws_connected')) return; } catch (e) { return; }
+  // 没配对 → 什么都不做（避免无谓的 mDNS 组播打扰网络）
+  if (!settings.pairing) { updateLinkPill(false); return; }
+  // 窗口不可见时不扫描（最小化/切走时省 CPU；回来下一次 tick 立即补上）
+  if (document.hidden) return;
+  let connected = false;
+  try { connected = await call('is_ws_connected'); } catch (e) { return; }
+  updateLinkPill(connected);
+  if (connected) { _scanFailStreak = 0; _scanTick = 0; return; }
+  _scanTick += 1;
+  const every = _scanFailStreak < 3 ? 1 : (_scanFailStreak < 8 ? 3 : 8);
+  if (_scanTick % every !== 0) return;
   // 未连接 → 拿起扫描（autoScanAndReconnect 内部有 busy 锁，不会叠加）
-  autoScanAndReconnect(1);
+  let ok = false;
+  try { ok = await autoScanAndReconnect(1); } catch (e) { ok = false; }
+  _scanFailStreak = ok ? 0 : _scanFailStreak + 1;
 }
 function startAutoScanWatchdog() {
   if (_autoScanWatchTimer) return;
-  _autoScanWatchTimer = setInterval(autoScanWatchdog, 5000);   // 每 5s 检查一次
+  _autoScanWatchTimer = setInterval(autoScanWatchdog, 8000);   // v5.15.23 D2：5s → 8s（配合退避）
   autoScanWatchdog();                                          // 启动立即查一次
 }
 
@@ -2924,11 +2958,14 @@ async function checkReconnectFail() {
   try {
     const v = await call('get_setting', { key: 'reconnect_fail' });
     if (v === '1') {
-      const now = Date.now();
-      if (now - _lastReconnectToast > 60000) {   // 60s 提示一次防刷屏（原来 30s）
-        _lastReconnectToast = now;
-        showToast('⚠ 手机暂时不在网络，正在自动扫描重连…');
+      // v5.15.23 D1（boss：「现在一直弹出来很烦」）—— 同一个断连周期只提示一次；
+      //   之后状态看右下角常驻胶囊，不再反复弹 toast。
+      if (!window._offlineToastShown) {
+        window._offlineToastShown = true;
+        showToast('手机暂时不在网络，正在后台自动重连（状态见右下角）');
       }
+    } else {
+      window._offlineToastShown = false;   // 连上了 → 允许下次断连再提示一次
     }
   } catch (e) { /* 忽略 */ }
 }

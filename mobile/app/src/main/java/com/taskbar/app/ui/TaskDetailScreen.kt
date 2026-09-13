@@ -665,7 +665,9 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 // 提醒（v5.15.10：字段顺序与电脑端「新建任务」弹窗完全一致 ——
                 //   端（不提醒/仅手机/仅电脑/双端）→ 方式（四通道多选）→ 时间；
                 //   选「不提醒」时方式与时间整块收起，与电脑端同一套逻辑）
-                run {
+                // v5.15.23 M13（boss：「目标任务如果没有设置截止时间，那下面的提醒方式之类的也没必要了」）——
+                //   目标类型且未开截止时间 → 整块提醒设置不渲染。
+                if (!(catSel == "goal" && !goalDeadlineOn)) run {
                     Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     // 1) 端（单选）——每行两个，防挤压

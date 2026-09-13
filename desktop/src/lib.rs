@@ -1606,7 +1606,11 @@ fn auto_reconnect_loop(
     loop {
         // v5.15.19：断连期把轮询间隔从 5s 收到 2s —— 手机刚连上 WiFi 时要尽快抓到，
         //   不能让用户等七八秒。连上后（fail_count==0）回落到 5s 省电。
-        let sleep_secs: u64 = if fail_count > 0 { 2 } else { 5 };
+        // v5.15.23 D2（boss：「现在很卡，不知道是不是因为一直扫描连接手机端」）——
+        //   实测断连时这一轮 = 2s sleep + 3s ping 超时 + 最多 12s mDNS 扫描（还每轮新建/销毁
+        //   ServiceDaemon），几乎是**持续满载**在扫。改为：轮询 4s；mDNS 重发现改为每 3 轮一次
+        //   （≈12s 一次），扫描窗口封顶 5s。发现速度只慢一点点，CPU/组播开销降一个量级。
+        let sleep_secs: u64 = if fail_count > 0 { 4 } else { 5 };
         std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
         let cur_url = { url.lock().unwrap().clone() };
         if cur_url.is_empty() {
@@ -1662,7 +1666,12 @@ fn auto_reconnect_loop(
         //   于是连续几轮扫不到 → 前端持续弹「手机不在网络」→ 用户以为坏了只能手动点。
         //   改法：扫描窗口按失败轮次自适应放大（4s → 8s → 12s 封顶），
         //   一旦发现过设备就回落到最短窗口（说明 mDNS 通道正常，不用长扫）。
-        let scan_secs: u64 = if fail_count >= 8 { 12 } else if fail_count >= 3 { 8 } else { 4 };
+        // v5.15.23 D2：mDNS 重发现改为每 3 轮才做一次（≈12s），扫描窗口 4s→5s 封顶；
+        //   中间那两轮只 ping（轻量），避免"一直在扫"把 CPU 吃满。
+        if fail_count % 3 != 1 {
+            continue;
+        }
+        let scan_secs: u64 = 5;
         log::info!("配对目标不可达({}), 尝试 mDNS 重发现 deviceId={} (扫描 {}s)", base, did, scan_secs);
         let Ok(daemon) = ServiceDaemon::new() else { continue };
         let Ok(receiver) = daemon.browse("_taskguide._tcp.local.") else {

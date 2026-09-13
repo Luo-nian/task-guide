@@ -4,7 +4,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -218,26 +222,53 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 
 /** 习惯行：完成=今日打卡（卡片沉底显示"今日已完成"，明天自动重新出现） */
 // v5.15.2：streak 由父级聚合 Map 传入（原函数内每行 remember{vm.observeHabitStreak} 独立 Flow → 卡顿）
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0, tracking: Boolean = false,
                      /* v5.15.21 P3：取消追踪当次不重排（与追踪对称） */
-                     onJustStopped: () -> Unit = {}) {
+                     onJustStopped: () -> Unit = {},
+                     // v5.15.23 M11：多选支持
+                     selecting: Boolean = false,
+                     selected: Boolean = false,
+                     onToggleSelect: (() -> Unit)? = null,
+                     onLongSelect: (() -> Unit)? = null,
+                     onRowClick: (() -> Unit)? = null) {
     val ctx = LocalContext.current
-    val bg = if (checkedToday) TGColors.Jade.copy(alpha = 0.10f) else TGColors.Card
+    // v5.15.23 V2（boss：所有任务页面更多是视觉上的问题）——
+    //   已完成不再把**整张卡**染成淡绿（12 张绿卡叠在一起像一整块），
+    //   改成干净的白卡 + 左侧一条玉色色条：同样一眼看出"做完了"，但层次清爽得多。
+    val bg = TGColors.Card
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
             .border(
-                width = if (checkedToday) 1.dp else 1.dp,
-                /* v5.15.21 M6：任务行边框加重（BorderSoft → BorderMid） */
-                color = if (checkedToday) TGColors.Jade.copy(alpha = 0.45f) else TGColors.BorderMid,
+                width = if (selecting && selected) 2.dp else 1.dp,
+                color = when {
+                    selecting && selected -> TGColors.Jade
+                    checkedToday -> TGColors.BorderSoft
+                    else -> TGColors.BorderMid
+                },
                 shape = RoundedCornerShape(12.dp)
+            )
+            .combinedClickable(
+                onClick = { if (selecting) onToggleSelect?.invoke() else onRowClick?.invoke() },
+                onLongClick = { onLongSelect?.invoke() }
             )
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (checkedToday) {
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(TGColors.Jade)
+            )
+            Spacer(Modifier.width(9.dp))
+        }
         Box(
             Modifier
                 .size(12.dp)
@@ -246,11 +277,13 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TypeChip(TaskType.HABIT)
-                Spacer(Modifier.width(6.dp))
-                Text("连续 $streak 天", color = TGColors.Jade, fontSize = 11.sp)
-            }
+            // v5.15.23 V2：把「习惯」小标签 + 连续天数合并成一句话，减少每行的小元素
+            Text(
+                if (checkedToday) "习惯 · 今日已打卡 · 连续 $streak 天" else "习惯 · 连续 $streak 天",
+                color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 task.title,
@@ -260,16 +293,20 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                 textDecoration = if (checkedToday) TextDecoration.LineThrough else null
             )
         }
+        if (selecting) {
+            SelectBadge(selected = selected)
+            Spacer(Modifier.width(8.dp))
+        }
         if (checkedToday) {
-            // 完成态：实心绿圆 + 白勾
+            // v5.15.23 V2：完成态从"实心大绿圆"改成"描边玉环 + 玉勾"（更轻，不再抢戏）
             Box(
                 Modifier
-                    .size(26.dp)
+                    .size(22.dp)
                     .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(TGColors.Jade),
+                    .border(1.5.dp, TGColors.Jade.copy(alpha = 0.85f), androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("✓", color = TGColors.Jade, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         } else {
             // v5.15.21 M1（boss：取消打卡键，每日任务也变成追踪键和推进/完成键）：
@@ -344,7 +381,12 @@ private fun TaskRow(
        取消当次不重排，等下次进入主页再归位。 */
     onJustStopped: () -> Unit = {},
     onPin: (() -> Unit)? = null,
-    onUnpin: (() -> Unit)? = null
+    onUnpin: (() -> Unit)? = null,
+    // v5.15.23 M11：多选（长按进入 / 选中态高亮 / 点击切换选中）
+    selecting: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
+    onLongSelect: (() -> Unit)? = null
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -365,8 +407,15 @@ private fun TaskRow(
     val isPressed by pressSrc.collectIsPressedAsState()
     LaunchedEffect(isPressed) {
         if (isPressed) {
-            kotlinx.coroutines.delay(320)
-            onEdit()
+            // v5.15.23 M11（boss：长按任务可以多选）→ 长按进入多选模式；
+            //   没有传 onLongSelect 的场景（主页）保持原来的"长按进入编辑"。
+            if (onLongSelect != null && !selecting) {
+                kotlinx.coroutines.delay(320)
+                onLongSelect()
+            } else if (onLongSelect == null) {
+                kotlinx.coroutines.delay(320)
+                onEdit()
+            }
         }
     }
 
@@ -377,9 +426,13 @@ private fun TaskRow(
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
             .border(
-                width = if (tracking) 1.5.dp else 1.dp,
-                /* v5.15.21 M6：任务行边框加重 */
-                color = if (tracking) TGColors.Azure.copy(alpha = 0.65f) else TGColors.BorderMid,
+                width = if (selecting && selected) 2.dp else if (tracking) 1.5.dp else 1.dp,
+                /* v5.15.21 M6：任务行边框加重；v5.15.23 M11：选中态用玉色描边 */
+                color = when {
+                    selecting && selected -> TGColors.Jade
+                    tracking -> TGColors.Azure.copy(alpha = 0.65f)
+                    else -> TGColors.BorderMid
+                },
                 shape = RoundedCornerShape(12.dp)
             )
             // v5.15.12：长按 320ms 触发编辑（系统默认 ~500ms，boss 觉得太久）
@@ -388,9 +441,15 @@ private fun TaskRow(
             .clickable(
                 interactionSource = pressSrc,
                 indication = androidx.compose.foundation.LocalIndication.current,
-                onClick = onClick
+                onClick = { if (selecting) onToggleSelect?.invoke() else onClick() }
             )
     ) {
+        // v5.15.23 M11：多选勾标（选中态才显示在卡片右上角）
+        if (selecting) {
+            Box(Modifier.fillMaxWidth().padding(top = 6.dp, end = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                SelectBadge(selected = selected)
+            }
+        }
         // 顶部渐变条（仅追踪中置顶框）
         if (tracking) {
             Box(
@@ -1094,29 +1153,54 @@ fun HabitScreen(vm: TaskViewModel) {
 // ==================== 所有任务（追踪/待办/未来 全量，不含已完成——已完成只进历史任务） ====================
 @Composable
 fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
-    val tracking by vm.tracking.collectAsState()
-    val main by vm.mainList.collectAsState()
-    val future by vm.futureTasks.collectAsState()
     val ctx = LocalContext.current
     val stepsByUuid by vm.stepsByUuid.collectAsState()
-    val todo = main.filter { it.trackStatus != TrackStatus.TRACKING }
-    // 今日已打卡的每日任务（habit 类型 + checkedToday），挪到这里显示
+    val streaks by vm.allHabitStreaks.collectAsState()
+    // v5.15.23 M6/M7（boss：点"目标/限时"分类日历就没了；每日任务也有点乱）——
+    //   数据源换成"仓库视图"：全部未删除任务（含逾期/未来/自定义分类的目标限时，
+    //   以及今天已打卡的习惯），并逐行做过每日型折算。
+    val all by vm.allForWarehouse.collectAsState()
     val todayCheckedHabits by vm.todayCheckedHabits.collectAsState()
+    val dayEnd = remember {
+        java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59)
+            set(java.util.Calendar.SECOND, 59); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    // 今天已打卡的每日任务（完成态）
+    val doneToday = all.filter { it.type == TaskType.HABIT && it.uuid in todayCheckedHabits }
+    val active = all.filter { it.trackStatus != TrackStatus.DONE }
+    val tracking = active.filter { it.trackStatus == TrackStatus.TRACKING }
+    val rest = active.filter { it.trackStatus != TrackStatus.TRACKING }
+    val todo = rest.filter { it.dueAt == null || (it.dueAt ?: 0L) <= dayEnd }
+    val future = rest.filter { it.dueAt != null && (it.dueAt ?: 0L) > dayEnd }
     // v5.15.16（M2）：所有任务页也要能分类查看 + 右上角搜索
     var catFilter by remember { mutableStateOf("all") }
     var searchOn by remember { mutableStateOf(false) }
     var keyword by remember { mutableStateOf("") }
     // v5.15.21 R4：列表 / 日历 切换
     var calView by remember { mutableStateOf(false) }
+    // v5.15.23 M11：多选
+    val ms = remember { MultiSelectState() }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmRestore by remember { mutableStateOf(false) }
     fun match(t: Task) = (keyword.isBlank() || t.title.contains(keyword, ignoreCase = true))
     fun byCat(list: List<Task>) = list.filter { catFilter == "all" || catKeyOf(it) == catFilter }
     val trackingF = byCat(tracking).filter(::match)
     val todoF = byCat(todo).filter(::match)
     val futureF = byCat(future).filter(::match)
-    val todayCheckedList = byCat(todo.filter { it.type == TaskType.HABIT && it.uuid in todayCheckedHabits })
-        .filter(::match)
+    val todayCheckedList = byCat(doneToday).filter(::match)
+    val allIds = (trackingF + todayCheckedList + todoF + futureF).map { it.uuid }.distinct()
     // 置顶/置底确认弹窗状态：(uuid, action) action = "pin" | "unpin"
     var pendingRepoAction by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val listState = rememberLazyListState()
+    // 扁平行序（与 LazyColumn 的 item 顺序严格一致；null = 分区标题）→ 供滑动多选做命中测试
+    val flatRows: List<String?> = buildList {
+        if (trackingF.isNotEmpty()) { add(null); trackingF.forEach { add(it.uuid) } }
+        if (todayCheckedList.isNotEmpty()) { add(null); todayCheckedList.forEach { add(it.uuid) } }
+        if (todoF.isNotEmpty()) { add(null); todoF.forEach { add(it.uuid) } }
+        if (futureF.isNotEmpty()) { add(null); futureF.forEach { add(it.uuid) } }
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // 顶栏：返回 + 标题 + 右上角搜索
@@ -1128,8 +1212,25 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
             Spacer(Modifier.width(4.dp))
-            Text("所有任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            // v5.15.23 M11b：多选时标题位让给计数（顶栏窄，按钮才不会被挤成两行）
+            Text(
+                if (ms.selecting) "已选 ${ms.ids.size}" else "所有任务",
+                color = TGColors.Ink,
+                fontSize = if (ms.selecting) 16.sp else 20.sp,
+                fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif,
+                maxLines = 1
+            )
             Spacer(Modifier.weight(1f))
+            // v5.15.23 M11：多选模式下，右上角换成 [取消][恢复][全选] 三键
+            if (ms.selecting) {
+                MultiSelectBar(
+                    state = ms,
+                    allIds = allIds,
+                    onDelete = { confirmDelete = true },
+                    onRestore = { confirmRestore = true },
+                    showCount = false
+                )
+            } else {
             // v5.15.21 R4（boss：手机端要能日历形式查看所有任务）—— 列表 / 日历 切换
             PressPill(onClick = { calView = !calView; if (calView) searchOn = false }) {
                 Box(
@@ -1154,6 +1255,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     tint = TGColors.GoldDeep, size = 22.dp
                 )
             }
+            }
         }
         // 搜索框（展开时）
         if (searchOn) {
@@ -1168,9 +1270,10 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
         }
         // 分类筛选条（与主页同一套口径；本页含未来任务，首项保持"全部"）
         CategoryFilterRow(catFilter, { catFilter = it })
-        if (trackingF.isEmpty() && todoF.isEmpty() && futureF.isEmpty() && todayCheckedList.isEmpty()) {
-            EmptyState(if (keyword.isNotBlank()) "没有匹配「" + keyword + "」的任务" else "还没有任何任务", Modifier.fillMaxSize())
-        } else if (calView) {
+        // v5.15.23 M6（boss：点「目标」「限时」分类日历就没了 —— 分类应该是日历的下级筛选）——
+        //   改成「日历优先」：只要开着日历视图就永远渲染日历（没数据时日历自己显示空提示），
+        //   绝不会被空态顶掉；分类/搜索只影响日历里显示哪些任务。
+        if (calView) {
             // v5.15.21 R4：日历视图（按截止/期限时间铺开，无时间则用创建时间）
             val allForCal = (trackingF + todoF + futureF + todayCheckedList).distinctBy { it.uuid }
             Column(
@@ -1180,14 +1283,46 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             ) {
                 TaskCalendarView(
                     tasks = allForCal,
-                    dateOf = { it.dueAt ?: it.deadline ?: it.createdAt },
+                    // v5.15.23 M6：今天已打卡的每日任务要落在**今天**这一格
+                    //   （习惯没有 dueAt，若按 createdAt 会散落在"创建那天"，今日数量就对不上了）
+                    dateOf = { t ->
+                        if (t.type == TaskType.HABIT && t.uuid in todayCheckedHabits) dayEnd
+                        else t.dueAt ?: t.deadline ?: t.createdAt
+                    },
                     // v5.15.22 M9：日历点任务 → 只读详情（boss：不能有任何功能按键，防刷分）
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
+                    // v5.15.23 M6c：日历下方的当日清单要能一眼分清"已完成/未完成"
+                    //   （之前只显示任务名 + 分类，混在一起看不出状态）
+                    statusOf = { t -> if (t.trackStatus == TrackStatus.DONE) "已完成" else "未完成" },
                     emptyHint = "这一天没有任务"
                 )
             }
+        } else if (trackingF.isEmpty() && todoF.isEmpty() && futureF.isEmpty() && todayCheckedList.isEmpty()) {
+            EmptyState(if (keyword.isNotBlank()) "没有匹配「" + keyword + "」的任务" else "还没有任何任务", Modifier.fillMaxSize())
         } else {
+            // v5.15.23 M11：滑动多选 —— 长按起手后，手指划过哪一行就选中哪一行
+            Box(
+                Modifier.weight(1f).pointerInput(ms.selecting, flatRows) {
+                    if (!ms.selecting) return@pointerInput
+                    fun hit(y: Float): String? {
+                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                            y.toInt() in it.offset..(it.offset + it.size)
+                        } ?: return null
+                        return flatRows.getOrNull(item.index)
+                    }
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { pos: Offset -> hit(pos.y)?.let { ms.toggle(it) } },
+                        onDrag = { change: PointerInputChange, _: Offset ->
+                            hit(change.position.y)?.let { u -> if (!ms.isSelected(u)) ms.toggle(u) }
+                        },
+                        onDragEnd = {},
+                        onDragCancel = {}
+                    )
+                }
+            ) {
             LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
@@ -1195,38 +1330,116 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 if (trackingF.isNotEmpty()) {
                     item(key = "hdr-t") { SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet) }
                     items(trackingF, key = { "t-${it.uuid}" }) { task ->
-                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
-                            onClick = { navController.navigate("detail/${task.uuid}") },
-                            onEdit = { navController.navigate("edit/${task.uuid}") },
-                            onUnpin = { pendingRepoAction = task.uuid to "unpin" })
+                        if (task.type == TaskType.HABIT) {
+                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                                streak = streaks[task.uuid] ?: 0, tracking = true,
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) },
+                                onRowClick = { navController.navigate("detail/${task.uuid}") })
+                        } else {
+                            TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
+                                onClick = { navController.navigate("detail/${task.uuid}") },
+                                onEdit = { navController.navigate("edit/${task.uuid}") },
+                                onUnpin = { pendingRepoAction = task.uuid to "unpin" },
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) })
+                        }
                     }
                 }
                 if (todayCheckedList.isNotEmpty()) {
                     item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
                     items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
-                        HabitRow(task, vm, checkedToday = true)
+                        HabitRow(task, vm, checkedToday = true, streak = streaks[task.uuid] ?: 0,
+                            selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                            onToggleSelect = { ms.toggle(task.uuid) },
+                            onLongSelect = { ms.begin(task.uuid) },
+                            onRowClick = { navController.navigate("detail/${task.uuid}") })
                     }
                 }
                 if (todoF.isNotEmpty()) {
                     item(key = "hdr-todo") { SectionHeader("待办 (${todoF.size})", TGColors.GoldDeep) }
                     items(todoF, key = { "todo-${it.uuid}" }) { task ->
-                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
-                            onClick = { navController.navigate("detail/${task.uuid}") },
-                            onEdit = { navController.navigate("edit/${task.uuid}") },
-                            onUnpin = { pendingRepoAction = task.uuid to "unpin" })
+                        if (task.type == TaskType.HABIT) {
+                            // v5.15.23 M7/M8：每日任务在仓库页也按习惯行渲染（今日打卡/连续天数），
+                            //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
+                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                                streak = streaks[task.uuid] ?: 0,
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) },
+                                onRowClick = { navController.navigate("detail/${task.uuid}") })
+                        } else {
+                            TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
+                                onClick = { navController.navigate("detail/${task.uuid}") },
+                                onEdit = { navController.navigate("edit/${task.uuid}") },
+                                onUnpin = { pendingRepoAction = task.uuid to "unpin" },
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) })
+                        }
                     }
                 }
                 if (futureF.isNotEmpty()) {
                     item(key = "hdr-f") { SectionHeader("未来任务 (${futureF.size})", TGColors.Azure) }
                     items(futureF, key = { "f-${it.uuid}" }) { task ->
-                        TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
-                            onClick = { navController.navigate("detail/${task.uuid}") },
-                            onEdit = { navController.navigate("edit/${task.uuid}") },
-                            onPin = { pendingRepoAction = task.uuid to "pin" })
+                        if (task.type == TaskType.HABIT) {
+                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                                streak = streaks[task.uuid] ?: 0,
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) },
+                                onRowClick = { navController.navigate("detail/${task.uuid}") })
+                        } else {
+                            TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
+                                onClick = { navController.navigate("detail/${task.uuid}") },
+                                onEdit = { navController.navigate("edit/${task.uuid}") },
+                                onPin = { pendingRepoAction = task.uuid to "pin" },
+                                selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                                onToggleSelect = { ms.toggle(task.uuid) },
+                                onLongSelect = { ms.begin(task.uuid) })
+                        }
                     }
                 }
             }
+            }
         }
+    }
+
+    // v5.15.23 M11：批量【取消（删除）】/【恢复】的二次确认弹窗
+    if (confirmDelete) {
+        TGConfirmDialog(
+            title = "取消这 ${ms.ids.size} 个任务？",
+            message = "将删除选中的任务（两端一起移除），此操作不可撤销。",
+            confirmText = "确认取消",
+            confirmColor = TGColors.Crimson,
+            onConfirm = {
+                val list = ms.ids.toList()
+                vm.deleteTasks(list)
+                ToastHelper.show(ctx, "已取消 " + list.size + " 个任务")
+                confirmDelete = false
+                ms.exit()
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
+    if (confirmRestore) {
+        TGConfirmDialog(
+            title = "恢复这 ${ms.ids.size} 个任务？",
+            message = "选中的任务会回到待办。若含逾期未完成的任务，恢复按奖励的一半扣分（不足 1 分按 1 分算）。",
+            confirmText = "确认恢复",
+            confirmColor = TGColors.Jade,
+            onConfirm = {
+                val list = ms.ids.toList()
+                val overdue = all.filter { it.uuid in list && it.trackStatus != TrackStatus.DONE }
+                vm.restoreTasks(list, overdueHalf = overdue.isNotEmpty())
+                ToastHelper.show(ctx, "已恢复 " + list.size + " 个任务")
+                confirmRestore = false
+                ms.exit()
+            },
+            onDismiss = { confirmRestore = false }
+        )
     }
 
     // 置顶/置底确认弹窗（防误触）
@@ -1270,6 +1483,13 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     // v5.15.21 R4：false=列表（记账式流水）｜true=日历视图
     // v5.15.22 M1（boss：历史任务应该是默认日历形式）→ 初值改 true
     var calView by remember { mutableStateOf(true) }
+    // v5.15.23 M11：多选（列表 + 日历都要有）
+    val ms = remember { MultiSelectState() }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmRestore by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val entries = remember(archive, logs) { expandHistoryByDay(archive, logs) }
+    val allIds = entries.map { it.uuid }.distinct()
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
@@ -1279,8 +1499,24 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                 TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
             Spacer(Modifier.width(4.dp))
-            Text("历史任务", color = TGColors.Ink, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif)
+            Text(
+                if (ms.selecting) "已选 ${ms.ids.size}" else "历史任务",
+                color = TGColors.Ink,
+                fontSize = if (ms.selecting) 16.sp else 21.sp,
+                fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif,
+                maxLines = 1
+            )
             Spacer(Modifier.weight(1f))
+            // v5.15.23 M11：多选模式下右上角换成 [取消][恢复][全选]
+            if (ms.selecting) {
+                MultiSelectBar(
+                    state = ms,
+                    allIds = allIds,
+                    onDelete = { confirmDelete = true },
+                    onRestore = { confirmRestore = true },
+                    showCount = false
+                )
+            } else {
             // v5.15.21 R4（boss：手机端要能日历形式查看历史任务）—— 列表 / 日历 切换
             PressPill(onClick = { calView = !calView }) {
                 Box(
@@ -1296,6 +1532,7 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     )
                 }
             }
+            }
         }
         if (archive.isEmpty()) {
             EmptyState("还没有已完成的任务\n完成的任务会自动收进这里", Modifier.fillMaxSize())
@@ -1303,7 +1540,6 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
             // v5.15.21 R4：日历视图（按完成日期铺开）
             // v5.15.22 M3：每日任务按天展开（漏掉的那天也有一条"未完成"）→ 日历数量才真实
             // v5.15.22 M9：日历点任务 → 只读详情（防刷分）
-            val entries = remember(archive, logs) { expandHistoryByDay(archive, logs) }
             Column(
                 Modifier
                     .fillMaxSize()
@@ -1314,7 +1550,11 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     dateOf = { it.doneAt ?: it.dueAt ?: it.deadline ?: it.createdAt },
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
                     emptyHint = "这一天没有完成的任务",
-                    statusOf = { t -> if (t.done == 1) "已完成" else "未完成" }
+                    statusOf = { t -> if (t.done == 1) "已完成" else "未完成" },
+                    selecting = ms.selecting,
+                    isSelected = { t -> ms.isSelected(t.uuid) },
+                    onToggleSelect = { t -> ms.toggle(t.uuid) },
+                    onLongSelect = { t -> ms.begin(t.uuid) }
                 )
             }
         } else {
@@ -1323,10 +1563,52 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(archive, key = { it.uuid }) { task ->
-                    DoneTaskRow(task, vm)
+                    DoneTaskRow(task, vm,
+                        selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                        onToggleSelect = { ms.toggle(task.uuid) },
+                        onLongSelect = { ms.begin(task.uuid) })
                 }
             }
         }
+    }
+
+    // v5.15.23 M11：历史页的批量【取消（删除）】/【恢复】二次确认
+    if (confirmDelete) {
+        TGConfirmDialog(
+            title = "取消这 ${ms.ids.size} 个任务？",
+            message = "将删除选中的任务（两端一起移除），此操作不可撤销。",
+            confirmText = "确认取消",
+            confirmColor = TGColors.Crimson,
+            onConfirm = {
+                val list = ms.ids.toList()
+                vm.deleteTasks(list)
+                ToastHelper.show(ctx, "已取消 " + list.size + " 个任务")
+                confirmDelete = false
+                ms.exit()
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
+    if (confirmRestore) {
+        val list = ms.ids.toList()
+        // 逾期未完成 → 按奖励一半扣分（不足 1 分按 1 分）；已完成 → 全额扣回
+        val hasOverdue = archive.any { it.uuid in list && !(it.done == 1 && it.trackStatus == TrackStatus.DONE) }
+        TGConfirmDialog(
+            title = "恢复这 ${ms.ids.size} 个任务？",
+            message = if (hasOverdue)
+                "选中的任务会回到待办。含逾期未完成的任务：恢复按奖励的一半扣分（不足 1 分按 1 分算）。"
+            else
+                "选中的任务会回到待办，并扣回完成时获得的积分。",
+            confirmText = "确认恢复",
+            confirmColor = TGColors.Jade,
+            onConfirm = {
+                vm.restoreTasks(list, overdueHalf = hasOverdue)
+                ToastHelper.show(ctx, "已恢复 " + list.size + " 个任务")
+                confirmRestore = false
+                ms.exit()
+            },
+            onDismiss = { confirmRestore = false }
+        )
     }
 }
 
@@ -1373,9 +1655,18 @@ private fun expandHistoryByDay(archive: List<Task>, logs: List<com.taskbar.app.d
     return out
 }
 
-/** 已完成/逾期未完成任务行（完成=划线+时间+恢复；未完成=朱砂标记，无恢复键） */
+/** 已完成/逾期未完成任务行（完成=划线+时间+恢复；未完成=朱砂标记 + 可恢复） */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
+private fun DoneTaskRow(
+    task: Task,
+    vm: TaskViewModel,
+    // v5.15.23 M11：多选支持
+    selecting: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
+    onLongSelect: (() -> Unit)? = null
+) {
     val isDone = task.done == 1 && task.trackStatus == TrackStatus.DONE
     Row(
         Modifier
@@ -1383,13 +1674,25 @@ private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
             .clip(RoundedCornerShape(12.dp))
             .background(if (isDone) TGColors.Card.copy(alpha = 0.7f) else TGColors.Crimson.copy(alpha = 0.06f))
             .border(
-                1.dp,
-                if (isDone) TGColors.BorderMid else TGColors.Crimson.copy(alpha = 0.45f),
+                if (selecting && selected) 2.dp else 1.dp,
+                when {
+                    selecting && selected -> TGColors.Jade
+                    isDone -> TGColors.BorderMid
+                    else -> TGColors.Crimson.copy(alpha = 0.45f)
+                },
                 RoundedCornerShape(12.dp)
+            )
+            .combinedClickable(
+                onClick = { if (selecting) onToggleSelect?.invoke() },
+                onLongClick = { onLongSelect?.invoke() }
             )
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selecting) {
+            SelectBadge(selected = selected)
+            Spacer(Modifier.width(8.dp))
+        }
         Column(Modifier.weight(1f)) {
             if (!isDone) {
                 Text("逾期未完成", color = TGColors.Crimson, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1407,9 +1710,13 @@ private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
                 Text("历史里只做记录，不计积分", color = TGColors.InkMute, fontSize = 11.sp)
             }
         }
-        // v5.15.22 M3：未完成的任务没有"恢复"可言（它本来就还没做完）
         if (isDone) {
             TextButton(onClick = { vm.restoreTask(task.uuid) }) { Text("恢复", color = TGColors.GoldDeep) }
+        } else {
+            // v5.15.23 M10（boss：逾期任务也可以恢复，但积分减半，不足一分按一分算）
+            TextButton(onClick = { vm.restoreTask(task.uuid, overdueHalf = true) }) {
+                Text("恢复", color = TGColors.Crimson)
+            }
         }
     }
 }

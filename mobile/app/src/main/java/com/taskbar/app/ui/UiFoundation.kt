@@ -80,7 +80,12 @@ fun PressIcon(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, tween(100))
+    // v5.15.23 M2（boss：「按下的弹跳反馈现在弹的太快了，反馈性不强」）——
+    //   100ms/0.84 → 180ms/0.86：给一点"按下去"的过程感，不再是瞬闪。
+    val scale by animateFloatAsState(
+        if (pressed) 0.86f else 1f,
+        tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    )
     IconButton(
         onClick = onClick,
         interactionSource = interaction,
@@ -107,7 +112,11 @@ fun PressPill(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, tween(100))
+    // v5.15.23 M2：同 PressIcon —— 180ms/0.86，按下过程更清晰（boss 说"日历"键按下去弹太快）
+    val scale by animateFloatAsState(
+        if (pressed) 0.86f else 1f,
+        tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    )
     Box(
         modifier = modifier
             .graphicsLayer {
@@ -266,21 +275,21 @@ fun TrackRippleKey(
     Box(modifier = modifier.size(40.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(40.dp).drawBehind {
-                // v5.15.22 M5b（boss：两层涟漪 = 靠内圈再加一层）——
-                //   内圈：紧贴图标的一圈细环，**常驻呼吸**（明暗随外圈节奏变化，不会消失）；
-                //   外圈：从图标向外扩散、变淡、消失，再从头来。
+                // v5.15.23 M5（boss：「涟漪应该更内圈一点，要的是直接在按键上荡出来的波纹涟漪效果，
+                //   现在更像在按键外的一圈」）—— 把两圈都收进 40dp 按键圆内（按钮半径 20dp）：
+                //   内圈 12.5dp 常驻呼吸（贴着图标），外圈 14→19.5dp 在按钮面上向外荡开再消失。
                 val strokeInner = 1.8f.dp.toPx()
-                val alphaInner = 0.62f - 0.30f * phase          // 0.62 → 0.32 循环呼吸
+                val alphaInner = 0.62f - 0.30f * phase
                 drawCircle(
                     color = TGColors.Crimson.copy(alpha = alphaInner),
-                    radius = 15f.dp.toPx(),
+                    radius = 12.5f.dp.toPx(),
                     style = Stroke(width = strokeInner)
                 )
-                val p = phase                                    // 外圈扩散环
+                val p = phase
                 drawCircle(
-                    color = TGColors.Crimson.copy(alpha = (1f - p) * 0.42f),
-                    radius = 16f.dp.toPx() + (11f.dp.toPx()) * p,  // 16dp → 27dp
-                    style = Stroke(width = 1.2f.dp.toPx())
+                    color = TGColors.Crimson.copy(alpha = (1f - p) * 0.46f),
+                    radius = 14f.dp.toPx() + (5.5f.dp.toPx()) * p,   // 14dp → 19.5dp（不出按钮）
+                    style = Stroke(width = 1.3f.dp.toPx())
                 )
             }
         )
@@ -298,13 +307,14 @@ fun TrackRippleKey(
 /**
  * v5.15.22 M7（boss：「设置优先级时，点到『高』『中』『低』三个键颜色应该有所区分」）——
  * 选中态用该优先级自己的色填充（高=朱砂 / 中=深赤陶 / 低=灰），未选中是它的淡底描边。
+ * v5.15.23 M12：高与中的色相拉开（朱砂红 vs 琥珀金），未选中态也加深边框提高辨识度。
  */
 @Composable
 fun PriorityFilterChip(priority: String, selected: Boolean, onClick: () -> Unit) {
     val (color, label) = when (priority) {
-        Priority.HIGH -> TGColors.Crimson to "高"
+        Priority.HIGH -> PRIORITY_COLOR_HIGH to "高"
         Priority.LOW -> TGColors.InkMute to "低"
-        else -> TGColors.GoldDeep to "中"
+        else -> PRIORITY_COLOR_MED to "中"
     }
     Box(
         modifier = Modifier
@@ -328,6 +338,122 @@ fun PriorityFilterChip(priority: String, selected: Boolean, onClick: () -> Unit)
     }
 }
 
+/**
+ * v5.15.23 M11（boss：长按任务多选，右上三键=取消/恢复/全选，滑动可连续多选）——
+ * 多选状态容器：列表页与日历页共用。
+ */
+@Stable
+class MultiSelectState {
+    var selecting by mutableStateOf(false)
+        private set
+    val ids = mutableStateListOf<String>()
+
+    fun begin(uuid: String) {
+        selecting = true
+        if (!ids.contains(uuid)) ids.add(uuid)
+    }
+    fun toggle(uuid: String) {
+        if (ids.contains(uuid)) ids.remove(uuid) else ids.add(uuid)
+    }
+    fun isSelected(uuid: String): Boolean = ids.contains(uuid)
+    fun selectAll(all: List<String>) { ids.clear(); ids.addAll(all) }
+    fun clearAll() { ids.clear() }
+    fun exit() { ids.clear(); selecting = false }
+}
+
+/** 选中态的小勾标（右上角），未选中显示空心圈 */
+@Composable
+fun SelectBadge(selected: Boolean, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(20.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(if (selected) TGColors.Jade else Color.White.copy(alpha = 0.9f))
+            .border(
+                1.5.dp,
+                if (selected) TGColors.Jade else TGColors.InkFaint,
+                androidx.compose.foundation.shape.CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) Text("✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/**
+ * 多选模式下右上角的三个键：[取消（删除）] [恢复] [全选/取消全选]（最右为全选）。
+ * 两个动作键都会先弹二次确认（确认/取消）。
+ */
+@Composable
+fun MultiSelectBar(
+    state: MultiSelectState,
+    allIds: List<String>,
+    onDelete: () -> Unit,
+    onRestore: () -> Unit,
+    showCount: Boolean = true
+) {
+    val allSelected = allIds.isNotEmpty() && state.ids.size >= allIds.size
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // v5.15.23 M11b：计数可以搬到标题位（顶栏窄，避免按钮被挤成两行）
+        if (showCount) {
+            Text(
+                "已选 ${state.ids.size}",
+                color = TGColors.InkSoft, fontSize = 11.5.sp, fontWeight = FontWeight.Medium,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.padding(end = 5.dp)
+            )
+        }
+        // 取消（= 删除选中任务）
+        PressPill(onClick = { if (state.ids.isNotEmpty()) onDelete() }) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(TGColors.Crimson.copy(alpha = if (state.ids.isEmpty()) 0.08f else 0.14f))
+                    .border(1.dp, TGColors.Crimson.copy(alpha = if (state.ids.isEmpty()) 0.25f else 0.5f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 9.dp, vertical = 5.dp)
+            ) {
+                Text("取消", color = if (state.ids.isEmpty()) TGColors.InkFaint else TGColors.Crimson,
+                    fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        // 恢复
+        PressPill(onClick = { if (state.ids.isNotEmpty()) onRestore() }) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(TGColors.Jade.copy(alpha = if (state.ids.isEmpty()) 0.08f else 0.16f))
+                    .border(1.dp, TGColors.Jade.copy(alpha = if (state.ids.isEmpty()) 0.25f else 0.55f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 11.dp, vertical = 5.dp)
+            ) {
+                Text("恢复", color = if (state.ids.isEmpty()) TGColors.InkFaint else TGColors.Jade,
+                    fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        // 最右上角：全选 / 取消全选
+        PressPill(onClick = { if (allSelected) state.clearAll() else state.selectAll(allIds) }) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(TGColors.Gold.copy(alpha = 0.16f))
+                    .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 11.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    if (allSelected) "取消全选" else "全选",
+                    color = TGColors.GoldDeep, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 1, softWrap = false
+                )
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        PressIcon(onClick = { state.exit() }) {
+            TGIcon(R.drawable.ic_close, contentDescription = "退出多选", tint = TGColors.InkSoft, size = 20.dp)
+        }
+    }
+}
+
 /** 卡片：白米底 + 淡金细边（对应桌面端 .card + --border-soft） */
 @Composable
 fun TGCard(
@@ -344,13 +470,16 @@ fun TGCard(
     )
 }
 
-/** 优先级标签（高=朱砂 / 中=深金 / 低=灰） */
+/** 优先级标签（高=朱砂红 / 中=琥珀金 / 低=灰）
+ *  v5.15.23 M12（boss：「优先级 高和中的颜色区别不够大」）——
+ *  原来高(Crimson 赤陶红)与中(GoldDeep 深赤陶)同色系，肉眼几乎分不出；
+ *  改成明度/色相拉开：高=深朱砂红、中=琥珀金。 */
 @Composable
 fun PriorityChip(priority: String) {
     val (color, text) = when (priority) {
-        Priority.HIGH -> TGColors.Crimson to "高"
+        Priority.HIGH -> PRIORITY_COLOR_HIGH to "高"
         Priority.LOW -> TGColors.InkMute to "低"
-        else -> TGColors.GoldDeep to "中"
+        else -> PRIORITY_COLOR_MED to "中"
     }
     Box(
         modifier = Modifier
@@ -361,6 +490,10 @@ fun PriorityChip(priority: String) {
         Text(text, color = color, fontSize = 11.sp)
     }
 }
+
+/** v5.15.23 M12：优先级三档专用色（高=深朱砂红、中=琥珀金、低=灰）——显示标签与编辑键共用 */
+val PRIORITY_COLOR_HIGH = Color(0xFFB0361F)
+val PRIORITY_COLOR_MED = Color(0xFFC08A28)
 
 /** 任务类型标签 */
 @Composable

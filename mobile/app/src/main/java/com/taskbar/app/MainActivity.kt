@@ -60,37 +60,50 @@ import com.taskbar.app.ui.*
 import com.taskbar.app.ui.TGColors
 
 /**
- * v5.15.22 M4（boss：「我说我希望看到页面切换的 UI」）——
- * 三个主页面（主页 / 追踪 / 个人）组成一条横向页面带：
- *   · 手指左右滑动 → 切到相邻页（与底部中央追踪钮、顶栏头像入口共用同一套导航）
- *   · 切换时按方向滑入滑出（220ms），而不是原来的"瞬切"
- * 其余页面（所有任务/历史/详情/编辑/设置…）保持无动画，避免 boss 以前反馈的"右上角移下来"。
+ * v5.15.22 M4 + v5.15.23 M1/M3/M4（boss：「页面切换的 UI 还是没加上」「只做了主页和追踪和我的，
+ * 其他的呢」「现在太快了慢一点点」「方向应该按页面关系设计，比如"我的"是左边，追踪和主页按键都在下面」）
+ *
+ * 页面带的物理顺序（与入口位置对应）：
+ *   我的(0, 左上角头像入口) ← 主页(1, 底部中央) → 追踪(2, 底部凸起键)
+ * 转场规则：
+ *   · 主页面带内互切：按左右方向滑动（往右翻 → 新页从右侧进；往左翻 → 从左侧进）
+ *   · 进下级页面（所有任务/历史/详情/新建/设置…）：新页从**右侧推入**，当前页向左退出
+ *   · 从下级页面返回：下级页向右退出，主页面从**左侧**推回
+ *   · 时长 320ms（v5.15.22 的 220ms 被 boss 判为"太快"）
  */
-private val MAIN_PAGE_ORDER = listOf("home", "track", "profile")
+private val MAIN_PAGE_ORDER = listOf("profile", "home", "track")
+private const val PAGE_ANIM_MS = 320
 
 private fun pageIndex(route: String?): Int = MAIN_PAGE_ORDER.indexOf(route)
 
-/** 方向感知的滑入：往右翻页 → 新页从右侧滑入；往左翻页 → 新页从左侧滑入 */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainEnter(): EnterTransition {
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.appEnter(): EnterTransition {
     val from = pageIndex(initialState.destination.route)
     val to = pageIndex(targetState.destination.route)
-    if (from < 0 || to < 0) return EnterTransition.None
-    return slideIntoContainer(
-        if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
-        else AnimatedContentTransitionScope.SlideDirection.Right,
-        tween(220)
-    )
+    if (from >= 0 && to >= 0) {
+        return slideIntoContainer(
+            if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
+            else AnimatedContentTransitionScope.SlideDirection.Right,
+            tween(PAGE_ANIM_MS)
+        )
+    }
+    // 进下级页面 → 从右侧推入；回主页面带 → 从左侧推回
+    return if (to < 0) slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PAGE_ANIM_MS))
+    else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PAGE_ANIM_MS))
 }
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExit(): ExitTransition {
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.appExit(): ExitTransition {
     val from = pageIndex(initialState.destination.route)
     val to = pageIndex(targetState.destination.route)
-    if (from < 0 || to < 0) return ExitTransition.None
-    return slideOutOfContainer(
-        if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
-        else AnimatedContentTransitionScope.SlideDirection.Right,
-        tween(220)
-    )
+    if (from >= 0 && to >= 0) {
+        return slideOutOfContainer(
+            if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
+            else AnimatedContentTransitionScope.SlideDirection.Right,
+            tween(PAGE_ANIM_MS)
+        )
+    }
+    // 去下级页面 → 当前页向左退出；回主页面带 → 当前页向右退出
+    return if (to < 0) slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PAGE_ANIM_MS))
+    else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PAGE_ANIM_MS))
 }
 
 class MainActivity : ComponentActivity() {
@@ -117,6 +130,10 @@ class MainActivity : ComponentActivity() {
                     kotlinx.coroutines.delay(1500)
                     runCatching { SyncService.start(this@MainActivity) }
                         .onFailure { Log.e("MainActivity", "SyncService 延迟启动失败", it) }
+                    // v5.15.23 C-006：一次性修掉"今天已打卡、却还挂在追踪中"的习惯
+                    //   （这类行会让完成键点了没反应 —— boss 的「完成不掉」）
+                    runCatching { com.taskbar.app.TaskBarApp.instance.repo.repairStuckTrackedHabits() }
+                        .onFailure { Log.e("MainActivity", "修复卡住的习惯失败", it) }
                 }
                 MainApp()
             }
@@ -278,12 +295,12 @@ fun MainApp() {
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .consumeWindowInsets(WindowInsets.navigationBars),
-                // v5.15.22 M4：三个主页面按方向左右滑动切换（boss 要"看到页面切换的 UI"）；
-                //   其余页面保持无动画（boss 嫌默认"右上角移下来"的动画影响体验）。
-                enterTransition = { mainEnter() },
-                exitTransition = { mainExit() },
-                popEnterTransition = { mainEnter() },
-                popExitTransition = { mainExit() }
+                // v5.15.22 M4 + v5.15.23 M1/M4：主页面带按方向滑动；下级页面右侧推入/退出。
+                //   其余页面**不再**保持无动画（boss：「你只做了主页和追踪和我的，其他的呢」）。
+                enterTransition = { appEnter() },
+                exitTransition = { appExit() },
+                popEnterTransition = { appEnter() },
+                popExitTransition = { appExit() }
         ) {
             // v5.15.10：每个页面自带**不透明**背景（与原根背景同一个 brush）。
             // 起因：NavHost 切页时新旧两个 destination 会同时绘制一两帧，而各页面 Scaffold 都是

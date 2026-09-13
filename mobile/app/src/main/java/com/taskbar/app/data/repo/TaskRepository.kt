@@ -105,9 +105,16 @@ class TaskRepository(private val db: AppDatabase) {
         set(java.util.Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    /** 跨天的每日任务：在返回给 UI 之前折算成"今天的待办"（不落库） */
+    /** 跨天的每日型任务：在返回给 UI 之前折算成"今天的待办"（不落库）
+     *  v5.15.23 C-006（boss：习惯/每日任务"完成不掉"）——
+     *  原来只认 `category == "daily"`，但习惯任务从电脑端建的时候 category 是自定义分类
+     *  （'锻炼'/'学习'/'生活'…）→ 这类习惯**永远不折算**：完成后卡在 done 态，
+     *  主页/仓库里想再点一次完成会被 `trackStatus == DONE` 静默拦掉（表现为"点了去不掉"）。
+     *  统一判定：`category == "daily"` 或 `type == HABIT` 都算每日型。 */
+    private fun isDailyType(t: Task): Boolean = t.category == "daily" || t.type == TaskType.HABIT
+
     private fun normalizeDailyReset(t: Task, dayStart: Long): Task {
-        if (t.category != "daily" || t.trackStatus != TrackStatus.DONE) return t
+        if (!isDailyType(t) || t.trackStatus != TrackStatus.DONE) return t
         val doneToday = (t.doneAt ?: 0L) >= dayStart
         if (doneToday) return t
         return t.copy(
@@ -121,6 +128,13 @@ class TaskRepository(private val db: AppDatabase) {
     fun observeArchive(): Flow<List<Task>> = taskDao.observeArchiveWithOverdue(todayStart())
     /** v5.15.22 M3：全部打卡日志（历史页按天展开"哪天打卡了/哪天漏了"用） */
     fun observeAllHabitLogs(): Flow<List<HabitLog>> = habitDao.observeAllHabitLogs()
+    /** v5.15.23 M6/M7：仓库视图的全部任务（所有任务页 / 日历 / 分类筛选统一数据源）——
+     *  逐行做每日型折算，跨天的每日任务仍以"今天的待办"呈现。 */
+    fun observeAllForWarehouse(): Flow<List<Task>> = taskDao.observeAllNonDeleted().map { list ->
+        val dayStart = todayStart()
+        list.map { normalizeDailyReset(it, dayStart) }
+    }
+
     fun observeHabits(): Flow<List<Task>> = taskDao.observeHabits()
     fun observeTask(uuid: String): Flow<Task?> = taskDao.observeByUuid(uuid)
     fun observeSteps(taskUuid: String): Flow<List<Step>> = stepDao.observeByTask(taskUuid)
@@ -235,11 +249,22 @@ class TaskRepository(private val db: AppDatabase) {
         //   这里先把 daily 任务按同一条规则折算回未完成，再走正常完成流程。
         val task = normalizeDailyReset(raw, todayStart())
         if (task.type == TaskType.HABIT) {
-            // 习惯：今日已打卡则不再处理；写 habit_log + 加积分，任务保持非 done
+            // 习惯：今日已打卡则不再加分；写 habit_log + 加积分，任务保持非 done
             val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(t))
-            if (habitDao.isChecked(uuid, date)) return
-            habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
-            emitWithData(ChangeOp("upsert", "habit", uuid))
+            val already = habitDao.isChecked(uuid, date)
+            if (!already) {
+                habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
+                emitWithData(ChangeOp("upsert", "habit", uuid))
+            }
+            // v5.15.23 C-006（boss：「这些任务都完成不掉，点了但是去不掉」）——
+            //   根因：习惯完成只写 log、**不解除追踪态**；下次再点完成时 `isChecked → return`
+            //   静默返回 → 任务永远赖在"追踪中"，而追踪页/仓库给的完成键怎么点都没反应。
+            //   修法：打卡即代表这一轮结束 → 顺手把追踪态落回待办（幂等，不改积分）。
+            if (task.trackStatus == TrackStatus.TRACKING) {
+                taskDao.upsert(task.copy(trackStatus = TrackStatus.PENDING, updatedAt = t))
+                emitWithData(ChangeOp("upsert", "task", uuid))
+            }
+            if (already) return
         } else if (task.type == TaskType.MILESTONE) {
             // 里程碑：进度 +1；达到目标次数才归档（大任务，可多次推进）
             // 防止重复完成刷分：已归档则不再加分
@@ -267,25 +292,60 @@ class TaskRepository(private val db: AppDatabase) {
     }
 
     /** 从归档恢复（取消完成）—— 同步扣回完成任务时奖励的积分 */
-    suspend fun restoreTask(uuid: String) {
+    /**
+     * 从归档恢复（取消完成）—— 同步扣回完成任务时奖励的积分。
+     * v5.15.23 M10（boss：「逾期任务也可以恢复，但是积分减半，不足一分按一分算」）——
+     * @param overdueHalf true = 这是"逾期未完成"的任务（本来就没给过分），
+     *   恢复代价按奖励的一半扣（至少 1 分），比"已完成再恢复"轻一档。
+     */
+    suspend fun restoreTask(uuid: String, overdueHalf: Boolean = false) {
         val task = taskDao.getByUuid(uuid) ?: return
         val t = now()
         taskDao.upsert(task.copy(trackStatus = TrackStatus.PENDING, done = 0, doneAt = null, updatedAt = t))
-        // 扣回积分（防刷分：完成→恢复→完成 来回刷）+ 推电脑端
-        bumpPoints(-task.rewardPoints)
+        // 扣积分（防刷分：完成→恢复→完成 来回刷）+ 推电脑端
+        val cost = if (overdueHalf) maxOf(1, task.rewardPoints / 2) else task.rewardPoints
+        bumpPoints(-cost)
         emitWithData(ChangeOp("upsert", "task", uuid))
+    }
+
+    /** v5.15.23 C-006：一次性修复"今天已打卡、却还挂在追踪中"的习惯
+     *  （这类行会让完成键点了没反应 —— boss 的「完成不掉」）。
+     *  修完自动推给电脑端，双端一起干净。 */
+    suspend fun repairStuckTrackedHabits() {
+        val df = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val today = df.format(java.util.Date())
+        val stuck = taskDao.getAllNonDeleted().filter {
+            it.type == TaskType.HABIT &&
+                it.trackStatus == TrackStatus.TRACKING &&
+                habitDao.isChecked(it.uuid, today)
+        }
+        if (stuck.isEmpty()) return
+        val t = now()
+        stuck.forEach { h ->
+            taskDao.upsert(h.copy(trackStatus = TrackStatus.PENDING, updatedAt = t))
+            emitWithData(ChangeOp("upsert", "task", h.uuid))
+        }
     }
 
     /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新） */
     fun observeHabitStreak(taskUuid: String): Flow<Int> {
         return habitDao.observeCheckDatesByTask(taskUuid).map { dates ->
             if (dates.isEmpty()) return@map 0
+            val parsed = dates.mapNotNull { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+                .distinct().sortedDescending()
+            if (parsed.isEmpty()) return@map 0
             val today = java.time.LocalDate.now()
+            // v5.15.23 F5（boss：「我完成了习惯，为什么显示还是连续 0 天」）——
+            //   旧算法强制从"今天"起算：今天还没打卡时，哪怕昨天之前连打 7 天也显示 0，
+            //   看起来像"完成没生效"。改为锚点 = 今天（今天打了）或昨天（今天还没打）；
+            //   更早断档才算真的断了。
+            var cursor = when (parsed.first()) {
+                today -> today
+                today.minusDays(1) -> today.minusDays(1)
+                else -> return@map 0
+            }
             var streak = 0
-            var cursor = today
-            // dates 已经是 DESC 排序
-            for (dateStr in dates) {
-                val d = try { java.time.LocalDate.parse(dateStr) } catch (_: Exception) { continue }
+            for (d in parsed) {
                 if (d == cursor) { streak++; cursor = cursor.minusDays(1) }
                 else if (d.isBefore(cursor)) break
             }

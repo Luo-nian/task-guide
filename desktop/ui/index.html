@@ -9,6 +9,12 @@
 <body>
 <div class="widget" id="app">
 
+  <!-- v5.15.23 D1（boss：连接成功弹一次就行，角落放个已连接/未连接就行）——
+       常驻状态胶囊：右下角，pointer-events 只给悬停提示，不挡任何点击 -->
+  <div class="link-pill" id="linkPill" title="连接状态">
+    <span class="lp-dot"></span><span class="lp-text">未连接</span>
+  </div>
+
   <!-- ===== 顶栏 ===== -->
   <header class="topbar" id="topbar" data-tauri-drag-region="true">
     <div class="title">

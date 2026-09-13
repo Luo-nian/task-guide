@@ -63,7 +63,7 @@ interface TaskDao {
         WHERE deleted = 0
           AND (
                 track_status != 'done'
-                OR (category = 'daily' AND (done_at IS NULL OR done_at < :dayStart))
+                OR ((category = 'daily' OR type = 'habit') AND (done_at IS NULL OR done_at < :dayStart))
               )
           AND (track_status = 'tracking' OR due_at IS NULL OR due_at <= :dayEnd)
         ORDER BY
@@ -133,6 +133,13 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE deleted = 0")
     suspend fun getAllNonDeleted(): List<Task>
+
+    /** v5.15.23 M6/M7：「所有任务」页与日历的数据源 —— 全部未删除任务（含逾期/未来/
+     *  自定义分类的目标限时/今天已打卡的习惯），不再只依赖"今日列表 + 未来列表"，
+     *  这样点分类筛选（目标/限时）时不会因为今日列表里没有该类任务而整页空掉。
+     *  调用方（repo）会再做一次每日型折算，保证跨天的每日任务仍显示为"今天的待办"。 */
+    @Query("SELECT * FROM tasks WHERE deleted = 0 ORDER BY updated_at DESC")
+    fun observeAllNonDeleted(): Flow<List<Task>>
 
     @Query("UPDATE tasks SET deleted = 1, updated_at = :now WHERE uuid = :uuid")
     suspend fun softDelete(uuid: String, now: Long)

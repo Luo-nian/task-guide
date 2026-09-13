@@ -2,7 +2,9 @@ package com.taskbar.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +48,7 @@ import com.taskbar.app.data.model.Task
  * @param onTaskClick 点击某条任务
  * @param emptyHint   选中日无任务时的提示文案
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TaskCalendarView(
     tasks: List<Task>,
@@ -52,7 +56,12 @@ fun TaskCalendarView(
     onTaskClick: (Task) -> Unit,
     emptyHint: String = "这一天没有任务",
     // v5.15.22 M3：可选状态文案（历史页把每日任务按天展开后，用来标"未完成"）
-    statusOf: ((Task) -> String)? = null
+    statusOf: ((Task) -> String)? = null,
+    // v5.15.23 M11：多选（日历形式也要能多选）
+    selecting: Boolean = false,
+    isSelected: (Task) -> Boolean = { false },
+    onToggleSelect: ((Task) -> Unit)? = null,
+    onLongSelect: ((Task) -> Unit)? = null
 ) {
     var monthOffset by remember { mutableStateOf(0) }
     var selectedKey by remember { mutableStateOf<String?>(null) }
@@ -88,7 +97,17 @@ fun TaskCalendarView(
     val daysInMonth = firstCal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
     val rows = (lead + daysInMonth + 6) / 7
 
-    Column(Modifier.fillMaxWidth()) {
+    // v5.15.23 V1（boss：「所有任务页面更多是视觉上的问题」）——
+    //   日历本体装进一张白卡：有明确边界，和下方"当日清单"形成两个清晰区块，
+    //   不再是一堆数字散在米色背景上。
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(TGColors.Card)
+            .border(1.dp, TGColors.BorderSoft, RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
         // ── 月份切换 ──
         Row(
             Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -100,8 +119,9 @@ fun TaskCalendarView(
             Text(
                 "$year 年 ${monthIdx + 1} 月",
                 color = TGColors.Ink,
-                fontSize = 15.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Serif,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
@@ -117,8 +137,10 @@ fun TaskCalendarView(
             listOf("一", "二", "三", "四", "五", "六", "日").forEach { w ->
                 Text(
                     w,
-                    color = TGColors.InkMute,
-                    fontSize = 11.sp,
+                    color = TGColors.InkSoft,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 1.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f)
                 )
@@ -142,50 +164,61 @@ fun TaskCalendarView(
                         Box(
                             Modifier
                                 .weight(1f)
-                                .height(46.dp)
+                                .height(48.dp)
                                 .padding(2.dp)
                                 .clip(RoundedCornerShape(9.dp))
+                                // v5.15.23 M6（boss：日历按任务数量染色分 1~3 / 4~10 / 10+ 三档，
+                                //   但不能影响看清日期）—— 底色只做分层，日期文字始终深色；
+                                //   M6b 去掉数字角标后，把三档色调再拉开一档，让"哪几天忙"一眼可辨。
                                 .background(
                                     when {
-                                        isSel -> TGColors.Gold.copy(alpha = 0.22f)
-                                        n > 0 -> TGColors.Gold.copy(alpha = 0.08f)
+                                        isSel -> TGColors.Gold.copy(alpha = 0.38f)
+                                        n >= 10 -> TGColors.Crimson.copy(alpha = 0.30f)
+                                        n >= 4 -> TGColors.Orange.copy(alpha = 0.24f)
+                                        n >= 1 -> TGColors.Gold.copy(alpha = 0.15f)
                                         else -> Color.Transparent
                                     }
                                 )
+                                // v5.15.23 V1：既有极淡网格边（不再是"数字浮在背景上"），
+                                //   又让"今天"（金边+金点）与"选中"（更浓的赤陶底）两种强调分开
                                 .border(
-                                    1.dp,
-                                    if (isToday) TGColors.Gold.copy(alpha = 0.6f) else Color.Transparent,
+                                    if (isToday) 1.5.dp else 0.8.dp,
+                                    when {
+                                        isToday -> TGColors.GoldDeep.copy(alpha = 0.8f)
+                                        else -> TGColors.BorderSoft
+                                    },
                                     RoundedCornerShape(9.dp)
                                 )
                                 .clickable { selectedKey = key },
                             contentAlignment = Alignment.Center
                         ) {
-                            // 日期数字（格子居中）
-                            Text(
-                                "$dayNum",
-                                color = if (isSel || n > 0) TGColors.Ink else TGColors.InkMute,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSel || isToday) FontWeight.Bold else FontWeight.Normal
-                            )
-                            // v5.15.22 M2（boss：日期对应的任务数量有点小而且位置偏下）——
-                            //   角标从"日期下方居中"改到**格子右上角**，字号 9→10.5，颜色加深更醒目。
-                            if (n > 0) {
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = 1.dp, end = 1.dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(TGColors.GoldDeep.copy(alpha = if (isSel) 0.95f else 0.72f))
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        "$n",
-                                        color = Color.White,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                // 日期数字（格子居中）
+                                Text(
+                                    "$dayNum",
+                                    // v5.15.23 M6：无任务的日期半透明；有任务的保持深色清晰可读
+                                    color = when {
+                                        n > 0 -> TGColors.Ink
+                                        isSel || isToday -> TGColors.InkSoft
+                                        else -> TGColors.InkMute.copy(alpha = 0.45f)
+                                    },
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSel || isToday || n > 0) FontWeight.Bold else FontWeight.Normal
+                                )
+                                // v5.15.23 M6（boss：当天日期就在日期下面加一个点）
+                                if (isToday) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Box(
+                                        Modifier
+                                            .size(4.dp)
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(TGColors.GoldDeep)
                                     )
                                 }
                             }
+                            // v5.15.23 M6b（boss：「把数字形式显示任务取消，现在的太丑了」）——
+                            //   去掉日期格右上角的数量角标；数量信息改由**底色深浅三档**表达
+                            //   （1~3 / 4~10 / 10+），想具体看某天有几条就点那一天看清单。
                         }
                     }
                 }
@@ -198,26 +231,63 @@ fun TaskCalendarView(
 
         // ── 选中日的任务清单 ──
         val selList = selectedKey?.let { byDay[it] }.orEmpty()
-        Text(
-            selectedKey ?: "",
-            color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                selectedKey ?: "",
+                color = TGColors.Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.width(6.dp))
+            if (selList.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(TGColors.Gold.copy(alpha = 0.14f))
+                        .padding(horizontal = 7.dp, vertical = 1.dp)
+                ) {
+                    Text("${selList.size} 项", color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         Spacer(Modifier.height(6.dp))
         if (selList.isEmpty()) {
-            Text(emptyHint, color = TGColors.InkMute, fontSize = 12.sp)
+            // v5.15.23 M6（boss：空提示应该弄大一点，放在那一块的中间）
+            Box(
+                Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    emptyHint,
+                    color = TGColors.InkMute,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (t in selList) {
+                    val selNow = selecting && isSelected(t)
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(TGColors.Card)
-                            .border(1.dp, TGColors.BorderMid, RoundedCornerShape(10.dp))
-                            .clickable { onTaskClick(t) }
+                            .border(
+                                if (selNow) 2.dp else 1.dp,
+                                if (selNow) TGColors.Jade else TGColors.BorderMid,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .combinedClickable(
+                                onClick = { if (selecting) onToggleSelect?.invoke(t) else onTaskClick(t) },
+                                onLongClick = { onLongSelect?.invoke(t) }
+                            )
                             .padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (selecting) {
+                            SelectBadge(selected = selNow)
+                            Spacer(Modifier.width(8.dp))
+                        }
                         Text(
                             t.title,
                             color = TGColors.Ink,

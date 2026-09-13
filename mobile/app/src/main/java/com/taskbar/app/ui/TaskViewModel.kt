@@ -35,6 +35,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     val habitLogs: StateFlow<List<HabitLog>> = repo.observeAllHabitLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** v5.15.23 M6/M7：仓库视图全部任务（所有任务页 + 日历 + 分类筛选） */
+    val allForWarehouse: StateFlow<List<Task>> = repo.observeAllForWarehouse()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val habits: StateFlow<List<Task>> = repo.observeHabits()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -110,6 +114,19 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    // ===== v5.15.23 M11：多选批量操作 =====
+    /** 批量取消（删除）任务 */
+    fun deleteTasks(uuids: List<String>) = viewModelScope.launch {
+        uuids.forEach { repo.deleteTask(it) }
+        refreshWidget()
+    }
+
+    /** 批量恢复到待办；overdueHalf=true 时按"逾期恢复"规则扣半分（至少 1 分） */
+    fun restoreTasks(uuids: List<String>, overdueHalf: Boolean = false) = viewModelScope.launch {
+        uuids.forEach { repo.restoreTask(it, overdueHalf) }
+        refreshWidget()
+    }
+
     /** 开始追踪；已达上限返回 false（UI 据此弹提示） */
     fun startTracking(uuid: String, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
         val ok = repo.startTracking(uuid)
@@ -147,8 +164,9 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
-    fun restoreTask(uuid: String) = viewModelScope.launch {
-        repo.restoreTask(uuid)
+    /** v5.15.23 M10：overdueHalf=true 时按"逾期恢复"规则扣半分（至少 1 分） */
+    fun restoreTask(uuid: String, overdueHalf: Boolean = false) = viewModelScope.launch {
+        repo.restoreTask(uuid, overdueHalf)
         refreshWidget()
     }
 
