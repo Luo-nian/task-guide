@@ -30,3 +30,4 @@ node_modules/
 # 数据文件
 *.db-wal
 *.db-shm
+.tmp-data/
