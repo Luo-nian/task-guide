@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,6 +62,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -133,6 +136,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
                 // 列表状态：显式持有，回到主页时若有追踪任务则强制滚回顶部（否则停在旧位置看不到置顶的追踪区）
                 val listState = rememberLazyListState()
+
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 LaunchedEffect(backStackEntry?.destination?.route) {
                     // 重新进入主页 → 恢复置顶（刚追踪的"不置顶"只影响当次）
@@ -208,7 +212,6 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                     // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
                                     HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
                                         streak = (habitStats[task.uuid]?.streak ?: 0),
-                                        strength = (habitStats[task.uuid]?.strength ?: 0),
                                         tracking = task.trackStatus == TrackStatus.TRACKING,
                                         onJustStopped = { showPinSection = false })   // v5.15.21 P3
                                 } else {
@@ -232,8 +235,6 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, streak: Int = 0, tracking: Boolean = false,
-                     /* v5.15.24 F1：习惯强度分（0..100） */
-                     strength: Int = 0,
                      /* v5.15.21 P3：取消追踪当次不重排（与追踪对称） */
                      onJustStopped: () -> Unit = {},
                      // v5.15.23 M11：多选支持
@@ -288,10 +289,10 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
         Column(Modifier.weight(1f)) {
             // v5.15.23 V2：把「习惯」小标签 + 连续天数合并成一句话，减少每行的小元素
             Text(
-                // v5.15.24 F1b：加了强度分后整行会超宽换行（"81%"被挤到第二行）——
-                //   去掉"今日已打卡"（状态已由左侧绿方块 + 右侧绿勾 + 玉青描边表达），
-                //   并强制单行，极端天数也不会撑破卡片。
-                "习惯 · 连续 $streak 天 · 强度 $strength%",
+                // v5.15.24 F1c（boss：「把百分比强度去掉，看着不舒服」）——
+                //   列表行回到最干净的一行：只留连续天数（完成态由绿方块/绿勾表达）。
+                //   强度分算法本身保留在仓库层（allHabitStats），只是不再在列表展示。
+                "习惯 · 连续 $streak 天",
                 color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -1116,7 +1117,6 @@ fun HabitScreen(vm: TaskViewModel) {
                 items(habits, key = { it.uuid }) { habit ->
                     val stat = habitStats[habit.uuid]
                     val streak = stat?.streak ?: 0
-                    val strength = stat?.strength ?: 0
                     val checkedToday = habit.uuid in checkedSet
                     val scope = rememberCoroutineScope()
                     Row(
@@ -1131,12 +1131,9 @@ fun HabitScreen(vm: TaskViewModel) {
                         Column(Modifier.weight(1f)) {
                             Text(habit.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                             Text(
-                                // v5.15.24 F1b：同样去掉"今日已打卡"避免换行（状态已用绿勾表达）
-                                "连续 $streak 天 · 强度 $strength%",
+                                if (checkedToday) "今日已打卡 · 连续 $streak 天" else "连续 $streak 天",
                                 color = if (checkedToday) TGColors.Jade else TGColors.GoldDeep,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                fontSize = 12.sp
                             )
                         }
                         Button(
@@ -1168,6 +1165,18 @@ fun HabitScreen(vm: TaskViewModel) {
         }
     }
 }
+
+/**
+ * v5.15.24 F4（boss：阅览方式要做成「可下拉的多选项菜单」）——
+ * 阅览方式清单。**加一种新方式（如"挂件""看板"）只需往这里加一行**，
+ * 顶栏的下拉菜单会自动多出一项（UI 由这份 list 驱动，不用改 UI 代码）。
+ */
+private data class ViewMode(val label: String, val isCalendar: Boolean)
+
+private val VIEW_MODES = listOf(
+    ViewMode("列表", isCalendar = false),
+    ViewMode("日历", isCalendar = true),
+)
 
 // ==================== 所有任务（追踪/待办/未来 全量，不含已完成——已完成只进历史任务） ====================
 @Composable
@@ -1205,6 +1214,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     var confirmRestore by remember { mutableStateOf(false) }
     // v5.15.24 F11（调研 3.2）：批量操作后的滑入式撤销快照（只记这一批 uuid，避免撤销误伤）
     var undoSnap by remember { mutableStateOf<UndoSnap?>(null) }
+    // v5.15.24 F4：阅览方式下拉菜单是否展开
+    var viewMenuOpen by remember { mutableStateOf(false) }
     fun match(t: Task) = (keyword.isBlank() || t.title.contains(keyword, ignoreCase = true))
     fun byCat(list: List<Task>) = list.filter { catFilter == "all" || catKeyOf(it) == catFilter }
     val trackingF = byCat(tracking).filter(::match)
@@ -1215,6 +1226,22 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     // 置顶/置底确认弹窗状态：(uuid, action) action = "pin" | "unpin"
     var pendingRepoAction by remember { mutableStateOf<Pair<String, String>?>(null) }
     val listState = rememberLazyListState()
+    // v5.15.24 F5（boss：学 iOS 的用户思维 —— 滚动时给内容让位）——
+    //   搜索框展开后，用户一滑动就把它在**竖直方向压到 1/3**（只留一条细边），
+    //   把阅览面积还给列表；**点一下它立刻恢复原高**（并聚焦输入）。
+    //   只在"已展开搜索框"时才压缩，不影响正常浏览。
+    var searchCompact by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val calScroll = rememberScrollState()
+    val scrolling = listState.isScrollInProgress || calScroll.isScrollInProgress
+    LaunchedEffect(scrolling) {
+        if (scrolling && searchOn) searchCompact = true
+    }
+    val searchHeight by animateDpAsState(
+        targetValue = if (searchCompact) 18.dp else 56.dp,
+        animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "searchHeight"
+    )
     // 扁平行序（与 LazyColumn 的 item 顺序严格一致；null = 分区标题）→ 供滑动多选做命中测试
     val flatRows: List<String?> = buildList {
         if (trackingF.isNotEmpty()) { add(null); trackingF.forEach { add(it.uuid) } }
@@ -1253,19 +1280,57 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     showCount = false
                 )
             } else {
-            // v5.15.21 R4（boss：手机端要能日历形式查看所有任务）—— 列表 / 日历 切换
-            PressPill(onClick = { calView = !calView; if (calView) searchOn = false }) {
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(TGColors.Gold.copy(alpha = 0.16f))
-                        .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 5.dp)
+            // v5.15.24 F4（boss：「阅览方式」应该是可下拉的多选项菜单）——
+            //   原来是"日历/列表"二态键（点一下来回翻），现在点开拉出一个框，
+            //   框里列出所有可选方式，点哪项切哪项，当前方式打勾。
+            Box {
+                PressPill(onClick = { viewMenuOpen = true; searchOn = false }) {
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(TGColors.Gold.copy(alpha = 0.16f))
+                            .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                            .padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "阅览方式",
+                            color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text("▾", color = TGColors.GoldDeep, fontSize = 11.sp)   // 下拉指示
+                    }
+                }
+                DropdownMenu(
+                    expanded = viewMenuOpen,
+                    onDismissRequest = { viewMenuOpen = false }
                 ) {
-                    Text(
-                        if (calView) "列表" else "日历",
-                        color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
-                    )
+                    VIEW_MODES.forEach { mode ->
+                        val active = mode.isCalendar == calView
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    mode.label,
+                                    color = if (active) TGColors.GoldDeep else TGColors.Ink,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            trailingIcon = {
+                                if (active) {
+                                    TGIcon(
+                                        drawable = R.drawable.ic_check,
+                                        contentDescription = null,
+                                        tint = TGColors.GoldDeep, size = 16.dp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                calView = mode.isCalendar
+                                viewMenuOpen = false
+                            }
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(6.dp))
@@ -1280,15 +1345,32 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             }
         }
         // 搜索框（展开时）
+        // v5.15.24 F5：外层是一个高度可动画的裁切盒 —— 滑动时高度收到 18dp（约原生 1/3），
+        //   视觉上只剩一条细边；点它就还原并发起聚焦。内部输入框保持 56dp 不变，超出的部分被裁掉。
         if (searchOn) {
-            OutlinedTextField(
-                value = keyword,
-                onValueChange = { keyword = it },
-                placeholder = { Text("搜索任务名…", color = TGColors.InkFaint, fontSize = 14.sp) },
-                singleLine = true,
-                leadingIcon = { TGIcon(R.drawable.ic_search, contentDescription = null, tint = TGColors.InkMute, size = 18.dp) },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(searchHeight)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = searchCompact) {
+                        searchCompact = false          // 点一下 → 恢复原本体积
+                        focusRequester.requestFocus()  // 顺手把光标放进去，省一次点击
+                    }
+            ) {
+                OutlinedTextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    placeholder = { Text("搜索任务名…", color = TGColors.InkFaint, fontSize = 14.sp) },
+                    singleLine = true,
+                    leadingIcon = { TGIcon(R.drawable.ic_search, contentDescription = null, tint = TGColors.InkMute, size = 18.dp) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .align(Alignment.TopStart)
+                        .focusRequester(focusRequester)
+                )
+            }
         }
         // 分类筛选条（与主页同一套口径；本页含未来任务，首项保持"全部"）
         CategoryFilterRow(catFilter, { catFilter = it })
@@ -1301,7 +1383,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             Column(
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(calScroll)   // v5.15.24 F5：与列表共用"一滚动就压缩搜索框"的监听
             ) {
                 TaskCalendarView(
                     tasks = allForCal,
@@ -1365,8 +1447,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     items(trackingF, key = { "t-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
-                                streak = (habitStats[task.uuid]?.streak ?: 0),
-                                strength = (habitStats[task.uuid]?.strength ?: 0), tracking = true,
+                                streak = (habitStats[task.uuid]?.streak ?: 0), tracking = true,
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },
@@ -1386,7 +1467,6 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
                     items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
                         HabitRow(task, vm, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
- strength = (habitStats[task.uuid]?.strength ?: 0),
                             selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                             onToggleSelect = { ms.toggle(task.uuid) },
                             onLongSelect = { ms.begin(task.uuid) },
@@ -1401,7 +1481,6 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),
-                                strength = (habitStats[task.uuid]?.strength ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },
@@ -1423,7 +1502,6 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),
-                                strength = (habitStats[task.uuid]?.strength ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) },

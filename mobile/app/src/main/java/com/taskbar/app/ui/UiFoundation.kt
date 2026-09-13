@@ -168,6 +168,10 @@ object TGColors {
 
     // ---- 装饰色（v5.4 全面去蓝化） ----
     val Jade        = Color(0xFF7D9B76)   // 鼠尾草绿 Muted Sage #7D9B76（取代"完成绿"）
+    /** v5.15.24 F3c：日历"整日清空"用的**深**玉青。
+     *  原来的 Jade(#7D9B76) 在浅粉底上对比度只有 2.7:1，13sp 小字基本看不出
+     *  （像素扫描证实已渲染但肉眼不可辨）→ 换成 5.3:1 的深色，保证一眼可辨。 */
+    val JadeDeep    = Color(0xFF3F6B4A)
     val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级
     val Azure       = Color(0xFF6B8E9E)   // 浅灰蓝（保留少量做"重复任务"等标签，整体不蓝）
     val Violet      = Color(0xFFA38FA0)   // 灰紫（取代紫罗兰，低饱和不刺眼）

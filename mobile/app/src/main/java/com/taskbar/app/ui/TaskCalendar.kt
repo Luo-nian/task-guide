@@ -212,7 +212,7 @@ fun TaskCalendarView(
                                     "$dayNum",
                                     // v5.15.23 M6：无任务的日期半透明；有任务的保持深色清晰可读
                                     color = when {
-                                        allDone -> TGColors.Jade       // v5.15.24 F3：整日清空
+                                        allDone -> TGColors.JadeDeep       // v5.15.24 F3：整日清空
                                         n > 0 -> TGColors.Ink
                                         isSel || isToday -> TGColors.InkSoft
                                         else -> TGColors.InkMute.copy(alpha = 0.45f)
@@ -227,7 +227,7 @@ fun TaskCalendarView(
                                         Modifier
                                             .size(4.dp)
                                             .clip(RoundedCornerShape(999.dp))
-                                            .background(if (allDone) TGColors.Jade else TGColors.GoldDeep)
+                                            .background(if (allDone) TGColors.JadeDeep else TGColors.GoldDeep)
                                     )
                                 }
                             }
