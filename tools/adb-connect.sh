@@ -8,7 +8,9 @@
 # ============================================================
 ADB="C:/Users/Hasee/.workbuddy/tools/platform-tools/adb.exe"
 ADB_WIN='C:\Users\Hasee\.workbuddy\tools\platform-tools\adb.exe'
-IP="${TG_PHONE_IP:-10.112.227.105}"
+# ⚠️ 手机 IP 会变（换 WiFi / DHCP 续租）→ **默认从 mDNS 读当前地址**；
+#    也支持 TG_PHONE_IP 手动覆盖（无 mDNS 时用）
+IP="${TG_PHONE_IP:-}"
 QUIET=0
 [ "$1" = "-q" ] && QUIET=1
 log() { [ "$QUIET" = "0" ] && echo "$@" >&2; return 0; }
@@ -35,12 +37,23 @@ for P in 5555 5556; do
   SER=$(pick); [ -n "$SER" ] && { log "✓ 连上：$SER"; echo "$SER"; exit 0; }
 done
 
-# ── 4) mDNS 发现（server 常驻后才正常工作） ─────────────────
-MDNS=$("$ADB" mdns services 2>/dev/null | grep -o 'adb-[^ ]*_adb-tls-connect\._tcp' | head -1)
-if [ -n "$MDNS" ]; then
-  log "· mDNS 发现：$MDNS"
-  timeout 12 "$ADB" connect "$MDNS" >/dev/null 2>&1
+# ── 4) mDNS 发现：**直接取 IP:端口**（手机 IP 会变，这一步是关键兜底） ──
+MDNS_OUT=$("$ADB" mdns services 2>/dev/null)
+# 优先 _adb._tcp（tcpip 5555 固定端口），其次 _adb-tls-connect._tcp
+MDNS_ADDR=$(echo "$MDNS_OUT" | awk '/_adb\._tcp/ {print $3; exit}')
+[ -z "$MDNS_ADDR" ] && MDNS_ADDR=$(echo "$MDNS_OUT" | awk '/_adb-tls-connect\._tcp/ {print $3; exit}')
+if [ -n "$MDNS_ADDR" ]; then
+  log "· mDNS 发现当前地址：$MDNS_ADDR"
+  # 顺带把 IP 更新成当前值（后面扫描兜底也要用）
+  [ -z "$IP" ] && IP="${MDNS_ADDR%%:*}"
+  timeout 15 "$ADB" connect "$MDNS_ADDR" >/dev/null 2>&1
   SER=$(pick); [ -n "$SER" ] && { log "✓ 连上：$SER"; echo "$SER"; exit 0; }
+fi
+
+# 无 IP 又无 mDNS → 没法继续
+if [ -z "$IP" ]; then
+  log "✗ 手机 IP 未知且 mDNS 无结果。可显式指定：TG_PHONE_IP=x.x.x.x bash adb-connect.sh"
+  exit 1
 fi
 
 # ── 5) 端口扫描兜底（无线调试端口每次开关都会变） ───────────

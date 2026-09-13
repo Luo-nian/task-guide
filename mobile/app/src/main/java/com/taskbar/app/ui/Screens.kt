@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -1298,7 +1299,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
                         )
                         Spacer(Modifier.width(3.dp))
-                        Text("▾", color = TGColors.GoldDeep, fontSize = 11.sp)   // 下拉指示
+                        Text(
+                            "▾",
+                            color = TGColors.GoldDeep,
+                            fontSize = 15.sp,                                  // v5.15.24 F4b（boss：三角形太小了）
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 DropdownMenu(
@@ -1369,6 +1375,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         .height(56.dp)
                         .align(Alignment.TopStart)
                         .focusRequester(focusRequester)
+                        // v5.15.24 F5b：压缩时把内部内容淡出 —— 否则会残留"半个放大镜"很难看
+                        .alpha(if (searchCompact) 0.25f else 1f)
                 )
             }
         }
