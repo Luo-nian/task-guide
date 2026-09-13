@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -275,19 +276,18 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             //   习惯任务没有步骤 → 按"无步骤"规则给两个键（追踪 + 完成），与 TaskRow 无步骤分支一致。
             //   完成键就是原来的"打卡"语义（habit 的 completeTask 会写 habit_log），只是不再单独做一个绿胶囊。
             // v5.15.21 M1：去掉 else 分支里重复声明的 ctx（已提到函数顶部）
-            PressIcon(onClick = {
-                if (tracking) {
+            // v5.15.22 M5：追踪态下取消键带涟漪呼吸（与桌面端 rippleBreath 同语义）
+            if (tracking) {
+                TrackRippleKey(onClick = {
                     vm.stopTracking(task.uuid)
                     onJustStopped()   // v5.15.21 P3
-                } else {
+                }, iconSize = 22.dp)
+            } else {
+                PressIcon(onClick = {
                     vm.startTracking(task.uuid) { ok ->
                         if (!ok) ToastHelper.show(ctx, "追踪已达上限，先取消别的追踪或在设置里调高上限")
                     }
-                }
-            }) {
-                if (tracking) {
-                    TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 22.dp)
-                } else {
+                }) {
                     TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
                 }
             }
@@ -314,7 +314,8 @@ private fun SectionHeader(title: String, color: Color) {
     ) {
         Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
         Spacer(Modifier.width(6.dp))
-        Text(name, color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        // v5.15.22 D5：分区标题加重（boss：一眼区分各部分）
+        Text(name, color = TGColors.Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         if (count != null) {
             Spacer(Modifier.width(6.dp))
             Box(
@@ -403,7 +404,8 @@ private fun TaskRow(
         if (tracking) {
             // ===== 追踪中布局：任务名上移 / 步骤大字占原任务名位置 / 分类 chips 右移排一排 =====
             Row(
-                Modifier.padding(12.dp, 8.dp, 6.dp, 2.dp),
+                // v5.15.22 M6：end 6→12，与 HabitRow 的 12dp 内边距一致 → 追踪/完成两键跨行同列
+                Modifier.padding(12.dp, 8.dp, 12.dp, 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -425,16 +427,16 @@ private fun TaskRow(
                 )
                 // 操作：停止追踪 + 推进/完成
                 // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
-                PressIcon(onClick = { vm.stopTracking(task.uuid); onJustStopped() }) {   // v5.15.21 P3
-                    TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
-                }
+                // v5.15.22 M5：追踪态下取消键带涟漪呼吸；M6：键间距 10dp、图标 22dp（跨行同列）
+                TrackRippleKey(onClick = { vm.stopTracking(task.uuid); onJustStopped() }, iconSize = 22.dp)   // v5.15.21 P3
+                Spacer(Modifier.width(10.dp))
                 if (hasSteps) {
                     // 剩余未完成步骤 > 3 时，连按 3 次推进键才弹"完成"键（步骤少直接推进就行，不需要这个机制）
                     val remainingSteps = steps.count { it.status != com.taskbar.app.data.model.StepStatus.DONE }
                     // v5.15.16（M9）：只剩最后一步 → 推进键直接变「完成」键
                     if (remainingSteps <= 1) {
                         PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                         }
                     } else {
                         PressIcon(onClick = {
@@ -454,24 +456,24 @@ private fun TaskRow(
                                 }
                             }
                         }) {
-                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 22.dp)
                         }
                         if (showFinish) {
                             PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                             }
                         }
                     }
                 } else {
                     PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                     }
                 }
             }
             // 当前步骤大字（占据原本任务名的位置，一眼看到现在做到哪一步）
             if (currentStep != null && currentStepIndex != null) {
                 Row(
-                    Modifier.padding(start = 36.dp, end = 12.dp, bottom = 6.dp),
+                    Modifier.padding(start = 36.dp, end = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("▶", color = TGColors.Azure, fontSize = 12.sp)
@@ -489,7 +491,7 @@ private fun TaskRow(
             }
             // 分类 chips 右移排一排（类型/分类/优先级/追踪中）
             Row(
-                Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp),
+                Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 TypeChip(task.type)
@@ -509,13 +511,14 @@ private fun TaskRow(
                     "步骤都完成了吗？可以直接点完成哦",
                     color = TGColors.Jade,
                     fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp)
+                    modifier = Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp)
                 )
             }
         } else {
             // ===== 未追踪布局：任务名原位（不显示步骤），chips 左上 =====
             Row(
-                Modifier.padding(12.dp, 12.dp, 6.dp, 12.dp),
+                // v5.15.22 M6：end 6→12，与 HabitRow 对齐
+                Modifier.padding(12.dp, 12.dp, 12.dp, 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 左侧菱形标识
@@ -553,7 +556,7 @@ private fun TaskRow(
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(task.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(task.title, color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     task.dueAt?.let {
                         Spacer(Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -580,9 +583,8 @@ private fun TaskRow(
                 // 右侧操作：追踪 + 主操作（完成/推进）
                 if (tracking) {
                     // v5.15.16（boss）：取消追踪 = 红色实心追踪键（追踪键镂空处填满），不再用 ✕
-                    PressIcon(onClick = { vm.stopTracking(task.uuid); onJustStopped() }) {   // v5.15.21 P3
-                        TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 20.dp)
-                    }
+                    // v5.15.22 M5：追踪态下取消键带涟漪呼吸；M6：图标统一 22dp
+                    TrackRippleKey(onClick = { vm.stopTracking(task.uuid); onJustStopped() }, iconSize = 22.dp)
                 } else {
                     PressIcon(onClick = {
                         vm.startTracking(task.uuid) { ok ->
@@ -593,16 +595,18 @@ private fun TaskRow(
                             }
                         }
                     }) {
-                        TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 20.dp)
+                        TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
                     }
                 }
+                // v5.15.22 M6：与 HabitRow 相同的 10dp 键间距 → 追踪/完成两键跨行同列
+                Spacer(Modifier.width(10.dp))
                 if (hasSteps) {
                     // 剩余未完成步骤 > 3 时，连按 3 次推进键才弹"完成"键（步骤少直接推进就行，不需要这个机制）
                     val remainingSteps = steps.count { it.status != com.taskbar.app.data.model.StepStatus.DONE }
                     // v5.15.16（M9）：只剩最后一步 → 推进键直接变「完成」键
                     if (remainingSteps <= 1) {
                         PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                            TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                         }
                     } else {
                         PressIcon(onClick = {
@@ -622,17 +626,17 @@ private fun TaskRow(
                                 }
                             }
                         }) {
-                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 20.dp)
+                            TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 22.dp)
                         }
                         if (showFinish) {
                             PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                                TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                             }
                         }
                     }
                 } else {
                     PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 20.dp)
+                        TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
                     }
                 }
             }
@@ -641,13 +645,13 @@ private fun TaskRow(
                     "步骤都完成了吗？可以直接点完成哦",
                     color = TGColors.Jade,
                     fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 36.dp, end = 12.dp, bottom = 10.dp)
+                    modifier = Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp)
                 )
             }
             // 仓库操作行（所有任务页专用：置顶到主页 / 移回仓库）
             if (onPin != null || onUnpin != null) {
                 Row(
-                    Modifier.padding(start = 30.dp, end = 12.dp, bottom = 6.dp),
+                    Modifier.padding(start = 30.dp, end = 6.dp, bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     onPin?.let {
@@ -709,7 +713,7 @@ fun TrackScreen(vm: TaskViewModel) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(
             "追踪中 (${tracking.size}/$limit)",
-            color = TGColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+            color = TGColors.Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif,
             modifier = Modifier.padding(4.dp, 12.dp)
         )
 
@@ -769,7 +773,7 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(task.title, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(task.title, color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 if (total > 0) {
                     Text("$doneCount / $total 步骤", color = TGColors.InkMute, fontSize = 11.sp)
                 }
@@ -830,13 +834,13 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
             //   旧版是 TextButton + 长度不同的文字（"取消追踪" vs "完成"），图标起点参差；
             //   现在两个键都是 40dp 圆形（PressIcon 内 IconButton）+ 固定间距 + 整体右对齐，
             //   图标自然落在同一条竖线上。左端 Spacer 不再需要（改用 End 对齐）。
-            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End),
+            // v5.15.22 M6：键间距 14→10，与主页 TaskRow/HabitRow 完全一致
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 取消追踪：朱砂红实心靶心（追踪键镂空处填满）——与主页 TaskRow / HabitRow 一致
-            PressIcon(onClick = { vm.stopTracking(task.uuid) }) {
-                TGIcon(R.drawable.ic_track_fill, contentDescription = "取消追踪", tint = TGColors.Crimson, size = 24.dp)
-            }
+            // v5.15.22 M5：追踪态下取消键带涟漪呼吸
+            TrackRippleKey(onClick = { vm.stopTracking(task.uuid) }, iconSize = 24.dp)
             // 推进 / 完成：只剩最后一步（或无步骤）时直接变「完成」，与主页规则一致
             if (total == 0 || remaining <= 1) {
                 PressIcon(onClick = { vm.completeTask(task.uuid) }) {
@@ -939,9 +943,10 @@ private fun TrackStepLine(seq: Int, step: Step, vm: TaskViewModel) {
     }
 }
 
-/** 通用步骤行（详情页等使用），seq 非空时显示序号 */
+/** 通用步骤行（详情页等使用），seq 非空时显示序号
+ *  v5.15.22 M9：readOnly=true 时只渲染状态，不给任何可点击的按钮（日历进详情防刷分） */
 @Composable
-fun StepRow(step: Step, vm: TaskViewModel, seq: Int? = null) {
+fun StepRow(step: Step, vm: TaskViewModel, seq: Int? = null, readOnly: Boolean = false) {
     val isDone = step.status == StepStatus.DONE
     val isDoing = step.status == StepStatus.DOING
     val bg = when {
@@ -997,6 +1002,12 @@ fun StepRow(step: Step, vm: TaskViewModel, seq: Int? = null) {
             ) {
                 Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
+        } else if (readOnly) {
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .border(1.5.dp, TGColors.InkFaint, androidx.compose.foundation.shape.CircleShape)
+            )
         } else {
             // 未完成：空心圆环 + 勾（可点击完成）
             PressIcon(onClick = { vm.advanceStep(step.uuid) }, modifier = Modifier.size(36.dp)) {
@@ -1170,7 +1181,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 TaskCalendarView(
                     tasks = allForCal,
                     dateOf = { it.dueAt ?: it.deadline ?: it.createdAt },
-                    onTaskClick = { navController.navigate("detail/${it.uuid}") },
+                    // v5.15.22 M9：日历点任务 → 只读详情（boss：不能有任何功能按键，防刷分）
+                    onTaskClick = { navController.navigate("ro/${it.uuid}") },
                     emptyHint = "这一天没有任务"
                 )
             }
@@ -1253,6 +1265,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
 @Composable
 fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     val archive by vm.archive.collectAsState()
+    // v5.15.22 M3：打卡日志 —— 每日任务按天展开（哪天打了=已完成，哪天漏了=未完成）
+    val logs by vm.habitLogs.collectAsState()
     // v5.15.21 R4：false=列表（记账式流水）｜true=日历视图
     // v5.15.22 M1（boss：历史任务应该是默认日历形式）→ 初值改 true
     var calView by remember { mutableStateOf(true) }
@@ -1265,7 +1279,7 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                 TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
             Spacer(Modifier.width(4.dp))
-            Text("历史任务", color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text("历史任务", color = TGColors.Ink, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif)
             Spacer(Modifier.weight(1f))
             // v5.15.21 R4（boss：手机端要能日历形式查看历史任务）—— 列表 / 日历 切换
             PressPill(onClick = { calView = !calView }) {
@@ -1287,16 +1301,20 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
             EmptyState("还没有已完成的任务\n完成的任务会自动收进这里", Modifier.fillMaxSize())
         } else if (calView) {
             // v5.15.21 R4：日历视图（按完成日期铺开）
+            // v5.15.22 M3：每日任务按天展开（漏掉的那天也有一条"未完成"）→ 日历数量才真实
+            // v5.15.22 M9：日历点任务 → 只读详情（防刷分）
+            val entries = remember(archive, logs) { expandHistoryByDay(archive, logs) }
             Column(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
             ) {
                 TaskCalendarView(
-                    tasks = archive,
-                    dateOf = { it.doneAt ?: it.updatedAt },
-                    onTaskClick = { navController.navigate("detail/${it.uuid}") },
-                    emptyHint = "这一天没有完成的任务"
+                    tasks = entries,
+                    dateOf = { it.doneAt ?: it.dueAt ?: it.deadline ?: it.createdAt },
+                    onTaskClick = { navController.navigate("ro/${it.uuid}") },
+                    emptyHint = "这一天没有完成的任务",
+                    statusOf = { t -> if (t.done == 1) "已完成" else "未完成" }
                 )
             }
         } else {
@@ -1312,28 +1330,87 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     }
 }
 
-/** 已完成任务行（划线 + 完成时间 + 恢复） */
+/**
+ * v5.15.22 M3（boss：「历史任务不是已完成任务，已逾期未完成的每日任务也算进去」）——
+ * 把归档按天展开：
+ *  · 每日/习惯任务：从创建日（最多回溯 60 天）到昨天，逐天生成一条 —— 有打卡记录 = 已完成，
+ *    没打卡 = 未完成（这就是"某天漏了"也能在日历上看到数量的来源）
+ *  · 普通任务：已完成 → doneAt 那天；未完成且已逾期 → 归在 dueAt/deadline/创建那天
+ * 今天的状态是"活的"（主页还在管），不参与展开。
+ */
+private fun expandHistoryByDay(archive: List<Task>, logs: List<com.taskbar.app.data.model.HabitLog>): List<Task> {
+    val todayStart = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val dayFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+    val logMap = HashMap<String, HashSet<String>>()
+    for (l in logs) logMap.getOrPut(l.taskUuid) { HashSet() }.add(l.checkDate)
+    val out = ArrayList<Task>(archive.size + 64)
+    for (t in archive) {
+        val isDaily = t.type == TaskType.HABIT || t.category == "daily"
+        if (!isDaily) { out.add(t); continue }
+        // 今天已打卡 → 保留今天这条"活"的完成记录
+        if (t.done == 1 && (t.doneAt ?: 0L) >= todayStart) out.add(t)
+        // 往期逐天展开（最多回溯 60 天，防止老任务把列表撑爆）
+        val start = maxOf(t.createdAt, todayStart - 60L * 24 * 3600 * 1000)
+        val cur = java.util.Calendar.getInstance().apply {
+            timeInMillis = start
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val days = logMap[t.uuid]
+        while (cur.timeInMillis < todayStart) {
+            val key = dayFmt.format(cur.time)
+            val checked = days?.contains(key) == true
+            out.add(
+                if (checked) t.copy(done = 1, trackStatus = TrackStatus.DONE, doneAt = cur.timeInMillis)
+                else t.copy(done = 0, trackStatus = TrackStatus.PENDING, doneAt = cur.timeInMillis)
+            )
+            cur.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        }
+    }
+    return out
+}
+
+/** 已完成/逾期未完成任务行（完成=划线+时间+恢复；未完成=朱砂标记，无恢复键） */
 @Composable
 private fun DoneTaskRow(task: Task, vm: TaskViewModel) {
+    val isDone = task.done == 1 && task.trackStatus == TrackStatus.DONE
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(TGColors.Card.copy(alpha = 0.7f))
-            .border(1.dp, TGColors.BorderMid, RoundedCornerShape(12.dp))   // v5.15.21 M6
+            .background(if (isDone) TGColors.Card.copy(alpha = 0.7f) else TGColors.Crimson.copy(alpha = 0.06f))
+            .border(
+                1.dp,
+                if (isDone) TGColors.BorderMid else TGColors.Crimson.copy(alpha = 0.45f),
+                RoundedCornerShape(12.dp)
+            )
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
+            if (!isDone) {
+                Text("逾期未完成", color = TGColors.Crimson, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(2.dp))
+            }
             Text(
                 task.title,
-                color = TGColors.InkMute,
+                color = if (isDone) TGColors.InkMute else TGColors.Ink,
                 fontSize = 14.sp,
-                textDecoration = TextDecoration.LineThrough
+                textDecoration = if (isDone) TextDecoration.LineThrough else null
             )
-            task.doneAt?.let { Text("完成于 ${dateFmt.format(Date(it))}", color = TGColors.InkMute, fontSize = 11.sp) }
+            if (isDone) {
+                task.doneAt?.let { Text("完成于 ${dateFmt.format(Date(it))}", color = TGColors.InkMute, fontSize = 11.sp) }
+            } else {
+                Text("历史里只做记录，不计积分", color = TGColors.InkMute, fontSize = 11.sp)
+            }
         }
-        TextButton(onClick = { vm.restoreTask(task.uuid) }) { Text("恢复", color = TGColors.GoldDeep) }
+        // v5.15.22 M3：未完成的任务没有"恢复"可言（它本来就还没做完）
+        if (isDone) {
+            TextButton(onClick = { vm.restoreTask(task.uuid) }) { Text("恢复", color = TGColors.GoldDeep) }
+        }
     }
 }
 
@@ -1358,8 +1435,9 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     Text(
                         "任务栏",
                         color = TGColors.Ink,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Serif
                     )
                     Spacer(Modifier.width(6.dp))
                     // 连接状态小圆点：连上=鼠尾草绿，未连=极淡（不打扰，只做状态提示）
@@ -1413,7 +1491,7 @@ private fun barWithTitle(title: String, navController: NavController, showBack: 
             }
             Spacer(Modifier.width(4.dp))
         }
-        Text(title, color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = TGColors.Ink, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif)
     }
 }
 

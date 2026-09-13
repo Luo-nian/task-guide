@@ -1036,7 +1036,7 @@ fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<
         // v5.15 P0：改 /api/pair 的 body 为 { name, deviceName, deviceId } —— 手机端 ApiRoutes
         //   读的是 deviceName（旧实现只发 name，手机端永远收到 null → 记成默认"电脑"）；
         //   deviceId 用于桌面重新发现配对（安卓在 SyncService 里读同一 ANDROID_ID）
-        let _ = reqwest::blocking::Client::new()
+        let _ = crate::sync::lan_client()
             .post(format!("{}/api/pair", base))
             .timeout(std::time::Duration::from_secs(5))
             .json(&serde_json::json!({ "name": pc_name, "deviceName": pc_name, "deviceId": did_arc.lock().unwrap().clone() }))
@@ -1064,7 +1064,7 @@ fn disconnect_server(state: tauri::State<AppState>) {
             sync::server_base(&g)
         };
         if base.is_empty() { return; }
-        let _ = reqwest::blocking::Client::new()
+        let _ = crate::sync::lan_client()
             .post(format!("{}/api/pair/clear", base))
             .timeout(std::time::Duration::from_secs(3))
             .send();
@@ -1474,7 +1474,7 @@ fn push_avatar_emoji(state: tauri::State<AppState>, emoji: String) {
         };
         if base.is_empty() { return; }
         let url = format!("{}/api/settings/upsert", base);
-        let _ = reqwest::blocking::Client::new()
+        let _ = crate::sync::lan_client()
             .post(&url)
             .timeout(std::time::Duration::from_secs(4))
             .json(&serde_json::json!({"key":"avatar_emoji","value":emoji}))
@@ -1621,7 +1621,7 @@ fn auto_reconnect_loop(
         //   等待 3s 超时纯属浪费（每轮 5s 间隔 + 3s 超时 = 8s 才有一次扫描机会）。
         let ping_timeout = if fail_count >= 3 { 1500 } else { 3000 };
         let base = sync::server_base(&cur_url);
-        let alive = reqwest::blocking::Client::new()
+        let alive = crate::sync::lan_client()
             .get(format!("{}/api/ping", base))
             .timeout(std::time::Duration::from_millis(ping_timeout))
             .send()
@@ -1711,7 +1711,7 @@ fn auto_reconnect_loop(
             let pc_name2 = pc_name.clone();
             std::thread::spawn(move || {
                 let base = { sync::server_base(&url_arc2.lock().unwrap()) };
-                let _ = reqwest::blocking::Client::new()
+                let _ = crate::sync::lan_client()
                     .post(format!("{}/api/pair", base))
                     .timeout(std::time::Duration::from_secs(4))
                     .json(&serde_json::json!({

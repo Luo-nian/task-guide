@@ -46,12 +46,52 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.navigation.NavBackStackEntry
 import com.taskbar.app.server.SyncService
 import com.taskbar.app.ui.*
 import com.taskbar.app.ui.TGColors
+
+/**
+ * v5.15.22 M4（boss：「我说我希望看到页面切换的 UI」）——
+ * 三个主页面（主页 / 追踪 / 个人）组成一条横向页面带：
+ *   · 手指左右滑动 → 切到相邻页（与底部中央追踪钮、顶栏头像入口共用同一套导航）
+ *   · 切换时按方向滑入滑出（220ms），而不是原来的"瞬切"
+ * 其余页面（所有任务/历史/详情/编辑/设置…）保持无动画，避免 boss 以前反馈的"右上角移下来"。
+ */
+private val MAIN_PAGE_ORDER = listOf("home", "track", "profile")
+
+private fun pageIndex(route: String?): Int = MAIN_PAGE_ORDER.indexOf(route)
+
+/** 方向感知的滑入：往右翻页 → 新页从右侧滑入；往左翻页 → 新页从左侧滑入 */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainEnter(): EnterTransition {
+    val from = pageIndex(initialState.destination.route)
+    val to = pageIndex(targetState.destination.route)
+    if (from < 0 || to < 0) return EnterTransition.None
+    return slideIntoContainer(
+        if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
+        else AnimatedContentTransitionScope.SlideDirection.Right,
+        tween(220)
+    )
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExit(): ExitTransition {
+    val from = pageIndex(initialState.destination.route)
+    val to = pageIndex(targetState.destination.route)
+    if (from < 0 || to < 0) return ExitTransition.None
+    return slideOutOfContainer(
+        if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
+        else AnimatedContentTransitionScope.SlideDirection.Right,
+        tween(220)
+    )
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -199,7 +239,38 @@ fun MainApp() {
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                // v5.15.22 M4：主轴三页左右滑动切换（72dp 触发阈值；纵向滚动不受影响）
+                .pointerInput(currentRoute) {
+                    val idx = pageIndex(currentRoute)
+                    if (idx < 0) return@pointerInput
+                    val threshold = 72.dp.toPx()
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { total = 0f },
+                        onHorizontalDrag = { _, dragAmount -> total += dragAmount },
+                        onDragCancel = { total = 0f },
+                        onDragEnd = {
+                            val target = when {
+                                total <= -threshold -> idx + 1
+                                total >= threshold -> idx - 1
+                                else -> -1
+                            }
+                            if (target in MAIN_PAGE_ORDER.indices) {
+                                navController.navigate(MAIN_PAGE_ORDER[target]) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                            total = 0f
+                        }
+                    )
+                }
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = "home",
@@ -207,11 +278,12 @@ fun MainApp() {
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .consumeWindowInsets(WindowInsets.navigationBars),
-                // 全部页面切换无动画（boss 嫌默认"右上角移下来"的动画影响体验）
-                enterTransition = { androidx.compose.animation.EnterTransition.None },
-                exitTransition = { androidx.compose.animation.ExitTransition.None },
-                popEnterTransition = { androidx.compose.animation.EnterTransition.None },
-                popExitTransition = { androidx.compose.animation.ExitTransition.None }
+                // v5.15.22 M4：三个主页面按方向左右滑动切换（boss 要"看到页面切换的 UI"）；
+                //   其余页面保持无动画（boss 嫌默认"右上角移下来"的动画影响体验）。
+                enterTransition = { mainEnter() },
+                exitTransition = { mainExit() },
+                popEnterTransition = { mainEnter() },
+                popExitTransition = { mainExit() }
         ) {
             // v5.15.10：每个页面自带**不透明**背景（与原根背景同一个 brush）。
             // 起因：NavHost 切页时新旧两个 destination 会同时绘制一两帧，而各页面 Scaffold 都是
@@ -228,6 +300,13 @@ fun MainApp() {
                 arguments = listOf(navArgument("uuid") { type = NavType.StringType })
             ) { entry ->
                 ScreenSurface { TaskDetailScreen(vm, navController, entry.arguments?.getString("uuid") ?: "") }
+            }
+            // v5.15.22 M9：日历里点进来的**只读**详情（没有任何操作键，防刷分）
+            composable(
+                "ro/{uuid}",
+                arguments = listOf(navArgument("uuid") { type = NavType.StringType })
+            ) { entry ->
+                ScreenSurface { TaskDetailScreen(vm, navController, entry.arguments?.getString("uuid") ?: "", readOnly = true) }
             }
             composable("add") { ScreenSurface { AddEditTaskScreen(vm, navController, null) } }
             composable(

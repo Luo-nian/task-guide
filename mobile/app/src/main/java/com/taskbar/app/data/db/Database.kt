@@ -85,6 +85,29 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE track_status = 'done' AND deleted = 0 ORDER BY done_at DESC")
     fun observeArchive(): Flow<List<Task>>
 
+    /**
+     * v5.15.22 M3（boss：「历史任务不是已完成任务，已逾期未完成的每日任务也算进去」）——
+     * 旧的 observeArchive 只取 track_status='done'，所以"某天有任务但没做完"的那天在
+     * 历史日历里是 0 条（boss 报的「12、13 日没有任务数量」）。
+     * 归档口径改为：已完成 ∪ 往期没做完的每日/习惯任务 ∪ 已逾期未完成的普通任务。
+     * 用 created_at < dayStart 排除"今天刚建的"（还没到能算逾期的程度）。
+     */
+    @Query("""
+        SELECT * FROM tasks
+        WHERE deleted = 0 AND (
+          track_status = 'done'
+          OR (
+            track_status != 'done' AND created_at < :dayStart AND (
+              type = 'habit'
+              OR (due_at   IS NOT NULL AND due_at   < :dayStart)
+              OR (deadline IS NOT NULL AND deadline < :dayStart)
+            )
+          )
+        )
+        ORDER BY COALESCE(done_at, 0) DESC, created_at DESC
+    """)
+    fun observeArchiveWithOverdue(dayStart: Long): Flow<List<Task>>
+
     @Query("SELECT * FROM tasks WHERE type = 'habit' AND deleted = 0 ORDER BY due_at ASC")
     fun observeHabits(): Flow<List<Task>>
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -53,9 +54,14 @@ import java.util.Date
 import java.util.Locale
 
 // ==================== 任务详情 ====================
+/**
+ * @param readOnly v5.15.22 M9（boss：「日历里点任务只能看详情，不能编辑、不能完成、
+ *   不能有任何功能按键，否则可以通过日历刷分」）—— 只读模式只渲染信息，
+ *   整个操作区（追踪/完成/延迟/编辑/删除）、添加步骤、步骤打勾键全部不渲染。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: String) {
+fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: String, readOnly: Boolean = false) {
     val taskState by vm.observeTaskFlow(uuid).collectAsStateWithLifecycle(initialValue = null)
     val steps by vm.steps(uuid).collectAsStateWithLifecycle(initialValue = emptyList())
     if (taskState == null) {
@@ -79,7 +85,7 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
             IconButton(onClick = { navController.popBackStack() }) {
                 TGIcon(R.drawable.ic_back, contentDescription = "返回", tint = TGColors.Ink, size = 22.dp)
             }
-            Text("任务详情", color = TGColors.InkSoft, fontSize = 14.sp)
+            Text(if (readOnly) "任务详情 · 只读" else "任务详情", color = TGColors.InkSoft, fontSize = 14.sp)
         }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -89,7 +95,8 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                     TypeChip(task.type); Spacer(Modifier.width(6.dp)); PriorityChip(task.priority)
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(task.title, color = TGColors.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                // v5.15.22 D5：详情任务名是本页主角 → 衬线 + 21sp
+                Text(task.title, color = TGColors.Ink, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif)
                 if (task.desc.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp)); Text(task.desc, color = TGColors.InkSoft, fontSize = 13.sp)
                 }
@@ -111,8 +118,8 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                 }
             }
         }
-        // 操作按钮
-        item {
+        // 操作按钮（v5.15.22 M9：只读模式整块不渲染 —— 防日历刷分）
+        if (!readOnly) item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val isTracking = task.trackStatus == TrackStatus.TRACKING
                 Button(
@@ -185,17 +192,24 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                         modifier = Modifier.weight(1f)
                     )
                     // 添加步骤：点按钮弹窗设置（不再内嵌表单，避免一进来就看到一堆输入框）
-                    TextButton(onClick = { showAddStepDialog = true }) {
-                        TGIcon(R.drawable.ic_add, contentDescription = null, tint = TGColors.GoldDeep, size = 16.dp)
-                        Spacer(Modifier.width(3.dp))
-                        Text("添加步骤", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    // v5.15.22 M9：只读模式不给这个入口
+                    if (!readOnly) {
+                        TextButton(onClick = { showAddStepDialog = true }) {
+                            TGIcon(R.drawable.ic_add, contentDescription = null, tint = TGColors.GoldDeep, size = 16.dp)
+                            Spacer(Modifier.width(3.dp))
+                            Text("添加步骤", color = TGColors.GoldDeep, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 if (steps.isEmpty()) {
-                    Text("还没有步骤，点右上角「添加步骤」拆解它", color = TGColors.InkMute, fontSize = 12.sp)
+                    // v5.15.22 M9：只读模式下不给"添加步骤"的引导（入口已隐藏）
+                    Text(
+                        if (readOnly) "这个任务还没有步骤（只读模式）" else "还没有步骤，点右上角「添加步骤」拆解它",
+                        color = TGColors.InkMute, fontSize = 12.sp
+                    )
                 } else {
-                    steps.forEachIndexed { i, step -> StepRow(step, vm, seq = i + 1); Spacer(Modifier.height(4.dp)) }
+                    steps.forEachIndexed { i, step -> StepRow(step, vm, seq = i + 1, readOnly = readOnly); Spacer(Modifier.height(4.dp)) }
                 }
             }
         }
@@ -634,8 +648,11 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 // 优先级
                 Text("优先级", color = TGColors.InkSoft, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(Priority.HIGH to "高", Priority.MEDIUM to "中", Priority.LOW to "低").forEach { (v, l) ->
-                        FilterChip(selected = priority == v, onClick = { priority = v }, label = { Text(l) })
+                    // v5.15.22 M7（boss：点到「高」「中」「低」时颜色应该有所区分）——
+                    //   原来三个档位共用一个 FilterChip 配色，选中态长得一模一样；
+                    //   换成按优先级上色的 PriorityFilterChip。
+                    listOf(Priority.HIGH, Priority.MEDIUM, Priority.LOW).forEach { v ->
+                        PriorityFilterChip(priority = v, selected = priority == v, onClick = { priority = v })
                     }
                 }
 

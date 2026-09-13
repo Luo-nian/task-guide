@@ -50,7 +50,9 @@ fun TaskCalendarView(
     tasks: List<Task>,
     dateOf: (Task) -> Long?,
     onTaskClick: (Task) -> Unit,
-    emptyHint: String = "这一天没有任务"
+    emptyHint: String = "这一天没有任务",
+    // v5.15.22 M3：可选状态文案（历史页把每日任务按天展开后，用来标"未完成"）
+    statusOf: ((Task) -> String)? = null
 ) {
     var monthOffset by remember { mutableStateOf(0) }
     var selectedKey by remember { mutableStateOf<String?>(null) }
@@ -224,6 +226,20 @@ fun TaskCalendarView(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+                        // v5.15.22 M3：状态标签（未完成 = 朱砂红，一眼能看出那天漏了）
+                        statusOf?.let { f ->
+                            val st = f(t)
+                            if (st.isNotEmpty()) {
+                                val missed = st.contains("未")
+                                Text(
+                                    st,
+                                    color = if (missed) TGColors.Crimson else TGColors.InkMute,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (missed) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.padding(start = 6.dp)
+                                )
+                            }
+                        }
                         Text(
                             CAT_FILTER_LABEL[catKeyOf(t)] ?: "",
                             color = TGColors.InkMute,

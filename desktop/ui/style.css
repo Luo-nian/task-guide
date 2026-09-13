@@ -940,9 +940,10 @@ body::after {
   background: linear-gradient(135deg, #FFFFFF, #F0E8D6);  /* 浅米底，破浪骑士 4 字清楚可见 */
   border: 1px solid var(--border-mid);
   border-radius: 10px;
-  /* v5.15.21 D1（boss：等级图标那一栏太扁了，宽一点吧）—— 12→18 padding + 最小高度，整体加厚 */
-  padding: 18px;
-  min-height: 96px;
+  /* v5.15.21 D1（boss：等级图标那一栏太扁了，宽一点吧）—— 12→18 padding + 最小高度，整体加厚
+     v5.15.22 D1：再加厚一档（上轮被文件尾部的覆盖规则压掉，boss 实际没看到这版） */
+  padding: 20px 22px;
+  min-height: 112px;
   box-shadow: var(--shadow-card);
   margin-bottom: 12px;
   display: flex; align-items: center; gap: 14px;
@@ -956,17 +957,17 @@ body::after {
   opacity: 0.6;
 }
 .level-character {
-  /* v5.15.21 D1：52 → 64，配合加厚后的卡片 */
-  width: 64px; height: 64px;
+  /* v5.15.21 D1：52 → 64，配合加厚后的卡片；v5.15.22 D1：64 → 68 */
+  width: 68px; height: 68px; flex: 0 0 68px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 36px;
+  font-size: 38px;
   --rank-from: #E8CB7F; --rank-to: #B98F2E; --rank-ico: #1F1407;
   background: linear-gradient(135deg, var(--rank-from), var(--rank-to));
   color: var(--rank-ico);
   border-radius: 50%;
   box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.4), 0 4px 10px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 244, 208, 0.35);
-  flex: 0 0 64px;
+  flex: 0 0 68px;
 }
 /* v5.13j：level-character 10 档分档 */
 .level-character.rank-lv4 { --rank-from: #D8B45A; --rank-to: #6B4E1B; }
@@ -2099,13 +2100,17 @@ input::placeholder { color: var(--ink-faint); }
 }
 .goal-add-row .g-submit:disabled { opacity: 0.5; cursor: wait; }
 
-/* 等级卡整修：左侧加宽，中间放大、字号升级 */
-.level-card { padding: 10px 14px !important; min-height: 56px; }
+/* 等级卡整修：左侧加宽，中间放大、字号升级
+   v5.15.22 D1（boss 上轮仍觉得扁）—— 真凶在这里：下面这条**靠后的覆盖**用
+   `padding: 10px 14px !important; min-height: 56px` 把 v5.15.21 改的 18px/96px
+   整个压掉了（CSS 同名规则生效的是靠后那条，style.css 里 .level-card 有两处定义）。
+   现在把覆盖值改成加厚后的数值，并去掉 !important。 */
+.level-card { padding: 20px 22px; min-height: 112px; }
 .level-character {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
-  color: var(--ink-black); display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 10px var(--glow-gold);
+  width: 68px; height: 68px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--rank-from, var(--gold-light)), var(--rank-to, var(--gold-deep)));
+  color: var(--rank-ico, var(--ink-black)); display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 208, 0.35), 0 0 12px rgba(216, 180, 90, 0.45), 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 .level-info { flex: 1; min-width: 0; padding-left: 4px; }
 .level-name { color: var(--ink-black); font-size: 16px; font-weight: 700; letter-spacing: 1px; }
@@ -2729,3 +2734,57 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 }
 /* 弹窗面板本身也不要用毛玻璃（透明底 + blur = 又一处分层重建） */
 .m, .modal, .dialog, .bless-card, .crop-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* ========== v5.15.22 D4：近 7 日完成热力条（纯静态，无动画） ========== */
+.week-strip {
+  margin-top: 10px;
+  background: linear-gradient(135deg, #FFFFFF, #F0E8D6);
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  padding: 12px 14px 10px;
+}
+.week-strip .ws-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.week-strip .ws-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.week-strip .ws-sum { margin-left: auto; font-size: 12px; color: var(--ink-mute); }
+.week-strip .ws-bars { display: flex; align-items: flex-end; gap: 6px; height: 66px; }
+.week-strip .ws-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.week-strip .ws-bar {
+  width: 100%; max-width: 26px; border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, var(--gold-light), var(--gold-deep));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.week-strip .ws-bar.zero { background: var(--bg-deep, #EAE2D2); box-shadow: inset 0 0 0 1px var(--border-soft); }
+.week-strip .ws-bar.today { outline: 1.5px solid rgba(200, 150, 60, 0.55); outline-offset: 1px; }
+.week-strip .ws-num { font-size: 11px; color: var(--ink-soft); font-weight: 600; margin-top: 3px; line-height: 1.1; min-height: 13px; }
+.week-strip .ws-day { font-size: 10.5px; color: var(--ink-mute); line-height: 1.3; }
+
+/* ========== v5.15.22 D5（boss：排版/字体要能一眼看清重点、区分各部分） ==========
+   规则：标题用衬线（Noto Serif SC / 思源宋体 / 宋体兜底），正文保持 Noto Sans SC；
+   数字放大加重；标签小字距加宽；分区标题加重。放文件尾覆盖旧值。 */
+:root {
+  --font-title: "Noto Serif SC", "Source Han Serif SC", "思源宋体", "SimSun", serif;
+}
+/* —— 页面/卡片标题：衬线 + 加重，分区一眼可辨 —— */
+.vh-title, .cc-name, .progress-title, .level-name, .dv-name, .ws-title, .dash-greet-text {
+  font-family: var(--font-title);
+}
+.vh-title { font-size: 15px; font-weight: 700; letter-spacing: 2px; }
+.cc-name { font-size: 14.5px; font-weight: 700; letter-spacing: 0.5px; }
+.progress-title { font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+.level-name { font-size: 19px; font-weight: 700; }
+.dash-greet-text { font-size: 16px; font-weight: 700; }
+/* —— 统计卡：数值是主角 —— */
+.stat-label { font-weight: 600; letter-spacing: 1.5px; }
+.stat-value { font-size: 24px; font-weight: 800; }
+.stat-value .unit { font-size: 12px; font-weight: 500; }
+/* —— 近 7 日完成条：字放大、柱加高 —— */
+.week-strip { padding: 14px 16px 12px; }
+.week-strip .ws-head { margin-bottom: 10px; }
+.week-strip .ws-title { font-size: 14.5px; font-weight: 700; }
+.week-strip .ws-sum { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.week-strip .ws-bars { height: 76px; gap: 8px; }
+.week-strip .ws-num { font-size: 13px; font-weight: 700; color: var(--ink); min-height: 16px; }
+.week-strip .ws-day { font-size: 11.5px; }
+/* —— 列表任务名：再醒目一点 —— */
+.cat-task .ct-title, .list-task .ct-title, .arc-item .arc-title { font-weight: 600; }

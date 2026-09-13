@@ -182,7 +182,8 @@
           <div class="stat-trend" id="statRemainTrend">加油 ✦</div>
         </div>
         <div class="stat-card tracking" id="statCardTrack">
-          <span class="stat-ico" data-icon="crosshair" data-icon-size="17" data-icon-sw="1.9"></span>
+          <!-- v5.15.22 D3（boss：这里的图标也要换）crosshair → goal，与追踪页/侧边栏同款 -->
+          <span class="stat-ico" data-icon="goal" data-icon-size="17" data-icon-sw="1.9"></span>
           <div class="stat-label">追踪中</div>
           <div class="stat-value" id="statTracking">0<span class="unit">项</span></div>
           <div class="stat-trend up" id="statTrackingTrend">进行时</div>
@@ -193,6 +194,16 @@
           <div class="stat-value" id="statWeek">0<span class="unit">项</span></div>
           <div class="stat-trend" id="statWeekTrend">稳步前行</div>
         </div>
+      </div>
+
+      <!-- v5.15.22 D4（boss：电脑端也加点 UI）—— 近 7 日完成热力条：
+           纯静态、数据驱动（归档里 done_at 按天计数），无任何动画，不占 CPU -->
+      <div class="week-strip" id="weekStrip">
+        <div class="ws-head">
+          <span class="ws-title">近 7 日完成</span>
+          <span class="ws-sum" id="weekStripSum">0 项</span>
+        </div>
+        <div class="ws-bars" id="weekStripBars"></div>
       </div>
 
       <!-- boss 反馈：这个 22:00 提醒小字提示很没必要 → 已删除整块 tipCard -->

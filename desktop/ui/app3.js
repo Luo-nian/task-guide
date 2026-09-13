@@ -823,7 +823,7 @@ function rowActsHtml(t) {
   const noStep = !(t.step_total > 0);
   const first = tracking
     ? `<div class="act" data-act="stop" title="取消追踪"><span class="b">${svgIcon('targetFill', 11)}</span><span class="l">取消</span></div>`
-    : `<div class="act track" data-act="track" title="开始追踪"><span class="b">${svgIcon('play', 11, 2.3)}</span><span class="l">追踪</span></div>`;
+    : `<div class="act track" data-act="track" title="开始追踪"><span class="b">${svgIcon('goal', 11, 2.3)}</span><span class="l">追踪</span></div>`;
   return `<div class="acts">
     ${first}
     <div class="act ${noStep ? 'disabled' : ''}" data-act="advance" title="${noStep ? '没有步骤，无法推进' : '推进到下一步'}">
@@ -1089,7 +1089,36 @@ function renderDashboard() {
   const statIcons = document.querySelectorAll('.stat-card .stat-ico');
   if (statIcons.length && typeof initIcons === 'function') initIcons(document.getElementById('statRow') || document.body);
 
+  // v5.15.22 D4（boss：电脑端也加点 UI）：近 7 日完成热力条（纯静态，不占 CPU）
+  renderWeekStrip();
+
   // boss 反馈：22:00 提醒提示很没必要 → tipCard 已删整块（HTML+JS），不再渲染
+}
+
+/** v5.15.22 D4：近 7 日完成热力条（归档 done_at 按天计数；纯静态、无动画） */
+function renderWeekStrip() {
+  const el = document.getElementById('weekStripBars');
+  if (!el) return;
+  const now = new Date();
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
+  const counts = days.map(d => {
+    const s = d.getTime(), e = s + 86400000;
+    return (archive || []).filter(t => typeof t.done_at === 'number' && t.done_at >= s && t.done_at < e).length;
+  });
+  const max = Math.max(1, ...counts);
+  const week = ['日', '一', '二', '三', '四', '五', '六'];
+  el.innerHTML = days.map((d, i) => {
+    const h = Math.round(10 + (counts[i] / max) * 38);
+    const isToday = i === days.length - 1;
+    return `<div class="ws-col" title="${d.getMonth() + 1}月${d.getDate()}日 · 完成 ${counts[i]} 项">
+      <div class="ws-bar ${counts[i] ? '' : 'zero'} ${isToday ? 'today' : ''}" style="height:${h}px"></div>
+      <div class="ws-num">${counts[i] || ''}</div>
+      <div class="ws-day">${week[d.getDay()]}</div>
+    </div>`;
+  }).join('');
+  const sum = document.getElementById('weekStripSum');
+  if (sum) sum.textContent = counts.reduce((a, b) => a + b, 0) + ' 项';
 }
 
 function renderLevelBadge() {
@@ -1254,7 +1283,8 @@ window.openDetail = async function(uuid) {
         ? `<div class="dva" data-dva="stop" onclick="untrackTask('${t.uuid}')">
              <span class="dva-b stop">${svgIcon('targetFill', 19)}</span><span class="dva-l">取消追踪</span></div>`
         : `<div class="dva ${canTrack ? 'disabled' : ''}" data-dva="track" ${canTrack ? '' : `onclick="trackTask('${t.uuid}')"`}>
-             <span class="dva-b track">${svgIcon('play', 19, 2.1)}</span>
+             <!-- v5.15.22 D2（boss：追踪按键图标要和追踪页/侧边栏一致）play 三角 → goal -->
+             <span class="dva-b track">${svgIcon('goal', 19, 2.1)}</span>
              <span class="dva-l">${canTrack ? '追踪已满' : '追踪任务'}</span></div>`}
       ${!hasStep
         /* v5.15.21 D8（boss：无步骤的任务直接舍弃中间的推进键，但其他两个键的位置不变）

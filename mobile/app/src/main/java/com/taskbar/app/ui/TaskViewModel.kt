@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.HabitLog
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.repo.TaskRepository
@@ -28,6 +29,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val archive: StateFlow<List<Task>> = repo.observeArchive()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** v5.15.22 M3：全部打卡日志（历史页按天展开用） */
+    val habitLogs: StateFlow<List<HabitLog>> = repo.observeAllHabitLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val habits: StateFlow<List<Task>> = repo.observeHabits()

@@ -117,7 +117,10 @@ class TaskRepository(private val db: AppDatabase) {
         )
     }
     fun observeTracking(): Flow<List<Task>> = taskDao.observeTracking()
-    fun observeArchive(): Flow<List<Task>> = taskDao.observeArchive()
+    /** v5.15.22 M3：归档 = 已完成 ∪ 已逾期未完成（含往期没打卡的每日任务） */
+    fun observeArchive(): Flow<List<Task>> = taskDao.observeArchiveWithOverdue(todayStart())
+    /** v5.15.22 M3：全部打卡日志（历史页按天展开"哪天打卡了/哪天漏了"用） */
+    fun observeAllHabitLogs(): Flow<List<HabitLog>> = habitDao.observeAllHabitLogs()
     fun observeHabits(): Flow<List<Task>> = taskDao.observeHabits()
     fun observeTask(uuid: String): Flow<Task?> = taskDao.observeByUuid(uuid)
     fun observeSteps(taskUuid: String): Flow<List<Step>> = stepDao.observeByTask(taskUuid)

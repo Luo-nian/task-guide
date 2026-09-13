@@ -2,6 +2,7 @@ package com.taskbar.app.ui
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,9 +21,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -236,6 +239,93 @@ fun TGIcon(
         tint = tint,
         modifier = modifier.size(size)
     )
+}
+
+/**
+ * v5.15.22 M5（boss：「追踪任务后，取消追踪键应该有涟漪UI」）——
+ * 与电脑端 `@keyframes rippleBreath` 同语义：追踪态下，朱砂红「取消追踪」键外圈
+ * 持续扩散一圈细环（半径外扩 + 透明度衰减），1.9s 一轮循环。
+ * 尺寸与 [PressIcon] 的 40dp 完全一致 → 换上来不会破坏 M6 的按键分列对齐。
+ */
+@Composable
+fun TrackRippleKey(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 22.dp
+) {
+    val tr = rememberInfiniteTransition(label = "trackRipple")
+    val phase by tr.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripplePhase"
+    )
+    Box(modifier = modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(40.dp).drawBehind {
+                // v5.15.22 M5b（boss：两层涟漪 = 靠内圈再加一层）——
+                //   内圈：紧贴图标的一圈细环，**常驻呼吸**（明暗随外圈节奏变化，不会消失）；
+                //   外圈：从图标向外扩散、变淡、消失，再从头来。
+                val strokeInner = 1.8f.dp.toPx()
+                val alphaInner = 0.62f - 0.30f * phase          // 0.62 → 0.32 循环呼吸
+                drawCircle(
+                    color = TGColors.Crimson.copy(alpha = alphaInner),
+                    radius = 15f.dp.toPx(),
+                    style = Stroke(width = strokeInner)
+                )
+                val p = phase                                    // 外圈扩散环
+                drawCircle(
+                    color = TGColors.Crimson.copy(alpha = (1f - p) * 0.42f),
+                    radius = 16f.dp.toPx() + (11f.dp.toPx()) * p,  // 16dp → 27dp
+                    style = Stroke(width = 1.2f.dp.toPx())
+                )
+            }
+        )
+        PressIcon(onClick = onClick) {
+            TGIcon(
+                drawable = R.drawable.ic_track_fill,
+                contentDescription = "取消追踪",
+                tint = TGColors.Crimson,
+                size = iconSize
+            )
+        }
+    }
+}
+
+/**
+ * v5.15.22 M7（boss：「设置优先级时，点到『高』『中』『低』三个键颜色应该有所区分」）——
+ * 选中态用该优先级自己的色填充（高=朱砂 / 中=深赤陶 / 低=灰），未选中是它的淡底描边。
+ */
+@Composable
+fun PriorityFilterChip(priority: String, selected: Boolean, onClick: () -> Unit) {
+    val (color, label) = when (priority) {
+        Priority.HIGH -> TGColors.Crimson to "高"
+        Priority.LOW -> TGColors.InkMute to "低"
+        else -> TGColors.GoldDeep to "中"
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) color.copy(alpha = 0.94f) else color.copy(alpha = 0.10f))
+            .border(
+                1.dp,
+                if (selected) color else color.copy(alpha = 0.40f),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 15.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else color,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+        )
+    }
 }
 
 /** 卡片：白米底 + 淡金细边（对应桌面端 .card + --border-soft） */

@@ -198,8 +198,8 @@ struct HabitLog {
     created_at: i64,
 }
 
-/// v5.15.7：手机端推送的打卡变更（同 HabitLog，但 id 等额外字段忽略）
-#[derive(Deserialize, Debug)]
+/// v5.15.22 M11：habit 也参与全量推送 → 补 Serialize（此前只用于接收，只有 Deserialize）
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct HabitLogChange {
     task_uuid: String,
@@ -234,7 +234,7 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
         server_base(&g)
     };
     if base.is_empty() { return Err("未设置服务器地址".into()); }
-    let resp: FullSyncPayload = reqwest::blocking::Client::new()
+    let resp: FullSyncPayload = lan_client()
         .get(format!("{}/api/sync/full", base))
         .timeout(Duration::from_secs(10))
         .send().map_err(|e| e.to_string())?
@@ -279,6 +279,139 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
         apply_setting_remote(&conn, &s.key, &s.value, s.updated_at);
     }
     Ok(())
+}
+
+/// v5.15.22 M11 关键修复：所有发往手机的 HTTP 一律**直连**（no_proxy）。
+/// 根因：boss 电脑开着系统代理（127.0.0.1:7892），reqwest 默认读取系统代理，
+/// 把发往手机内网 IP 的请求也塞进代理 → 代理回 502 Bad Gateway；
+/// WS 用的是 tungstenite 不走代理，所以"WS 通、HTTP 全挂"——
+/// 这就是双端同步单方向失效（桌面→手机全丢、全量拉取解码失败）的真正元凶。
+pub fn lan_client() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("reqwest client 初始化失败")
+}
+
+/// v5.15.22：同步调试日志（log crate 没接 logger，log::info! 全是空操作 ——
+///   排查"推送到底跑没跑/为什么失败"必须落文件）。写在 exe 同目录 sync-debug.log。
+fn sync_debug_log(msg: &str) {
+    use std::io::Write;
+    let path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("sync-debug.log")));
+    let Some(path) = path else { return };
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        let _ = writeln!(f, "[{}] {}", ts, msg);
+    }
+}
+
+/// v5.15.22 M11：桌面 → 手机 **全量推送**。
+///
+/// 根因（2026-09-13 实测取证）：此前桌面端对手机只有「单条增量推送」—— push_change
+/// 是 fire-and-forget（后台线程 + 5s 超时 + 失败不重试也不补发），而 full_sync 只做
+/// "拉手机 → 写桌面"。**任何在手机不在线/断连期间产生的桌面端改动都会永久丢失**。
+/// 实测：桌面 74 行任务（59 活 + 15 软删），手机全量接口只回 28 行、连软删共 40 行，
+/// 其中 34 行手机端从未见过 —— 全是桌面端在断连期创建/修改的。
+///
+/// 做法：WS 连上（先拉后推）后，把桌面全量 tasks/steps/habit_logs 打包成 change 批量
+/// POST 给手机端。安全性由手机端自己的 LWW 保证（`upsertTaskFromSync` 里
+/// `local.updatedAt > remote.updatedAt` 就跳过）—— 手机端较新的状态不会被旧数据冲掉。
+/// 60s 节流：WS 抖动重连时不会连环全量推。
+pub fn push_full_to_mobile(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Result<usize, String> {
+    use std::sync::atomic::AtomicI64;
+    static LAST_PUSH_MS: AtomicI64 = AtomicI64::new(0);
+
+    let base = {
+        let g = url.lock().map_err(|e| e.to_string())?;
+        server_base(&g)
+    };
+    if base.is_empty() { return Err("未设置服务器地址".into()); }
+
+    // 60s 节流（连接抖动时避免反复全量推）
+    let now = now_ms();
+    let last = LAST_PUSH_MS.load(Ordering::Relaxed);
+    if last > 0 && now - last < 60_000 {
+        sync_debug_log("push_full 跳过：60s 节流窗口内");
+        return Ok(0);
+    }
+    sync_debug_log(&format!("push_full 开始 (base={})", base));
+
+    let payload: Vec<ChangeOp> = {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        let mut ops: Vec<ChangeOp> = Vec::new();
+        // ---- tasks（含软删行：deleted=1 也要推，手机端据此保持删除态） ----
+        {
+            let mut stmt = conn.prepare("SELECT * FROM tasks").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| crate::row_to_task(r)).map_err(|e| e.to_string())?;
+            for r in rows {
+                let t = match r { Ok(v) => v, Err(_) => continue };
+                if let Ok(data) = serde_json::to_string(&TaskSyncDto::from(&t)) {
+                    ops.push(ChangeOp { op: "upsert".into(), entity: "task".into(), uuid: t.uuid.clone(), data: Some(data) });
+                }
+            }
+        }
+        // ---- steps ----
+        {
+            let mut stmt = conn.prepare("SELECT * FROM steps").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| crate::row_to_step(r)).map_err(|e| e.to_string())?;
+            for r in rows {
+                let s = match r { Ok(v) => v, Err(_) => continue };
+                if let Ok(data) = serde_json::to_string(&StepSyncDto::from(&s)) {
+                    ops.push(ChangeOp { op: "upsert".into(), entity: "step".into(), uuid: s.uuid.clone(), data: Some(data) });
+                }
+            }
+        }
+        // ---- habit_logs ----
+        {
+            let mut stmt = conn.prepare("SELECT task_uuid, check_date, created_at FROM habit_logs").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| Ok(HabitLogChange {
+                task_uuid: r.get(0)?, check_date: r.get(1)?, created_at: r.get(2)?,
+            })).map_err(|e| e.to_string())?;
+            for r in rows {
+                let h = match r { Ok(v) => v, Err(_) => continue };
+                if let Ok(data) = serde_json::to_string(&h) {
+                    ops.push(ChangeOp { op: "upsert".into(), entity: "habit".into(), uuid: h.task_uuid.clone(), data: Some(data) });
+                }
+            }
+        }
+        ops
+    };
+    let total = payload.len();
+    sync_debug_log(&format!("push_full 载荷构建完成: {} 条 (task+step+habit)", total));
+    if total == 0 { return Ok(0); }
+    LAST_PUSH_MS.store(now, Ordering::Relaxed);
+
+    // 分批推送（单批 120 条，避免一次性 body 过大 / 手机端逐条 apply 阻塞太久）
+    let mut sent = 0usize;
+    for (bi, chunk) in payload.chunks(120).enumerate() {
+        let body = serde_json::json!({ "changes": chunk, "client_time": now_ms() });
+        let t0 = std::time::Instant::now();
+        let resp = lan_client()
+            .post(format!("{}/api/sync/changes", base))
+            .timeout(Duration::from_secs(25))
+            .json(&body)
+            .send();
+        match resp {
+            Ok(r) if r.status().is_success() => {
+                sent += chunk.len();
+                sync_debug_log(&format!(
+                    "push_full batch#{} {}条 ok ({}ms)", bi, chunk.len(), t0.elapsed().as_millis()
+                ));
+            }
+            Ok(r) => {
+                sync_debug_log(&format!("push_full batch#{} 失败: HTTP {}", bi, r.status()));
+                break;
+            }
+            Err(e) => {
+                sync_debug_log(&format!("push_full batch#{} 网络错误: {}", bi, e));
+                break;
+            }
+        }
+    }
+    sync_debug_log(&format!("push_full_to_mobile: 完成 {}/{} 条 (base={})", sent, total, base));
+    Ok(sent)
 }
 
 /// 推送本地变更到手机
@@ -341,7 +474,7 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
     // 网络推送放后台线程：手机不在线时最多拖 5s 超时，若阻塞在主线程，点「添加步骤/完成任务」
     // 会卡住整个 UI 直到超时（boss 实测感知为「按了没反应」）。这里立即返回、推送失败不影响主流程。
     std::thread::spawn(move || {
-        let _ = reqwest::blocking::Client::new()
+        let _ = lan_client()
             .post(url)
             .timeout(Duration::from_secs(5))
             .json(&body)
@@ -375,6 +508,7 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
         match tungstenite::connect(&ws_url) {
             Ok((mut socket, _)) => {
                 log::info!("WS 已连接: {}", ws_url);
+                sync_debug_log(&format!("WS 已连接: {}", ws_url));
                 WS_CONNECTED.store(true, Ordering::Relaxed);
                 // v5.15.19：每次 WS 连上后都补一次 /api/pair —— 让手机端 settings.paired_device
                 //   有值。旧实现只在「手动配对那一刻」发一次，导致自动重连后手机端
@@ -387,7 +521,7 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                         let pc_name = std::env::var("COMPUTERNAME")
                             .unwrap_or_else(|_| "BOOS PC".to_string());
                         let did = read_device_id().unwrap_or_default();
-                        let _ = reqwest::blocking::Client::new()
+                        let _ = lan_client()
                             .post(format!("{}/api/pair", base2))
                             .timeout(std::time::Duration::from_secs(4))
                             .json(&serde_json::json!({
@@ -404,7 +538,28 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                     let db2 = db.clone();
                     let url2 = url.clone();
                     std::thread::spawn(move || {
-                        if full_sync(&db2, &url2).is_ok() { notify_changed(); }
+                        match full_sync(&db2, &url2) {
+                            Ok(_) => {
+                                notify_changed();
+                                sync_debug_log("ws 连上：full_sync(拉取) ok");
+                            }
+                            Err(e) => sync_debug_log(&format!("ws 连上：full_sync 失败: {}", e)),
+                        }
+                        // v5.15.22 M11（boss：「双端的任务还是没能完全同步」）：
+                        //   拉完再把桌面全量推给手机 —— 双向收敛。
+                        //   根因：此前桌面 → 手机只有 fire-and-forget 的单条推送，
+                        //   断连期间的改动永久丢失（实测手机端少了 34 条任务）。
+                        //   推不完（网络抖动/手机端繁忙）自动重试，最多 3 轮。
+                        for attempt in 1..=3 {
+                            match push_full_to_mobile(&db2, &url2) {
+                                Ok(n) if n == 0 => break,          // 节流跳过
+                                Ok(n) => { sync_debug_log(&format!("push 第{}轮推送 {} 条", attempt, n)); break; }
+                                Err(e) => {
+                                    sync_debug_log(&format!("push 第{}轮失败: {}", attempt, e));
+                                    std::thread::sleep(Duration::from_secs(5));
+                                }
+                            }
+                        }
                     });
                 }
                 use tungstenite::Message;
@@ -424,7 +579,10 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                 }
                 WS_CONNECTED.store(false, Ordering::Relaxed);
             }
-            Err(_) => { WS_CONNECTED.store(false, Ordering::Relaxed); }
+            Err(e) => {
+                WS_CONNECTED.store(false, Ordering::Relaxed);
+                sync_debug_log(&format!("WS 连接失败(5s后重试): {}", e));
+            }
         }
         std::thread::sleep(Duration::from_secs(5));
     }
