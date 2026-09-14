@@ -1239,11 +1239,14 @@ function renderProgress() {
 // =============== 详情页 ===============
 window.openDetail = async function(uuid) {
   selectedUuid = uuid;
-  document.getElementById('detailView').style.display = '';
-  document.getElementById('dashboardView').style.display = 'none';
-  document.getElementById('detailTitle') && (document.getElementById('detailTitle').textContent = '任务详情');
+  const _dv = document.getElementById('detailView');
+  const _dash = document.getElementById('dashboardView');
   const body = document.getElementById('detailBody');
-  body.innerHTML = `<div style="color:var(--ink-faint);font-size:11px;padding:30px;text-align:center;">加载中…</div>`;
+  // v5.15.28 P10（boss：「点任务看详情时候 详情页面会有一点闪烁」）——
+  //   根因：这里先把 detailBody 换成「加载中…」、同时切视图，再 await 异步取数，
+  //   数据回来又把整整一屏换掉 → 中间那一帧（空占位）就是肉眼看到的闪。
+  //   改成：**先取数、再切视图**，数据和 DOM 全部就绪后一次性替换 → 视觉上零闪烁。
+  //   （get_task_detail 是本机调用，几十毫秒内返回，不会让点击显得没反应。）
 
   const d = await call('get_task_detail', { taskUuid: uuid });
   const t = d.task, steps = d.steps || [];
@@ -1259,6 +1262,10 @@ window.openDetail = async function(uuid) {
   const allStepDone = hasStep && doneSteps === totalSteps;
   const remainingSteps = hasStep ? totalSteps - doneSteps : 0;
 
+  // v5.15.28 P10：数据已在手，此刻才切视图 + 填内容（一次成帧，不再闪）
+  _dv.style.display = '';
+  _dash.style.display = 'none';
+  document.getElementById('detailTitle') && (document.getElementById('detailTitle').textContent = '任务详情');
   const _editBtn = document.getElementById('detailEdit');
   if (_editBtn) _editBtn.onclick = function () { openEdit(uuid); };
   const _delBtn = document.getElementById('detailDelete');
