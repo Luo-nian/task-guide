@@ -572,13 +572,15 @@ body::after {
 .cat-task.tracking::before { background: linear-gradient(90deg, var(--azure), transparent); opacity: 1; }
 
 .ct-diamond {
-  width: 6px; height: 6px;            /* boss #5：菱形再小一点 */
+  /* v5.15.27 P6（boss：「电脑端那个菱形涟漪 UI 还是没看出来是怎么样的」）——
+     6×6px 太小，压在列表里根本注意不到。放大到 8×8 并加亮金边。 */
+  width: 8px; height: 8px;
   background: transparent;
   border-radius: 1px;
   transform: rotate(45deg);
   display: none;
   position: relative;
-  flex: 0 0 6px;
+  flex: 0 0 8px;
   margin-left: auto;                 /* 靠右 */
   /* 边缘光存在感增强：双层 box-shadow 模拟原神追踪态脉冲 */
   box-shadow: 0 0 0 1.5px rgba(232, 203, 127, 0.95),  /* 内圈金边 */
@@ -589,17 +591,38 @@ body::after {
 .list-task.tracking .ct-diamond {
   display: block;
   background: var(--azure);
-  box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 6px var(--glow-azure);
-  animation: rippleBreath 2.2s ease-out infinite;
+  /* v5.15.27 P7（boss：「涟漪应该是菱形的 不是圆形的」）——
+     圆形 box-shadow 的"圈"改成用 **旋转 45° 的方形描边** 做波纹（见下面的 ::after），
+     本体只保留常驻金边 + 蓝色外发光，不再自己做动画。 */
+  box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 7px var(--glow-azure);
+}
+/* v5.15.27 P7：**菱形**波纹 —— 继承父级 rotate(45°)，一个方形描边被转成菱形，
+   整圈向外扩 + 淡出。只保留一圈（boss 要求），周期 1.8s。 */
+.ct-diamond::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 100%; height: 100%;
+  margin-left: -50%; margin-top: -50%;
+  border: 1.5px solid rgba(232, 203, 127, 0.9);
+  border-radius: 1px;
+  opacity: 0;
+  pointer-events: none;
+  animation: rippleDiamond 1.8s ease-out infinite;
+}
+/* v5.15.27 P7b（boss：「现在的效果是对了 但是涟漪不要出任务栏 现在范围太大了」）——
+   扩散上限 3.0 → 2.1 倍（8px 菱形 → 约 17px 方框 ≈ 半径 12px），刚好在行内荡开就消失，
+   同时行本身加 overflow:hidden 兜底（见 .cat-task/.list-task），保证绝不越界。 */
+@keyframes rippleDiamond {
+  0%   { transform: scale(1);    opacity: 0.9; }
+  60%  { transform: scale(1.6);  opacity: 0.22; }
+  100% { transform: scale(2.1);  opacity: 0; }
 }
 /* 涟漪动画：菱形外金色边框像水滴涟漪向外扩开变淡 */
 /* v5.15.26 P3（boss：追踪键「有闪烁之类的」「不像涟漪」，只留一圈、别太明显）——
    旧版 0→35% 扩开、35%→70% **缩回去**、70→100% 静止 → 视觉上就是"呼吸/闪烁"，不是涟漪。
    改成**单向一圈**：从菱形边缘荡出去、边扩边淡到 0；菱形本体金边全程保持不变（始终看得清）。 */
-@keyframes rippleBreath {
-  0%   { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 0 0 rgba(232, 203, 127, 0.55), 0 0 6px var(--glow-azure); }
-  100% { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 0 9px rgba(232, 203, 127, 0), 0 0 6px var(--glow-azure); }
-}
+/* v5.15.27 P7：旧的圆形 box-shadow 涟漪（rippleBreath）已被菱形波纹 rippleDiamond 取代，故移除。 */
 
 .ct-title {
   color: var(--ink); font-size: 12px;
@@ -2512,7 +2535,9 @@ body { background-color: var(--bg-paper); }
 /* v5.15.26 P4（boss：每个分类都弄成可收起的下拉栏，电脑端也这样）——
    分组头可点；收起时只隐藏 .cg-body，分组头本身保留（随时能点开） */
 .cat-group-head { cursor: pointer; user-select: none; }
-.cat-group-head .cg-arrow { margin-left: auto; font-size: 11px; color: var(--ink-mute); font-weight: 700; }
+/* v5.15.27 P3（boss：「分类栏的三角也太小」）11 → 15px，并用金色（灰字在金色底上不显眼） */
+/* v5.15.27 P3b（boss：「三角形还是太小」）15 → 20px */
+.cat-group-head .cg-arrow { margin-left: auto; font-size: 20px; color: var(--gold-deep); font-weight: 700; line-height: 1; }
 .cat-group.collapsed .cg-body { display: none; }
 
 .lg-day { margin-bottom: 10px; }
@@ -2554,15 +2579,41 @@ body { background-color: var(--bg-paper); }
    —— 分组头现在是一行扁平灰字（分类名 + 数字连读），任务行是金色渐变条；
    统一成历史任务那套：分组头 = 金色左条 + 金色渐变底 + 右侧条目数；行 = 白底细金边圆角 + hover。 */
 .cat-group { margin-bottom: 10px; }
-/* 只有分组头用金色底；页面标题（今日待办/追踪任务…）保持原来的轻量样式 */
+/* v5.15.27 P9（boss：「展开后 每一个分类的所有任务再用一个大框框起来 分类更清晰一点」）——
+   分组头 + 分组正文拼成**一个完整的"分类块"**：头在上、正文在下，中间不留缝。 */
 .cat-group-head {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 10px; margin-bottom: 6px;
-  background: linear-gradient(90deg, rgba(232, 203, 127, 0.34), rgba(232, 203, 127, 0.06));
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 10px; margin-bottom: 0;
+  /* v5.15.27 P2（boss：「分类的收起和展开那一栏 也要和背景做区分的颜色」）——
+     旧底色右端淡到 0.06，几乎等于页面背景 → 看不出"这是一栏"。
+     现在加深渐变（0.55 → 0.22）并补一圈描边，与页面背景明确分层。 */
+  background: linear-gradient(90deg, rgba(233, 201, 124, 0.55), rgba(233, 201, 124, 0.22));
+  border: 1px solid rgba(154, 123, 26, 0.30);
   border-left: 3px solid var(--gold);
-  border-radius: 4px;
+  border-radius: 8px 8px 0 0;
   font-size: 12px; font-weight: 700; color: var(--gold-deep); letter-spacing: 0.3px;
 }
+/* v5.15.27 P9：分组正文容器 —— 浅金底 + 细描边，与分组头连成一个大框 */
+.cat-group .cg-body {
+  background: rgba(233, 201, 124, 0.10);
+  border: 1px solid rgba(154, 123, 26, 0.16);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 5px 5px 3px;
+}
+/* 收起时只剩分组头 → 四角都圆回来 */
+.cat-group.collapsed .cat-group-head { border-radius: 8px; }
+/* v5.15.27 P4（boss：「我看到你在分类栏旁边有放对应的图标 但是背景颜色和大小导致我现在才看到
+   太不清晰了 改」）—— 分组头图标原来只有 13px、渐变底 + 浅描边，压在金色栏上几乎看不见。
+   现在给一个 18px 的圆角方块 + 白色内描边 + 外阴影，图标本身强制白色，一眼就能认出是什么分类。 */
+.cat-group-head .ico {
+  width: 20px; height: 20px; flex: 0 0 auto;
+  border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.6), 0 1px 3px rgba(110, 80, 30, 0.30);
+}
+.cat-group-head .ico svg { display: block; }
 /* v5.15.18 J1（boss 认可方案）：数量不再是"最右边一个孤零零的绿字"，
    改成紧贴分类名的圆角胶囊小标签，配色统一到金色系。 */
 .cat-group-head .gh-count {
@@ -2575,6 +2626,8 @@ body { background-color: var(--bg-paper); }
 }
 .cat-task, .list-task {
   display: flex; align-items: center; gap: 8px;
+  /* v5.15.27 P7b：兜底裁切 —— 菱形涟漪只在任务行内部荡开，绝不越到行外 */
+  overflow: hidden;
   padding: 6px 8px 6px 10px; border-radius: 8px; margin-bottom: 2px;
   background: rgba(255, 254, 251, 0.78);
   border: 1px solid rgba(201, 162, 39, 0.16);
@@ -2833,7 +2886,9 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 .link-pill {
   position: static;
   z-index: 5;
-  margin-right: 8px;
+  /* v5.15.27 P1：移到「任务栏」右边 —— 左外边距做间隔，margin-right:auto 吸收剩余空间，
+     保证它紧贴名字、不会被 topbar 的 space-between 推到中间 */
+  margin-left: 8px; margin-right: auto;
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 9px 3px 7px;

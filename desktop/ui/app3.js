@@ -543,8 +543,17 @@ async function render() {
 const _collapsedGroups = new Set();
 function _cg(k) { return _collapsedGroups.has(k); }
 function toggleCatGroup(k) {
-  if (_collapsedGroups.has(k)) _collapsedGroups.delete(k); else _collapsedGroups.add(k);
-  if (typeof render === 'function') render();
+  const on = !_collapsedGroups.has(k);
+  if (on) _collapsedGroups.add(k); else _collapsedGroups.delete(k);
+  // v5.15.27 P5（boss：「电脑端的分类的展开和收起会导致页面抖动」）——
+  //   旧实现是 `render()` **整页重渲染**：重建 innerHTML → 滚动位置被重置 + 闪一下 = 抖动。
+  //   现在只就地切 `.collapsed` 类 + 换箭头字形，**完全不重渲染** → 不抖、不跳、不闪。
+  //   （折叠状态仍写进 _collapsedGroups，下次 render 时保持一致）
+  document.querySelectorAll('.cat-group[data-cg="' + k + '"]').forEach(g => {
+    g.classList.toggle('collapsed', on);
+    const a = g.querySelector('.cg-arrow');
+    if (a) a.textContent = on ? '\u25B8' : '\u25BE';
+  });
 }
 window.toggleCatGroup = toggleCatGroup;
 
@@ -616,7 +625,7 @@ function renderTodayView() {
   `;
   if (pinnedTasks.length) {
     const c = _cg('__pin');
-    html += `<div class="cat-group pinned-tracking ${c ? 'collapsed' : ''}">
+    html += `<div class="cat-group pinned-tracking ${c ? 'collapsed' : ''}" data-cg="__pin">
       <div class="cat-group-head" onclick="toggleCatGroup('__pin')"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
       <div class="cg-body">${pinnedTasks.map(catTaskHtml).join('')}</div>
     </div>`;
@@ -625,7 +634,7 @@ function renderTodayView() {
     const list = grouped[cat];
     if (list.length === 0) return;
     const c = _cg(cat);
-    html += `<div class="cat-group ${c ? 'collapsed' : ''}">
+    html += `<div class="cat-group ${c ? 'collapsed' : ''}" data-cg="${cat}">
       <div class="cat-group-head" onclick="toggleCatGroup('${cat}')"><span class="ico ico-${iconMap[cat]}" data-icon="${iconMap[cat]}" data-icon-size="13"></span><span>${titleMap[cat]}</span><span class="gh-count">${list.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
       <div class="cg-body">${list.map(catTaskHtml).join('')}</div>
     </div>`;
@@ -2923,7 +2932,23 @@ function startApp() {
     window.__TAURI__.event.listen('sync-applied', onRemoteSyncApplied).catch(() => {});
   }
   setInterval(checkEmergency, 60000);
-  // v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
+  // v5.15.27 M9：手机端改了「用户名」→ 桌面端问候语要立刻跟上。
+//   实测：Rust 侧收到 setting 变更会落库，但**不会**触发 onRemoteSyncApplied（它只在任务/积分变更时被调），
+//   而 settings.nickname 只在启动时读一次 → 手机端改完，桌面端必须重启才看得见（boss 会以为"没生效"）。
+//   这里做个 5s 的轻量对账：只有真的变了才重渲染仪表盘，开销可忽略；未连接时静默。
+setInterval(async () => {
+  try {
+    const nn = await call('get_setting', { key: 'nickname' });
+    if (nn && nn !== settings.nickname) {
+      settings.nickname = nn;
+      if (typeof renderDashboard === 'function') renderDashboard();
+      const pn = document.getElementById('profileNickname');
+      if (pn && document.activeElement !== pn) pn.value = nn;
+    }
+  } catch (e) { /* 忽略 */ }
+}, 5000);
+
+// v5.14g：配对断连提示（auto_reconnect 在 Rust 侧写 settings.reconnect_fail，前端 15s 轮询提示）
   setInterval(checkReconnectFail, 15000);
   checkReconnectFail();
   checkNightNotify();                    // 启动即查一次（22 点后开机也能补提醒）

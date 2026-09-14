@@ -11,14 +11,15 @@
 
   <!-- ===== 顶栏 ===== -->
   <header class="topbar" id="topbar" data-tauri-drag-region="true">
-    <!-- v5.15.26 P1/P2（boss：连接状态放在任务栏名字左边；**配对手机之后**才显示）——
-         原来固定在右下角；现在移到「任务栏」名字左侧，未配对时由 JS 加 .hidden 隐藏 -->
-    <div class="link-pill" id="linkPill" title="连接状态">
-      <span class="lp-dot"></span><span class="lp-text">未连接</span>
-    </div>
     <div class="title">
       <span class="title-glyph"></span>
       <span>任务栏</span>
+    </div>
+    <!-- v5.15.27 P1（boss：「已连接那个东西 我只是让你放到左上角的右边一点，
+         左上角原本是属于"任务栏"这个名称的 不用动」）——
+         左上角保留「任务栏」名字不动，连接胶囊放到它**右边**（配对手机后才显示） -->
+    <div class="link-pill" id="linkPill" title="连接状态">
+      <span class="lp-dot"></span><span class="lp-text">未连接</span>
     </div>
     <div class="top-right" id="topRight">
       <!-- v5.14h.1：顶栏等级卡删除（勋章 v2 整卡搬到 dashboard greeting 位置） -->

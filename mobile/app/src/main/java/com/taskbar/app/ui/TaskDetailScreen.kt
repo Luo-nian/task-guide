@@ -174,9 +174,9 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                         RewardItem(R.drawable.ic_trophy, "坚持 $streak 天")
                     } else if (steps.isNotEmpty()) {
                         RewardItem(R.drawable.ic_trend, "步骤 ${steps.count { it.status == "done" }}/${steps.size}")
-                    } else {
-                        RewardItem(R.drawable.ic_trend, "进度 0/0")
                     }
+                    // v5.15.27 M12b：没有步骤时**不再显示「进度 0/0」** ——
+                    //   空进度条没有任何信息量，只是噪音（与上面「步骤 (0/0)」同一处意图）
                 }
             }
         }
@@ -185,7 +185,9 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
             TGCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "步骤 (${steps.count { it.status == "done" }}/${steps.size})",
+                        // v5.15.27 M12（boss：「查看任务详情页 如果没有步骤 不要显示步骤（0/0））」）——
+                        //   没有步骤时标题只写「步骤」，别摆一个 0/0 的空进度
+                        if (steps.isEmpty()) "步骤" else "步骤 (${steps.count { it.status == "done" }}/${steps.size})",
                         color = TGColors.Ink,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,

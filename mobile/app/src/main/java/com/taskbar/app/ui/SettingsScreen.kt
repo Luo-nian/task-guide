@@ -48,6 +48,20 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
 
+/** v5.15.27 M7：把「起床/睡前提醒」的下一次触发时刻说人话（今天 07:30 / 明天 07:30） */
+private fun nextDailyText(h: Int, m: Int): String {
+    val now = java.util.Calendar.getInstance()
+    val next = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, h)
+        set(java.util.Calendar.MINUTE, m)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+        if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_YEAR, 1)
+    }
+    val sameDay = next.get(java.util.Calendar.DAY_OF_YEAR) == now.get(java.util.Calendar.DAY_OF_YEAR)
+    return (if (sameDay) "今天 " else "明天 ") + String.format("%02d:%02d", h, m)
+}
+
 /** 下一级等级名（用于"距 XX 还差 N 分"） */
 private fun nextLevelName(currentLv: Int): String = when (currentLv) {
     1 -> "风华游侠"
@@ -392,7 +406,11 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             Text("按设定时间每天提醒一次，帮你规律作息", color = TGColors.InkMute, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             // 起床
-            val morningOn = prefs.getBoolean("daily_morning_on", false)
+            // v5.15.27 M7b ⭐ 真 bug：开关状态原来是**普通 val**（直接读 prefs），
+            //   关掉时 onCheckedChange 只写了 prefs 且 showMorningPicker=false 不构成状态变化
+            //   → 不触发重组 → Switch 视觉上**纹丝不动**（看着像"点不动/没反应"）。
+            //   改成 Compose state，回调里显式赋值。
+            var morningOn by remember { mutableStateOf(prefs.getBoolean("daily_morning_on", false)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("☀ 起床", color = TGColors.GoldDeep, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 Text(
@@ -403,6 +421,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Switch(
                     checked = morningOn,
                     onCheckedChange = { on ->
+                        morningOn = on                      // v5.15.27 M7b：状态驱动重组（否则关了看不出变化）
                         prefs.edit().putBoolean("daily_morning_on", on).apply()
                         if (on) {
                             DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_MORNING,
@@ -417,11 +436,19 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 )
             }
             if (morningOn) {
-                TextButton(onClick = { showMorningPicker = true }) { Text("修改起床时间", color = TGColors.GoldDeep, fontSize = 12.sp) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { showMorningPicker = true }) { Text("修改起床时间", color = TGColors.GoldDeep, fontSize = 12.sp) }
+                    Spacer(Modifier.weight(1f))
+                    // v5.15.27 M7：把"下一次什么时候响"直接写出来 —— 一眼能看出这功能是活的
+                    Text(
+                        "下次：" + nextDailyText(prefs.getInt("daily_morning_h", 7), prefs.getInt("daily_morning_m", 30)),
+                        color = TGColors.Jade, fontSize = 11.sp, fontWeight = FontWeight.Medium
+                    )
+                }
             }
             // 睡前
             Spacer(Modifier.height(4.dp))
-            val nightOn = prefs.getBoolean("daily_night_on", false)
+            var nightOn by remember { mutableStateOf(prefs.getBoolean("daily_night_on", false)) }   // v5.15.27 M7b 同上
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("☾ 睡前", color = TGColors.Azure, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 Text(
@@ -432,6 +459,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 Switch(
                     checked = nightOn,
                     onCheckedChange = { on ->
+                        nightOn = on                        // v5.15.27 M7b
                         prefs.edit().putBoolean("daily_night_on", on).apply()
                         if (on) {
                             DailyReminderScheduler.scheduleNext(ctx, DailyReminderScheduler.REQUEST_NIGHT,
@@ -444,33 +472,81 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 )
             }
             if (nightOn) {
-                TextButton(onClick = { showNightPicker = true }) { Text("修改睡前时间", color = TGColors.Azure, fontSize = 12.sp) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { showNightPicker = true }) { Text("修改睡前时间", color = TGColors.Azure, fontSize = 12.sp) }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "下次：" + nextDailyText(prefs.getInt("daily_night_h", 22), prefs.getInt("daily_night_m", 30)),
+                        color = TGColors.Jade, fontSize = 11.sp, fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(10.dp))
         // 后台保活引导（iQOO/小米等 ROM 会冻结后台 → 桌面连不上，引导用户放行）
+        // v5.15.27 M8（boss：「点了之后已经后台保活了，能不能让 app 检测一下是否已经保活然后显示出来，
+        //   不然一直显示那个保活键，让人总忍不住去点」）——
+        //   用 PowerManager.isIgnoringBatteryOptimizations 真查一次；已放行就**不再显示按钮**，
+        //   改成 Jade 色的「已保活 ✓」状态条；从系统设置页返回（ON_RESUME）时自动刷新。
         TGCard(Modifier.fillMaxWidth()) {
+            val powerMgr = remember {
+                ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            }
+            fun checkAlive(): Boolean = runCatching {
+                powerMgr.isIgnoringBatteryOptimizations(ctx.packageName)
+            }.getOrDefault(false)
+            var alive by remember { mutableStateOf(checkAlive()) }
+            val lcOwner = LocalLifecycleOwner.current
+            DisposableEffect(lcOwner) {
+                val obs = LifecycleEventObserver { _, e ->
+                    if (e == Lifecycle.Event.ON_RESUME) alive = checkAlive()
+                }
+                lcOwner.lifecycle.addObserver(obs)
+                onDispose { lcOwner.lifecycle.removeObserver(obs) }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("后台保活", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(3.dp))
-                    Text("手机息屏/锁屏后桌面连不上？部分系统会冻结后台", color = TGColors.InkMute, fontSize = 11.sp)
-                    Text("在系统设置里允许本应用后台运行 + 自启动", color = TGColors.InkMute, fontSize = 11.sp)
+                    if (alive) {
+                        Text(
+                            "已保活 ✓ 系统不会再冻结本应用",
+                            color = TGColors.Jade, fontSize = 12.sp, fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "若仍连不上，再检查系统的「自启动 / 后台高耗电」白名单",
+                            color = TGColors.InkMute, fontSize = 11.sp
+                        )
+                    } else {
+                        Text("手机息屏/锁屏后桌面连不上？部分系统会冻结后台", color = TGColors.InkMute, fontSize = 11.sp)
+                        Text("在系统设置里允许本应用后台运行 + 自启动", color = TGColors.InkMute, fontSize = 11.sp)
+                    }
                 }
-                // v5.15：跳系统电池优化设置页
-                val ctx = LocalContext.current
-                TextButton(onClick = {
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:${ctx.packageName}")
-                        }
-                        ctx.startActivity(intent)
-                    } catch (_: Exception) {}
-                }) { Text("忽略电池优化", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+                if (alive) {
+                    // 已保活 → 只显示状态胶囊，按钮撤掉（不再诱导反复点击）
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(TGColors.Jade.copy(alpha = 0.16f))
+                            .border(1.dp, TGColors.Jade.copy(alpha = 0.5f), RoundedCornerShape(999.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("已保活 ✓", color = TGColors.Jade, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    // 未保活 → 跳系统电池优化设置页
+                    TextButton(onClick = {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${ctx.packageName}")
+                            }
+                            ctx.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }) { Text("忽略电池优化", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+                }
             }
         }
-
         Spacer(Modifier.height(10.dp))
         // 同步服务器（给电脑端连接用）
         TGCard(Modifier.fillMaxWidth()) {

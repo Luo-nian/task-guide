@@ -169,6 +169,60 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 }
             }
         }
+        // ===== v5.15.27 M9（boss：「为什么手机端不能修改用户名」+「昵称编辑在我的页面写」）=====
+        //   昵称此前只能在电脑端改。现在放在「我的」页头像卡下面。
+        // v5.15.27 M9b（boss 二次修订）：
+        //   ① 标题就叫「用户名」（不要「（昵称）」）；② 去掉「电脑端的问候语…」那句小字；
+        //   ③ 交互改成**「修改」式**（默认只显示当前值 + 修改按钮，点修改才出现输入框 + 确定/取消），
+        //      与设置页「同时追踪上限 → 更改」同一种交互语言 —— 不要常态可编辑的输入框。
+        Spacer(Modifier.height(10.dp))
+        TGCard(Modifier.fillMaxWidth()) {
+            var nick by remember { mutableStateOf("") }
+            var draft by remember { mutableStateOf("") }
+            var editing by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                runCatching { nick = vm.getSetting("nickname", "boss") }
+                draft = nick
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("用户名", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                if (!editing) {
+                    Text(nick, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(onClick = { draft = nick; editing = true }) {
+                        Text("修改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            if (editing) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it.take(12) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(onClick = {
+                        val v = draft.trim().ifEmpty { "boss" }
+                        nick = v
+                        // 与电脑端同一把 key：nickname（走同步通道，桌面端立刻能看到）
+                        vm.setSyncedSetting("nickname", v)
+                        prefs.edit().putString("nickname", v).apply()
+                        editing = false
+                        ToastHelper.show(ctx, "用户名已改为「$v」")
+                    }) { Text("确定", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { draft = nick; editing = false }) {
+                        Text("取消", color = TGColors.InkMute, fontSize = 14.sp)
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
 
         // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====

@@ -45,6 +45,14 @@ class TaskBarApp : Application() {
             runCatching { initDefaultSettings() }
             runCatching { ReminderScheduler.rescheduleAll(repo, this@TaskBarApp) }
         }
+        // v5.15.27 M7（boss：「设置里那个每日提醒 现在好像没什么用了」）——
+        //   真因：起床/睡前提醒只在 **BOOT_COMPLETED（重启手机）** 时 restore。
+        //   而 AlarmManager 的闹钟在"重装/强停/被系统清理"后会全部丢失 →
+        //   不重启手机就永远不再响，表现为"这个功能好像没用了"。
+        //   现在每次 App 冷启动都补一次恢复 → 只要打开过 App，提醒就一直是活的。
+        appScope.launch {
+            runCatching { com.taskbar.app.notify.DailyReminderScheduler.restoreAll(this@TaskBarApp) }
+        }
         // v5.15.10：后台预热等级图标（PathParser 解析 10 档 ~30 段），
         //   否则首次进「我的」页会在首帧解析 → 实测 90th 300ms 的卡顿来源之一
         appScope.launch {

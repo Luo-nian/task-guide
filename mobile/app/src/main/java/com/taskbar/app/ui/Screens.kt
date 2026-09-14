@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -192,26 +193,28 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                     LazyColumn(
                         Modifier.fillMaxWidth().weight(1f, fill = false).padding(horizontal = 12.dp),
                         state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        // v5.15.27 M14：0 间距 —— 分组容器靠"行内边距"把同一分类连成一整块
+                        verticalArrangement = Arrangement.Top,
                         // 底部留 150dp 给浮动追踪键（~70dp 圆钮+数字）+ 系统导航栏（~50dp）+ 缓冲
                         contentPadding = PaddingValues(bottom = 150.dp)
                     ) {
                         if (pinnedTracking.isNotEmpty()) {
-                            val trCollapsed = collapsedCats["__tracking"] == true
+                            // v5.15.27 M10（boss：「手机端 正在追踪的任务不用"收起"这个功能，
+                            //   置顶放在那里就行」）—— 置顶的「正在追踪」**不再可收起**：
+                            //   标题不可点、不显示三角、永远展开。追踪中的任务是他最需要随手看到的一组，
+                            //   允许收起反而多一次操作、还可能把它藏起来。（其它分类分组仍可收起）
                             item(key = "hdr-tracking") {
-                                SectionHeader(
-                                    "正在追踪 (${pinnedTracking.size})", TGColors.Violet,
-                                    collapsed = trCollapsed,
-                                    onClick = { collapsedCats["__tracking"] = !trCollapsed }
-                                )
+                                SectionHeader("正在追踪 (${pinnedTracking.size})", TGColors.Violet)
                             }
-                            if (!trCollapsed) items(pinnedTracking, key = { "tr-${it.uuid}" }) { task ->
+                            itemsIndexed(pinnedTracking, key = { _, t -> "tr-${t.uuid}" }) { idx, task ->
+                                GroupBoxItem(idx == 0, idx == pinnedTracking.lastIndex, TGColors.Violet.copy(alpha = 0.10f)) {
                                 TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
                                     onJustTracked = { justTrackedUuid = task.uuid },
                                     onJustStopped = { })   // v5.15.21 P3
-                            }
+                            
+                                }}
                         }
                         // 今日任务：按分类分组渲染（每日/目标/限时/次数）
                         groupedTodo.forEach { (catKey, list) ->
@@ -224,7 +227,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                     onClick = { collapsedCats[catKey] = !catCollapsed }
                                 )
                             }
-                            if (!catCollapsed) items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
+                            if (!catCollapsed) itemsIndexed(list, key = { _, t -> "t-$catKey-${t.uuid}" }) { idx, task ->
+                                GroupBoxItem(idx == 0, idx == list.lastIndex, TGColors.Gold.copy(alpha = 0.10f)) {
                                 if (task.type == TaskType.HABIT) {
                                     // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
                                     HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
@@ -238,7 +242,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                         onJustTracked = { justTrackedUuid = task.uuid },
                                     onJustStopped = { })   // v5.15.21 P3
                                 }
-                            }
+                            
+                                }}
                         }
                     }
                 }
@@ -384,11 +389,19 @@ private fun SectionHeader(
     val m = Regex("""^(.*?)\s*\((\d+)\)$""").find(title)
     val name = m?.groupValues?.get(1) ?: title
     val count = m?.groupValues?.get(2)
+    // v5.15.27 M1（boss：「主页的分类栏不要和背景一个色啊，那分类栏应该分出一栏颜色来区分」）——
+    //   分组标题从"纯文字一行"改成**带底色的一条栏**：底色 = 该分组主题色 13% 淡染 + 1dp 描边，
+    //   与页面背景明确分层；内边距加大，看起来是"一栏"而不是"一行字"。
     Row(
         Modifier
             .fillMaxWidth()
+            // v5.15.27 M14：列表改成 0 项间距后，标题的上下留白由自己负责（padding 在 clip 之外）
+            .padding(top = 10.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(color.copy(alpha = 0.13f))
+            .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(9.dp))
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(top = 10.dp, bottom = 2.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
@@ -410,12 +423,49 @@ private fun SectionHeader(
         if (onClick != null) {
             Spacer(Modifier.weight(1f))
             // v5.15.26 M2：收起指示（▾ 展开中 / ▸ 已收起）
+            // v5.15.27 M2（boss：「三角形太小了」）12 → 17sp，并改成该分组的主题色（不再用灰字）
+            // v5.15.27 M2b（boss：「三角形还是太小」）17 → 22sp —— 直接用大号加粗字形，够醒目
             Text(
                 if (collapsed) "▸" else "▾",
-                color = TGColors.InkMute, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                color = color, fontSize = 22.sp, fontWeight = FontWeight.Bold
             )
         }
     }
+}
+
+/**
+ * v5.15.27 M14（boss：「展开后 每一个分类的所有任务再用一个大框框起来 分类更清晰一点」）——
+ * 分组容器：同一分类的任务共享一块淡色底 —— 首条圆上角、末条圆下角、中间不圆，
+ * 行与行之间的间距放进容器内边距里，于是**视觉上连成一个"大框"**，分类和分类一眼分得开。
+ *
+ * ⚠️ 刻意**不改变 LazyColumn 的 item 数量**（仍然一个任务一个 item）：
+ *    「所有任务」页的滑动多选命中测试是 `flatRows[item.index]`，一旦改成"一个分组一个 item"
+ *    就会整段错位（选中错行）。用"分段容器"就能零风险拿到同样的观感。
+ */
+@Composable
+private fun GroupBoxItem(
+    isFirst: Boolean,
+    isLast: Boolean,
+    tint: Color,
+    content: @Composable () -> Unit
+) {
+    val shape = RoundedCornerShape(
+        topStart = if (isFirst) 12.dp else 0.dp,
+        topEnd = if (isFirst) 12.dp else 0.dp,
+        bottomStart = if (isLast) 12.dp else 0.dp,
+        bottomEnd = if (isLast) 12.dp else 0.dp
+    )
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(tint)
+            .padding(
+                start = 6.dp, end = 6.dp,
+                top = if (isFirst) 6.dp else 0.dp,
+                bottom = if (isLast) 6.dp else 4.dp
+            )
+    ) { content() }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -863,7 +913,9 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
-            .border(1.5.dp, TGColors.Azure.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+            // v5.15.27 M4（boss：「收起来的任务栏的框要和主页的追踪任务的那个框一致」）——
+            //   与主页 TaskRow 追踪态完全同款：1.5dp + Azure alpha 0.65 + 12dp 圆角
+            .border(1.5.dp, TGColors.Azure.copy(alpha = 0.65f), RoundedCornerShape(12.dp))
     ) {
         // 卡头：点击展开/收起
         Row(
@@ -890,7 +942,21 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
                     Text("$doneCount / $total 步骤", color = TGColors.InkMute, fontSize = 11.sp)
                 }
             }
-            Text(if (expanded) "收起 ▾" else "展开 ▸", color = TGColors.GoldDeep, fontSize = 12.sp)
+            // v5.15.27 M4 定稿（boss 二次修订：「收起也应该放在下面，我改需求，而且展开/收起二者字体大小一样」）——
+            //   最终形态：**「取消追踪 / 完成」常驻卡头右侧**（就是当年展开键待的位置），
+            //   **「展开 ▸ / 收起 ▾」永远在卡片最底部**、两种状态同一字号。
+            //   于是展开/收起只影响"中间那一段步骤栏"的显隐，键位不再跳来跳去。
+            TrackRippleKey(onClick = { vm.stopTracking(task.uuid) }, iconSize = 22.dp)
+            Spacer(Modifier.width(10.dp))
+            if (total == 0 || steps.count { it.status != StepStatus.DONE } <= 1) {
+                PressIcon(onClick = { vm.completeTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 22.dp)
+                }
+            } else {
+                PressIcon(onClick = { vm.advanceStepByTask(task.uuid) }) {
+                    TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 22.dp)
+                }
+            }
         }
         if (total > 0) {
             LinearProgressIndicator(
@@ -934,35 +1000,20 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
                 Spacer(Modifier.height(4.dp))
             }
         }
-        // v5.15.16（M11）：追踪页也要有「取消追踪 / 推进」两个键
-        // v5.15.21 M9（boss：追踪页的取消追踪键和完成键还是以前的版本，改）——
-        //   旧实现是 TextButton + 灰色 ✕（ic_close），与主页/详情页早已统一的
-        //   「朱砂红实心靶心 = 取消追踪」「玉青勾 = 完成」「金箭头 = 推进」不一致。
-        //   这里改成同款圆形图标键（PressIcon），三处观感一致。
-        val remaining = steps.count { it.status != StepStatus.DONE }
+        // v5.15.27 M4 定稿：底部常驻一条「展开 ▸ / 收起 ▾」把手（两状态同一字号 20sp）
+        //   两个操作键已上移到卡头右侧，所以这里只留把手 → 展开与收起的高度差 = 步骤栏本身
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
-            // v5.15.21 M9b（boss：追踪键和完成键一列对齐一下，不然看着难受）——
-            //   旧版是 TextButton + 长度不同的文字（"取消追踪" vs "完成"），图标起点参差；
-            //   现在两个键都是 40dp 圆形（PressIcon 内 IconButton）+ 固定间距 + 整体右对齐，
-            //   图标自然落在同一条竖线上。左端 Spacer 不再需要（改用 End 对齐）。
-            // v5.15.22 M6：键间距 14→10，与主页 TaskRow/HabitRow 完全一致
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+            Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 取消追踪：朱砂红实心靶心（追踪键镂空处填满）——与主页 TaskRow / HabitRow 一致
-            // v5.15.22 M5：追踪态下取消键带涟漪呼吸
-            TrackRippleKey(onClick = { vm.stopTracking(task.uuid) }, iconSize = 24.dp)
-            // 推进 / 完成：只剩最后一步（或无步骤）时直接变「完成」，与主页规则一致
-            if (total == 0 || remaining <= 1) {
-                PressIcon(onClick = { vm.completeTask(task.uuid) }) {
-                    TGIcon(R.drawable.ic_check_circle, contentDescription = "完成", tint = TGColors.Jade, size = 24.dp)
-                }
-            } else {
-                PressIcon(onClick = { vm.advanceStepByTask(task.uuid) }) {
-                    TGIcon(R.drawable.ic_forward, contentDescription = "推进", tint = TGColors.GoldDeep, size = 24.dp)
-                }
-            }
+            Text(
+                if (expanded) "收起 ▾" else "展开 ▸",
+                color = TGColors.GoldDeep, fontSize = 20.sp, fontWeight = FontWeight.Bold
+            )
         }
     }
 
@@ -1493,17 +1544,18 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                // v5.15.27 M14：0 间距（分组容器用行内边距连成整块）
+                verticalArrangement = Arrangement.Top,
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 // v5.15.16（boss）：追踪中的任务必须置顶（原来"今日打卡"占着第一位）
                 if (trackingF.isNotEmpty()) {
                     item(key = "hdr-t") {
-                        SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet,
-                            collapsed = isCatCollapsed("t"),
-                            onClick = { collapsedCats["t"] = !isCatCollapsed("t") })
+                        // v5.15.27 M10：与主页一致 —— 「正在追踪」不可收起（常显，避免被藏起来）
+                        SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet)
                     }
-                    if (!isCatCollapsed("t")) items(trackingF, key = { "t-${it.uuid}" }) { task ->
+                    itemsIndexed(trackingF, key = { _, t -> "t-${t.uuid}" }) { idx, task ->
+                        GroupBoxItem(idx == 0, idx == trackingF.lastIndex, TGColors.Violet.copy(alpha = 0.10f)) {
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0), tracking = true,
@@ -1520,7 +1572,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) })
                         }
-                    }
+                    
+                        }}
                 }
                 if (todayCheckedList.isNotEmpty()) {
                     item(key = "hdr-today") {
@@ -1528,13 +1581,15 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             collapsed = isCatCollapsed("today"),
                             onClick = { collapsedCats["today"] = !isCatCollapsed("today") })
                     }
-                    if (!isCatCollapsed("today")) items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
+                    if (!isCatCollapsed("today")) itemsIndexed(todayCheckedList, key = { _, t -> "today-${t.uuid}" }) { idx, task ->
+                        GroupBoxItem(idx == 0, idx == todayCheckedList.lastIndex, TGColors.Jade.copy(alpha = 0.10f)) {
                         HabitRow(task, vm, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
                             selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                             onToggleSelect = { ms.toggle(task.uuid) },
                             onLongSelect = { ms.begin(task.uuid) },
                             onRowClick = { navController.navigate("detail/${task.uuid}") })
-                    }
+                    
+                        }}
                 }
                 if (todoF.isNotEmpty()) {
                     item(key = "hdr-todo") {
@@ -1542,7 +1597,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             collapsed = isCatCollapsed("todo"),
                             onClick = { collapsedCats["todo"] = !isCatCollapsed("todo") })
                     }
-                    if (!isCatCollapsed("todo")) items(todoF, key = { "todo-${it.uuid}" }) { task ->
+                    if (!isCatCollapsed("todo")) itemsIndexed(todoF, key = { _, t -> "todo-${t.uuid}" }) { idx, task ->
+                        GroupBoxItem(idx == 0, idx == todoF.lastIndex, TGColors.GoldDeep.copy(alpha = 0.10f)) {
                         if (task.type == TaskType.HABIT) {
                             // v5.15.23 M7/M8：每日任务在仓库页也按习惯行渲染（今日打卡/连续天数），
                             //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
@@ -1561,7 +1617,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) })
                         }
-                    }
+                    
+                        }}
                 }
                 if (futureF.isNotEmpty()) {
                     item(key = "hdr-f") {
@@ -1569,7 +1626,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                             collapsed = isCatCollapsed("f"),
                             onClick = { collapsedCats["f"] = !isCatCollapsed("f") })
                     }
-                    if (!isCatCollapsed("f")) items(futureF, key = { "f-${it.uuid}" }) { task ->
+                    if (!isCatCollapsed("f")) itemsIndexed(futureF, key = { _, t -> "f-${t.uuid}" }) { idx, task ->
+                        GroupBoxItem(idx == 0, idx == futureF.lastIndex, TGColors.Azure.copy(alpha = 0.10f)) {
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),
@@ -1586,7 +1644,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                                 onToggleSelect = { ms.toggle(task.uuid) },
                                 onLongSelect = { ms.begin(task.uuid) })
                         }
-                    }
+                    
+                        }}
                 }
             }
             }

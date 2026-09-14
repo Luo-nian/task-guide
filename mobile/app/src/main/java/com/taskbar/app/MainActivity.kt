@@ -60,52 +60,16 @@ import com.taskbar.app.ui.*
 import com.taskbar.app.ui.TGColors
 
 /**
- * v5.15.22 M4 + v5.15.23 M1/M3/M4（boss：「页面切换的 UI 还是没加上」「只做了主页和追踪和我的，
- * 其他的呢」「现在太快了慢一点点」「方向应该按页面关系设计，比如"我的"是左边，追踪和主页按键都在下面」）
- *
- * 页面带的物理顺序（与入口位置对应）：
- *   我的(0, 左上角头像入口) ← 主页(1, 底部中央) → 追踪(2, 底部凸起键)
- * 转场规则：
- *   · 主页面带内互切：按左右方向滑动（往右翻 → 新页从右侧进；往左翻 → 从左侧进）
- *   · 进下级页面（所有任务/历史/详情/新建/设置…）：新页从**右侧推入**，当前页向左退出
- *   · 从下级页面返回：下级页向右退出，主页面从**左侧**推回
- *   · 时长 320ms（v5.15.22 的 220ms 被 boss 判为"太快"）
+ * v5.15.27 M3/M6（boss：「页面切换还是卡卡的，要等按键的交互结束之后才弹出来，太慢了，改」
+ *   + 「我说页面切换的 UI 方向应该和按键方向一致你听不懂吗？不行你把页面切换去掉吧」）——
+ *   决定：**彻底去掉页面切换动画**（转场 0ms，点下即切）。
+ *   理由：① 方向语义反复调整仍不达 boss 预期；② 240ms 的转场叠加按键反馈后体感"慢半拍"。
+ *   副作用：主页面带（我的 ← 主页 → 追踪）**左右滑动切换**的手势保留（那是手势、不是动画）。
+ *   若以后想恢复方向一致的转场，只需把下面 NavHost 的四个 transition 参数换回 slideIntoContainer。
  */
 private val MAIN_PAGE_ORDER = listOf("profile", "home", "track")
-// v5.15.25 N2（boss：「点了按钮过了一下才能切换过去 再改快一点点」）—— 320 → 240ms
-private const val PAGE_ANIM_MS = 240
 
 private fun pageIndex(route: String?): Int = MAIN_PAGE_ORDER.indexOf(route)
-
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.appEnter(): EnterTransition {
-    val from = pageIndex(initialState.destination.route)
-    val to = pageIndex(targetState.destination.route)
-    if (from >= 0 && to >= 0) {
-        return slideIntoContainer(
-            if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
-            else AnimatedContentTransitionScope.SlideDirection.Right,
-            tween(PAGE_ANIM_MS)
-        )
-    }
-    // 进下级页面 → 从右侧推入；回主页面带 → 从左侧推回
-    return if (to < 0) slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PAGE_ANIM_MS))
-    else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PAGE_ANIM_MS))
-}
-
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.appExit(): ExitTransition {
-    val from = pageIndex(initialState.destination.route)
-    val to = pageIndex(targetState.destination.route)
-    if (from >= 0 && to >= 0) {
-        return slideOutOfContainer(
-            if (to > from) AnimatedContentTransitionScope.SlideDirection.Left
-            else AnimatedContentTransitionScope.SlideDirection.Right,
-            tween(PAGE_ANIM_MS)
-        )
-    }
-    // 去下级页面 → 当前页向左退出；回主页面带 → 当前页向右退出
-    return if (to < 0) slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PAGE_ANIM_MS))
-    else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PAGE_ANIM_MS))
-}
 
 class MainActivity : ComponentActivity() {
 
@@ -296,12 +260,12 @@ fun MainApp() {
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .consumeWindowInsets(WindowInsets.navigationBars),
-                // v5.15.22 M4 + v5.15.23 M1/M4：主页面带按方向滑动；下级页面右侧推入/退出。
-                //   其余页面**不再**保持无动画（boss：「你只做了主页和追踪和我的，其他的呢」）。
-                enterTransition = { appEnter() },
-                exitTransition = { appExit() },
-                popEnterTransition = { appEnter() },
-                popExitTransition = { appExit() }
+                // v5.15.27 M3/M6：转场已去掉（见文件头说明）。
+                // v5.15.27 M3/M6：转场全部置空 → 点击立即切换，不再等动画
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { ExitTransition.None }
         ) {
             // v5.15.10：每个页面自带**不透明**背景（与原根背景同一个 brush）。
             // 起因：NavHost 切页时新旧两个 destination 会同时绘制一两帧，而各页面 Scaffold 都是
