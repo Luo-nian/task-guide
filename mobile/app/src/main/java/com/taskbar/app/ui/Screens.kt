@@ -104,12 +104,9 @@ private val DONE_QUOTES = listOf(
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val allTasks by vm.mainList.collectAsState()
-    // v5.15.12：按任务类型筛选查看（boss：手机端所有任务也应该可以分类查看）
-    // v5.15.16：这个筛选条 = 电脑端侧边栏的等价物，只用来"在今日待办里单看某一类"
-    var catFilter by remember { mutableStateOf("all") }
-    val tasks = remember(allTasks, catFilter) {
-        if (catFilter == "all") allTasks else allTasks.filter { catKeyOf(it) == catFilter }
-    }
+    // v5.15.25 N8（boss：「主页的分类查看去掉吧 没啥用 有点多余」）→
+    //   主页直接显示全部今日待办，分类筛选只在「所有任务」页保留。
+    val tasks = allTasks
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -125,16 +122,19 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            // 类型筛选条（= 电脑端侧边栏：只在今日待办里单看某一类）
-            // v5.15.16（boss）：主页首项不叫"全部"，叫"今日"（这里本来就是今日任务）
-            CategoryFilterRow(catFilter, { catFilter = it }, allLabel = "今日")
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
                 // 追踪置顶逻辑：当次在主页点追踪 → 不立即置顶（任务原位+金框+追踪键涟漪）；
                 // 退出主页（切子界面/重启）再回来 → 追踪任务才置顶显示
-                var showPinSection by remember { mutableStateOf(true) }  // 普通 remember（不用 rememberSaveable），避免 app 重建后状态粘住导致追踪任务永久不置顶
+                // v5.15.25 N4/N7（boss：取消一个追踪后，其他追踪任务的框消失、置顶不再分层）——
+                //   旧实现用 showPinSection 控制"当次不置顶"，但 **取消追踪也把它置 false** →
+                //   整个置顶区消失、追踪任务掉进普通分组，要切页回来才恢复（boss 复现的正是这个）。
+                //   改成只记住"刚追踪的那一个 uuid"：仅它本轮留在原位不置顶，
+                //   其余追踪任务照常置顶；**取消追踪完全不影响置顶区**。
+                var justTrackedUuid by remember { mutableStateOf<String?>(null) }
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
+                val pinnedTracking = tracking.filter { it.uuid != justTrackedUuid }
                 // 列表状态：显式持有，回到主页时若有追踪任务则强制滚回顶部（否则停在旧位置看不到置顶的追踪区）
                 val listState = rememberLazyListState()
 
@@ -142,7 +142,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 LaunchedEffect(backStackEntry?.destination?.route) {
                     // 重新进入主页 → 恢复置顶（刚追踪的"不置顶"只影响当次）
                     if (backStackEntry?.destination?.route == "home") {
-                        showPinSection = true
+                        justTrackedUuid = null   // 回到主页 → 刚追踪的那个也归位到置顶区
                         // v5.15.16（boss）：从别的界面回到主页，只要有追踪任务 → 页面坐标默认回到最上面
                         if (tracking.isNotEmpty()) listState.scrollToItem(0)
                     }
@@ -157,7 +157,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 val habitStats by vm.allHabitStats.collectAsState()
                 // todo：置顶时排除追踪中（追踪在置顶区显示），不置顶时追踪任务混在列表里
                 // v5.15.16（boss）：每日任务打完卡当天就不再留在主页（明天自动重新出现）
-                val todo = (if (showPinSection) tasks.filter { it.trackStatus != TrackStatus.TRACKING } else tasks)
+                val todo = tasks
+                    .filter { it.trackStatus != TrackStatus.TRACKING || it.uuid == justTrackedUuid }
                     .filter { !(it.type == TaskType.HABIT && it.uuid in checkedHabits) }
                 // 今日任务按分类分组（每日/目标/限时/次数）——与电脑端今日待办同一口径
                 val groupedTodo = remember(todo) {
@@ -193,14 +194,14 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                         // 底部留 150dp 给浮动追踪键（~70dp 圆钮+数字）+ 系统导航栏（~50dp）+ 缓冲
                         contentPadding = PaddingValues(bottom = 150.dp)
                     ) {
-                        if (showPinSection && tracking.isNotEmpty()) {
-                            item(key = "hdr-tracking") { SectionHeader("正在追踪 (${tracking.size})", TGColors.Violet) }
-                            items(tracking, key = { "tr-${it.uuid}" }) { task ->
+                        if (pinnedTracking.isNotEmpty()) {
+                            item(key = "hdr-tracking") { SectionHeader("正在追踪 (${pinnedTracking.size})", TGColors.Violet) }
+                            items(pinnedTracking, key = { "tr-${it.uuid}" }) { task ->
                                 TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
-                                    onJustTracked = { showPinSection = false },
-                                    onJustStopped = { showPinSection = false })   // v5.15.21 P3
+                                    onJustTracked = { justTrackedUuid = task.uuid },
+                                    onJustStopped = { })   // v5.15.21 P3
                             }
                         }
                         // 今日任务：按分类分组渲染（每日/目标/限时/次数）
@@ -214,13 +215,13 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                     HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
                                         streak = (habitStats[task.uuid]?.streak ?: 0),
                                         tracking = task.trackStatus == TrackStatus.TRACKING,
-                                        onJustStopped = { showPinSection = false })   // v5.15.21 P3
+                                        onJustStopped = { })   // v5.15.21 P3
                                 } else {
                                     TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                         onClick = { navController.navigate("detail/${task.uuid}") },
                                         onEdit = { navController.navigate("edit/${task.uuid}") },
-                                        onJustTracked = { showPinSection = false },
-                                    onJustStopped = { showPinSection = false })   // v5.15.21 P3
+                                        onJustTracked = { justTrackedUuid = task.uuid },
+                                    onJustStopped = { })   // v5.15.21 P3
                                 }
                             }
                         }
@@ -814,7 +815,9 @@ fun TrackScreen(vm: TaskViewModel) {
 private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
     // v5.15.16（M4）：steps 由外层聚合 Map 传入（原内部 vm.steps(uuid) 每次进页重建 Flow）
     val ctx = LocalContext.current
-    var expanded by remember(task.uuid) { mutableStateOf(true) }
+    // v5.15.25 N9（boss：没有步骤的任务，追踪页默认把步骤栏收起来）——
+    //   有步骤才默认展开，没步骤默认收起（点卡头仍可手动展开）
+    var expanded by remember(task.uuid) { mutableStateOf(steps.isNotEmpty()) }
     var showAddStep by remember(task.uuid) { mutableStateOf(false) }
     val doneCount = steps.count { it.status == StepStatus.DONE }
     val total = steps.size
@@ -1397,9 +1400,15 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     tasks = allForCal,
                     // v5.15.23 M6：今天已打卡的每日任务要落在**今天**这一格
                     //   （习惯没有 dueAt，若按 createdAt 会散落在"创建那天"，今日数量就对不上了）
+                    // v5.15.25 N3（boss：「所有任务里追踪的任务为什么不显示」）——
+                    //   追踪中的任务没有 dueAt 时会被按 createdAt 铺到**创建那天**（甚至上个月），
+                    //   于是"正在追踪的"在日历上根本看不见 → 追踪中一律落位到**今天**。
                     dateOf = { t ->
-                        if (t.type == TaskType.HABIT && t.uuid in todayCheckedHabits) dayEnd
-                        else t.dueAt ?: t.deadline ?: t.createdAt
+                        when {
+                            t.trackStatus == TrackStatus.TRACKING -> dayEnd
+                            t.type == TaskType.HABIT && t.uuid in todayCheckedHabits -> dayEnd
+                            else -> t.dueAt ?: t.deadline ?: t.createdAt
+                        }
                     },
                     // v5.15.22 M9：日历点任务 → 只读详情（boss：不能有任何功能按键，防刷分）
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
@@ -1724,7 +1733,11 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                 )
             }
         } else {
+            // v5.15.25 N6（boss：列表形式点「恢复」会把页面一下拉到最下面）——
+            //   显式持有滚动状态：恢复后 archive 少一项、LazyColumn 重组时位置不会被重置/夹到末尾。
+            //   顺手加 animateScrollToItem 兜底（恢复后把位置钉回"原来第一项"）。
             LazyColumn(
+                state = rememberLazyListState(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {

@@ -72,7 +72,8 @@ import com.taskbar.app.ui.TGColors
  *   · 时长 320ms（v5.15.22 的 220ms 被 boss 判为"太快"）
  */
 private val MAIN_PAGE_ORDER = listOf("profile", "home", "track")
-private const val PAGE_ANIM_MS = 320
+// v5.15.25 N2（boss：「点了按钮过了一下才能切换过去 再改快一点点」）—— 320 → 240ms
+private const val PAGE_ANIM_MS = 240
 
 private fun pageIndex(route: String?): Int = MAIN_PAGE_ORDER.indexOf(route)
 
