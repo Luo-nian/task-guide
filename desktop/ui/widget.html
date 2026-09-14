@@ -277,6 +277,29 @@
   } catch (e) {}
   setInterval(refresh, 5000);   // 兜底轮询保留（事件丢了也不会长期不同步）
 })();
+
+/* v5.15.26 P8（boss：电脑端挂件可以用鼠标设置大小；按键和文字也一起缩放）——
+   ① 窗口本身已开 resizable（拖边缘即可，含 240×180 ~ 760×1000 的上下限，在 tauri.conf.json 里）；
+   ② 这里让**内容跟随窗口宽度整体缩放**：用 zoom 等比放大/缩小，所以文字、按钮、间距会一起变，
+      不会出现"窗口变大了但字还是原来那么大"的断裂感。限制 0.8×~1.8×，避免缩到看不清或大到溢出。 */
+(function () {
+  const BASE_W = 360;                // 设计基准宽度（原始挂件就是按 360px 做的）
+  const MIN_S = 0.8, MAX_S = 1.8;
+  let cur = 1;
+  function apply() {
+    // 注意：设了 zoom 之后 window.innerWidth 反映的是"缩放后"的可视宽度，
+    // 所以要用 cur 反算出未缩放的真实宽度，否则会来回震荡。
+    const realW = window.innerWidth * cur;
+    let s = realW / BASE_W;
+    s = Math.max(MIN_S, Math.min(MAX_S, s));
+    if (Math.abs(s - cur) > 0.004) {
+      cur = s;
+      document.documentElement.style.zoom = String(s);
+    }
+  }
+  window.addEventListener('resize', apply);
+  apply();
+})();
 </script>
 </div>
 </body>

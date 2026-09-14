@@ -590,14 +590,15 @@ body::after {
   display: block;
   background: var(--azure);
   box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 6px var(--glow-azure);
-  animation: rippleBreath 2.4s ease-out infinite;
+  animation: rippleBreath 2.2s ease-out infinite;
 }
 /* 涟漪动画：菱形外金色边框像水滴涟漪向外扩开变淡 */
+/* v5.15.26 P3（boss：追踪键「有闪烁之类的」「不像涟漪」，只留一圈、别太明显）——
+   旧版 0→35% 扩开、35%→70% **缩回去**、70→100% 静止 → 视觉上就是"呼吸/闪烁"，不是涟漪。
+   改成**单向一圈**：从菱形边缘荡出去、边扩边淡到 0；菱形本体金边全程保持不变（始终看得清）。 */
 @keyframes rippleBreath {
-  0%   { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 6px var(--glow-azure); }
-  35%  { box-shadow: 0 0 0 4px rgba(230, 199, 122, 0.45), 0 0 0 8px rgba(230, 199, 122, 0); }
-  70%  { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 6px var(--glow-azure); }
-  100% { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 6px var(--glow-azure); }
+  0%   { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 0 0 rgba(232, 203, 127, 0.55), 0 0 6px var(--glow-azure); }
+  100% { box-shadow: 0 0 0 1.5px var(--gold-light), 0 0 0 9px rgba(232, 203, 127, 0), 0 0 6px var(--glow-azure); }
 }
 
 .ct-title {
@@ -653,7 +654,12 @@ body::after {
 }
 .dash-greet-text {
   flex: 1;
-  color: var(--ink); font-size: 17px; font-weight: 600; letter-spacing: 1px;
+  /* v5.15.26 P5（boss：「晚上好boss的问候语 不明显」）——
+     根因：这是**深色**身份卡，问候语却用了 --ink（深色文字）→ 几乎看不见。
+     改成亮金色 + 一层轻阴影，让问候语成为这一行最醒目的信息（下一行的等级/积分保持原样）。 */
+  color: var(--gold-light, #E8CB7F);
+  font-size: 17px; font-weight: 700; letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 .dash-greet-sub { color: var(--ink-mute); font-size: 11.5px; }
 .dash-greet-icon {
@@ -934,6 +940,26 @@ body::after {
 .stat-trend { color: var(--ink-mute); font-size: 10px; margin-top: 3px; }
 .stat-trend.up { color: var(--jade); }
 .stat-trend.warn { color: var(--orange); }
+
+/* v5.15.26 P6（boss：卡片要分等级设计，越高级越高贵；**不得影响任何文字和图标的观感**）——
+   这里只改【外框颜色 / 外发光 / 角落光斑】这三样"装饰层"，一律不碰 color/font-size/filter，
+   所以卡里的问候语、等级名、积分、头像、宝石的观感完全不受影响。 */
+.dash-greeting.rank-lv4  { border-color: rgba(201, 162, 39, 0.22); }
+.dash-greeting.rank-lv5  { border-color: rgba(201, 162, 39, 0.34); box-shadow: 0 0 14px rgba(201, 162, 39, 0.12); }
+.dash-greeting.rank-lv6  { border-color: rgba(216, 180, 90, 0.42); box-shadow: 0 0 16px rgba(216, 180, 90, 0.16); }
+.dash-greeting.rank-lv7  { border-color: rgba(216, 180, 90, 0.50); box-shadow: 0 0 18px rgba(216, 180, 90, 0.20); }
+.dash-greeting.rank-lv8  { border-color: rgba(232, 203, 127, 0.58); box-shadow: 0 0 20px rgba(232, 203, 127, 0.24); }
+.dash-greeting.rank-lv9  { border-color: rgba(255, 220, 140, 0.66); box-shadow: 0 0 24px rgba(255, 220, 140, 0.28); }
+.dash-greeting.rank-lv10 { border-color: rgba(255, 220, 140, 0.76); box-shadow: 0 0 28px rgba(255, 220, 140, 0.34); }
+/* 高级别再加一枚极淡的角落光斑（纯装饰，位于右上角，不覆盖任何文字） */
+.dash-greeting.rank-lv7::after,
+.dash-greeting.rank-lv8::after,
+.dash-greeting.rank-lv9::after,
+.dash-greeting.rank-lv10::after {
+  content: ""; position: absolute; right: -26px; top: -26px;
+  width: 96px; height: 96px; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 226, 150, 0.22), transparent 70%);
+}
 
 /* 角色卡（等级 + 当前角色，简洁版：名字 + 问号） */
 .level-card {
@@ -2483,6 +2509,12 @@ body { background-color: var(--bg-paper); }
 
 /* ===== v5.15.11：历史任务「记账式流水」=====
    按天分组：日期 + 当日小计（完成 N 项 · +X 分），下面一行行流水（时间 / 任务名 / 分类 / 得分）。 */
+/* v5.15.26 P4（boss：每个分类都弄成可收起的下拉栏，电脑端也这样）——
+   分组头可点；收起时只隐藏 .cg-body，分组头本身保留（随时能点开） */
+.cat-group-head { cursor: pointer; user-select: none; }
+.cat-group-head .cg-arrow { margin-left: auto; font-size: 11px; color: var(--ink-mute); font-weight: 700; }
+.cat-group.collapsed .cg-body { display: none; }
+
 .lg-day { margin-bottom: 10px; }
 .lg-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -2497,6 +2529,9 @@ body { background-color: var(--bg-paper); }
 .lg-rows { display: flex; flex-direction: column; gap: 2px; }
 .lg-row {
   display: flex; align-items: center; gap: 8px;
+  min-height: 30px;                 /* v5.15.26 P7：行高固定，卡片不会忽高忽低 */
+  width: 100%;
+  box-sizing: border-box;
   padding: 5px 8px; border-radius: 6px; cursor: pointer;
   background: rgba(255, 254, 251, 0.7);
   border: 1px solid rgba(201, 162, 39, 0.14);
@@ -2506,8 +2541,12 @@ body { background-color: var(--bg-paper); }
 .lg-time { flex: 0 0 38px; font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .lg-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lg-cat { flex: 0 0 auto; font-size: 10px; color: var(--ink-mute);
-  padding: 1px 6px; border-radius: 999px; background: rgba(201, 162, 39, 0.12); }
+/* v5.15.26 P7（boss：历史卡片大小要固定，不要按任务多少拓宽/缩短）——
+   关键列全部改成**固定宽度**（时间/分类/得分），只有任务名那一列弹性伸缩，
+   于是每天每行都严格对齐，卡片整体宽窄不再随内容跳动。 */
+.lg-cat { flex: 0 0 56px; text-align: center; font-size: 10px; color: var(--ink-mute);
+  padding: 1px 0; border-radius: 999px; background: rgba(201, 162, 39, 0.12);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-pts { flex: 0 0 40px; text-align: right; font-size: 11px; font-weight: 700; color: var(--jade); }
 
 /* ===== v5.15.12：分类分组头 / 任务行 统一为「记账式」观感 =====
@@ -2773,7 +2812,7 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 .cc-name { font-size: 14.5px; font-weight: 700; letter-spacing: 0.5px; }
 .progress-title { font-size: 15px; font-weight: 700; letter-spacing: 1px; }
 .level-name { font-size: 19px; font-weight: 700; }
-.dash-greet-text { font-size: 16px; font-weight: 700; }
+.dash-greet-text { font-size: 17px; font-weight: 700; }  /* v5.15.26 P5：17px，与上方定义一致 */
 /* —— 统计卡：数值是主角 —— */
 .stat-label { font-weight: 600; letter-spacing: 1.5px; }
 .stat-value { font-size: 24px; font-weight: 800; }
@@ -2790,13 +2829,14 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 .cat-task .ct-title, .list-task .ct-title, .arc-item .arc-title { font-weight: 600; }
 
 /* ========== v5.15.23 D1：角落常驻「已连接/未连接」指示胶囊 ========== */
+/* v5.15.26 P1：连接胶囊从右下角移到顶栏「任务栏」名字左边（内联布局，不再 fixed） */
 .link-pill {
-  position: fixed;
-  right: 12px;
-  bottom: 10px;
-  z-index: 60;
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px 4px 8px;
+  position: static;
+  z-index: 5;
+  margin-right: 8px;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 7px;
   border-radius: 999px;
   background: rgba(255, 252, 243, 0.92);
   border: 1px solid var(--border-mid);
@@ -2812,6 +2852,8 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
   background: var(--ink-faint, #C2B59E);
   box-shadow: none;
 }
+/* v5.15.26 P2：未配对手机时不显示（boss：配对了之后才显示出来） */
+.link-pill.hidden { display: none !important; }
 .link-pill.on { color: var(--jade, #5E8C61); border-color: rgba(94, 140, 97, 0.45); }
 .link-pill.on .lp-dot {
   background: var(--jade, #5E8C61);

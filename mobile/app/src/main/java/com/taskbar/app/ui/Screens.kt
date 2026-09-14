@@ -133,6 +133,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 //   改成只记住"刚追踪的那一个 uuid"：仅它本轮留在原位不置顶，
                 //   其余追踪任务照常置顶；**取消追踪完全不影响置顶区**。
                 var justTrackedUuid by remember { mutableStateOf<String?>(null) }
+                // v5.15.26 M2：各分类分组的收起状态（catKey → true 表示已收起）
+                val collapsedCats = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
                 val tracking = tasks.filter { it.trackStatus == TrackStatus.TRACKING }
                 val pinnedTracking = tracking.filter { it.uuid != justTrackedUuid }
                 // 列表状态：显式持有，回到主页时若有追踪任务则强制滚回顶部（否则停在旧位置看不到置顶的追踪区）
@@ -195,8 +197,15 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                         contentPadding = PaddingValues(bottom = 150.dp)
                     ) {
                         if (pinnedTracking.isNotEmpty()) {
-                            item(key = "hdr-tracking") { SectionHeader("正在追踪 (${pinnedTracking.size})", TGColors.Violet) }
-                            items(pinnedTracking, key = { "tr-${it.uuid}" }) { task ->
+                            val trCollapsed = collapsedCats["__tracking"] == true
+                            item(key = "hdr-tracking") {
+                                SectionHeader(
+                                    "正在追踪 (${pinnedTracking.size})", TGColors.Violet,
+                                    collapsed = trCollapsed,
+                                    onClick = { collapsedCats["__tracking"] = !trCollapsed }
+                                )
+                            }
+                            if (!trCollapsed) items(pinnedTracking, key = { "tr-${it.uuid}" }) { task ->
                                 TaskRow(task, stepsByUuid[task.uuid].orEmpty(), vm,
                                     onClick = { navController.navigate("detail/${task.uuid}") },
                                     onEdit = { navController.navigate("edit/${task.uuid}") },
@@ -206,10 +215,16 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                         }
                         // 今日任务：按分类分组渲染（每日/目标/限时/次数）
                         groupedTodo.forEach { (catKey, list) ->
+                            val catCollapsed = collapsedCats[catKey] == true
                             item(key = "hdr-todo-$catKey") {
-                                SectionHeader("${CAT_FILTER_LABEL[catKey] ?: catKey} · 今日 (${list.size})", TGColors.GoldDeep)
+                                SectionHeader(
+                                    "${CAT_FILTER_LABEL[catKey] ?: catKey} · 今日 (${list.size})",
+                                    TGColors.GoldDeep,
+                                    collapsed = catCollapsed,
+                                    onClick = { collapsedCats[catKey] = !catCollapsed }
+                                )
                             }
-                            items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
+                            if (!catCollapsed) items(list, key = { "t-$catKey-${it.uuid}" }) { task ->
                                 if (task.type == TaskType.HABIT) {
                                     // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
                                     HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
@@ -358,12 +373,22 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
  *    自动拆出来渲染成**紧贴标题的圆角胶囊小标签**（金色系），两端观感一致。
  *    这里统一处理，6 个调用点不用逐个改。 */
 @Composable
-private fun SectionHeader(title: String, color: Color) {
+private fun SectionHeader(
+    title: String,
+    color: Color,
+    // v5.15.26 M2（boss：每个分类都做成可收起的下拉栏，方便查看）——
+    //   onClick 非空即「可收起」：点标题收起/展开，行尾显示 ▾/▸
+    collapsed: Boolean = false,
+    onClick: (() -> Unit)? = null
+) {
     val m = Regex("""^(.*?)\s*\((\d+)\)$""").find(title)
     val name = m?.groupValues?.get(1) ?: title
     val count = m?.groupValues?.get(2)
     Row(
-        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
@@ -381,6 +406,14 @@ private fun SectionHeader(title: String, color: Color) {
             ) {
                 Text(count, color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
+        }
+        if (onClick != null) {
+            Spacer(Modifier.weight(1f))
+            // v5.15.26 M2：收起指示（▾ 展开中 / ▸ 已收起）
+            Text(
+                if (collapsed) "▸" else "▾",
+                color = TGColors.InkMute, fontSize = 12.sp, fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -632,7 +665,11 @@ private fun TaskRow(
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(task.title, color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    // v5.15.26 M1（boss：为什么主页「喝水 8 次」的字体不一样）——
+                    //   这里是 TaskRow 的"带 chips"分支，原来是 16sp SemiBold，
+                    //   与另一分支/习惯行的 17sp Medium 不一致 → 同一个列表里字号字重跳变。
+                    //   统一到 17sp Medium。
+                    Text(task.title, color = TGColors.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium)
                     task.dueAt?.let {
                         Spacer(Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1205,6 +1242,8 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val future = rest.filter { it.dueAt != null && (it.dueAt ?: 0L) > dayEnd }
     // v5.15.16（M2）：所有任务页也要能分类查看 + 右上角搜索
     var catFilter by remember { mutableStateOf("all") }
+    // v5.15.26 M3（boss：所有任务也这样，总之列表的都这样）—— 分组收起状态
+    val collapsedCats = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     var searchOn by remember { mutableStateOf(false) }
     var keyword by remember { mutableStateOf("") }
     // v5.15.21 R4：列表 / 日历 切换
@@ -1244,11 +1283,13 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
         label = "searchHeight"
     )
     // 扁平行序（与 LazyColumn 的 item 顺序严格一致；null = 分区标题）→ 供滑动多选做命中测试
+    // v5.15.26 M3：flatRows 必须与「收起状态」同步构建，否则滑动多选的命中测试会整段错位
+    fun isCatCollapsed(k: String) = collapsedCats[k] == true
     val flatRows: List<String?> = buildList {
-        if (trackingF.isNotEmpty()) { add(null); trackingF.forEach { add(it.uuid) } }
-        if (todayCheckedList.isNotEmpty()) { add(null); todayCheckedList.forEach { add(it.uuid) } }
-        if (todoF.isNotEmpty()) { add(null); todoF.forEach { add(it.uuid) } }
-        if (futureF.isNotEmpty()) { add(null); futureF.forEach { add(it.uuid) } }
+        if (trackingF.isNotEmpty()) { add(null); if (!isCatCollapsed("t")) trackingF.forEach { add(it.uuid) } }
+        if (todayCheckedList.isNotEmpty()) { add(null); if (!isCatCollapsed("today")) todayCheckedList.forEach { add(it.uuid) } }
+        if (todoF.isNotEmpty()) { add(null); if (!isCatCollapsed("todo")) todoF.forEach { add(it.uuid) } }
+        if (futureF.isNotEmpty()) { add(null); if (!isCatCollapsed("f")) futureF.forEach { add(it.uuid) } }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -1457,8 +1498,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             ) {
                 // v5.15.16（boss）：追踪中的任务必须置顶（原来"今日打卡"占着第一位）
                 if (trackingF.isNotEmpty()) {
-                    item(key = "hdr-t") { SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet) }
-                    items(trackingF, key = { "t-${it.uuid}" }) { task ->
+                    item(key = "hdr-t") {
+                        SectionHeader("正在追踪 (${trackingF.size})", TGColors.Violet,
+                            collapsed = isCatCollapsed("t"),
+                            onClick = { collapsedCats["t"] = !isCatCollapsed("t") })
+                    }
+                    if (!isCatCollapsed("t")) items(trackingF, key = { "t-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0), tracking = true,
@@ -1478,8 +1523,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     }
                 }
                 if (todayCheckedList.isNotEmpty()) {
-                    item(key = "hdr-today") { SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade) }
-                    items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
+                    item(key = "hdr-today") {
+                        SectionHeader("今日打卡 (${todayCheckedList.size})", TGColors.Jade,
+                            collapsed = isCatCollapsed("today"),
+                            onClick = { collapsedCats["today"] = !isCatCollapsed("today") })
+                    }
+                    if (!isCatCollapsed("today")) items(todayCheckedList, key = { "today-${it.uuid}" }) { task ->
                         HabitRow(task, vm, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
                             selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                             onToggleSelect = { ms.toggle(task.uuid) },
@@ -1488,8 +1537,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     }
                 }
                 if (todoF.isNotEmpty()) {
-                    item(key = "hdr-todo") { SectionHeader("待办 (${todoF.size})", TGColors.GoldDeep) }
-                    items(todoF, key = { "todo-${it.uuid}" }) { task ->
+                    item(key = "hdr-todo") {
+                        SectionHeader("待办 (${todoF.size})", TGColors.GoldDeep,
+                            collapsed = isCatCollapsed("todo"),
+                            onClick = { collapsedCats["todo"] = !isCatCollapsed("todo") })
+                    }
+                    if (!isCatCollapsed("todo")) items(todoF, key = { "todo-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             // v5.15.23 M7/M8：每日任务在仓库页也按习惯行渲染（今日打卡/连续天数），
                             //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
@@ -1511,8 +1564,12 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     }
                 }
                 if (futureF.isNotEmpty()) {
-                    item(key = "hdr-f") { SectionHeader("未来任务 (${futureF.size})", TGColors.Azure) }
-                    items(futureF, key = { "f-${it.uuid}" }) { task ->
+                    item(key = "hdr-f") {
+                        SectionHeader("未来任务 (${futureF.size})", TGColors.Azure,
+                            collapsed = isCatCollapsed("f"),
+                            onClick = { collapsedCats["f"] = !isCatCollapsed("f") })
+                    }
+                    if (!isCatCollapsed("f")) items(futureF, key = { "f-${it.uuid}" }) { task ->
                         if (task.type == TaskType.HABIT) {
                             HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),

@@ -536,6 +536,18 @@ async function render() {
 }
 
 // =============== 侧栏 ===============
+// v5.15.26 P4（boss：把每个分类都弄成一个下拉栏，可以收起来；电脑端也这样干）——
+//   收起状态存这里（Set），整块 innerHTML 重绘后依然保留（不能靠 DOM class 存状态）。
+// ⚠️ C-021 教训：这段必须放**顶层**。第一次误插进了 renderSideNav() 内部 → 变成局部作用域，
+//   顶层的 renderTodayView 调用 _cg 时直接 ReferenceError（界面右上角弹红字 "render err"）。
+const _collapsedGroups = new Set();
+function _cg(k) { return _collapsedGroups.has(k); }
+function toggleCatGroup(k) {
+  if (_collapsedGroups.has(k)) _collapsedGroups.delete(k); else _collapsedGroups.add(k);
+  if (typeof render === 'function') render();
+}
+window.toggleCatGroup = toggleCatGroup;
+
 function renderSideNav() {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.nav === nav);
@@ -603,17 +615,19 @@ function renderTodayView() {
     <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
   if (pinnedTasks.length) {
-    html += `<div class="cat-group pinned-tracking">
-      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span></div>
-      ${pinnedTasks.map(catTaskHtml).join('')}
+    const c = _cg('__pin');
+    html += `<div class="cat-group pinned-tracking ${c ? 'collapsed' : ''}">
+      <div class="cat-group-head" onclick="toggleCatGroup('__pin')"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
+      <div class="cg-body">${pinnedTasks.map(catTaskHtml).join('')}</div>
     </div>`;
   }
   ['daily','time-limited','once','goal'].forEach(cat => {
     const list = grouped[cat];
     if (list.length === 0) return;
-    html += `<div class="cat-group">
-      <div class="cat-group-head"><span class="ico ico-${iconMap[cat]}" data-icon="${iconMap[cat]}" data-icon-size="13"></span><span>${titleMap[cat]}</span><span class="gh-count">${list.length}</span></div>
-      ${list.map(catTaskHtml).join('')}
+    const c = _cg(cat);
+    html += `<div class="cat-group ${c ? 'collapsed' : ''}">
+      <div class="cat-group-head" onclick="toggleCatGroup('${cat}')"><span class="ico ico-${iconMap[cat]}" data-icon="${iconMap[cat]}" data-icon-size="13"></span><span>${titleMap[cat]}</span><span class="gh-count">${list.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
+      <div class="cg-body">${list.map(catTaskHtml).join('')}</div>
     </div>`;
   });
   if (todayTasks.length === 0) {
@@ -1134,6 +1148,11 @@ function renderLevelBadge() {
     ringEl.style.setProperty('--ring-pct', pct + '%');
     const greetTag = document.getElementById('greetLvTag');
     if (greetTag) greetTag.textContent = 'Lv' + (lv.lv || 1);
+    // v5.15.26 P6：给身份卡挂等级 class（装饰用，仅影响边框/光晕）
+    const greetCard = document.getElementById('dashGreeting');
+    if (greetCard) {
+      greetCard.className = greetCard.className.replace(/\s*rank-lv\d+/g, '') + ' rank-lv' + (lv.lv || 1);
+    }
     const gem = document.getElementById('greetGem');
     if (gem) {
       const gemPalette = [
@@ -2583,6 +2602,10 @@ let _scanTick = 0;
 function updateLinkPill(connected, peer) {
   const pill = document.getElementById('linkPill');
   if (!pill) return;
+  // v5.15.26 P2（boss：配对手机之后再显示出来）—— 没配对就整块不显示
+  const hasPair = !!(settings.pairing && (settings.pairing.url || settings.pairing.host));
+  pill.classList.toggle('hidden', !hasPair);
+  if (!hasPair) return;
   pill.classList.toggle('on', !!connected);
   pill.title = connected
     ? ('已连接手机端' + (peer ? '：' + peer : '') + (settings.pairing ? '\n' + settings.pairing.url : ''))

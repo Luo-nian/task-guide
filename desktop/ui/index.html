@@ -4,19 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v66">
+<link rel="stylesheet" href="style.css?v=v69">
 </head>
 <body>
 <div class="widget" id="app">
 
-  <!-- v5.15.23 D1（boss：连接成功弹一次就行，角落放个已连接/未连接就行）——
-       常驻状态胶囊：右下角，pointer-events 只给悬停提示，不挡任何点击 -->
-  <div class="link-pill" id="linkPill" title="连接状态">
-    <span class="lp-dot"></span><span class="lp-text">未连接</span>
-  </div>
-
   <!-- ===== 顶栏 ===== -->
   <header class="topbar" id="topbar" data-tauri-drag-region="true">
+    <!-- v5.15.26 P1/P2（boss：连接状态放在任务栏名字左边；**配对手机之后**才显示）——
+         原来固定在右下角；现在移到「任务栏」名字左侧，未配对时由 JS 加 .hidden 隐藏 -->
+    <div class="link-pill" id="linkPill" title="连接状态">
+      <span class="lp-dot"></span><span class="lp-text">未连接</span>
+    </div>
     <div class="title">
       <span class="title-glyph"></span>
       <span>任务栏</span>
@@ -762,6 +761,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v67"></script>
+<script src="app3.js?v=v68"></script>
 </body>
 </html>

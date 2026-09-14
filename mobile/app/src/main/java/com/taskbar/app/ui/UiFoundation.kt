@@ -277,37 +277,21 @@ fun TrackRippleKey(
         ),
         label = "ripplePhase"
     )
-    // v5.15.25 N11（boss：涟漪节奏不匀，「1 1 1 11 1 1 1 11」多出来那一下）——
-    //   根因：内圈呼吸原来是 `0.62 - 0.30 * phase` 的**锯齿波**，每轮结束 alpha 从 0.32
-    //   瞬间跳回 0.62 → 每 1.6s 多闪一下。
-    //   改用 **Reverse 往返**动画：两端连续，呼吸平滑；周期取外圈的一半 → 一个扩散对应一次完整呼吸，节奏均匀。
-    val breath by tr.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rippleBreath"
-    )
     Box(modifier = modifier.size(40.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(40.dp).drawBehind {
                 // v5.15.23 M5（boss：「涟漪应该更内圈一点，要的是直接在按键上荡出来的波纹涟漪效果，
                 //   现在更像在按键外的一圈」）—— 把两圈都收进 40dp 按键圆内（按钮半径 20dp）：
                 //   内圈 12.5dp 常驻呼吸（贴着图标），外圈 14→19.5dp 在按钮面上向外荡开再消失。
-                val strokeInner = 1.8f.dp.toPx()
-                val alphaInner = 0.40f + 0.22f * breath   // 0.40 ↔ 0.62 平滑呼吸（v5.15.25 N11）
-                drawCircle(
-                    color = TGColors.Azure.copy(alpha = alphaInner),
-                    radius = 12.5f.dp.toPx(),
-                    style = Stroke(width = strokeInner)
-                )
+                // v5.15.26 M5（boss：「那个小菱形的 菱形涟漪不太明显 只要一个涟漪就行，
+                //   不用太明显 但是现在的不像是涟漪」）——
+                //   去掉原来那个**常驻的内圈呼吸环**（它更像"一圈静止不动的线"，所以"不像涟漪"），
+                //   只留**一圈**从图标处荡开、边扩散边变细变淡的环 —— 这才是涟漪本身。
                 val p = phase
                 drawCircle(
-                    color = TGColors.Azure.copy(alpha = (1f - p) * 0.46f),
-                    radius = 14f.dp.toPx() + (5.5f.dp.toPx()) * p,   // 14dp → 19.5dp（不出按钮）
-                    style = Stroke(width = 1.3f.dp.toPx())
+                    color = TGColors.Azure.copy(alpha = (1f - p) * 0.50f),
+                    radius = 12.5f.dp.toPx() + (7f.dp.toPx()) * p,        // 12.5dp → 19.5dp（不出按键）
+                    style = Stroke(width = (2.0f - 0.9f * p).dp.toPx())   // 边荡边变细
                 )
             }
         )
