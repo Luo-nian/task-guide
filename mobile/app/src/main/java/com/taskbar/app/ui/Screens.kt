@@ -787,11 +787,8 @@ fun TrackScreen(vm: TaskViewModel) {
     val stepsByUuid by vm.stepsByUuid.collectAsState()
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Text(
-            "追踪中 (${tracking.size}/$limit)",
-            color = TGColors.Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif,
-            modifier = Modifier.padding(4.dp, 12.dp)
-        )
+        // v5.15.25 N13（boss：追踪页左上角已经有「追踪中」了，下面不要重复）——
+        //   顶栏标题已表明页面身份，页内不再重复一个同名大标题（省下行高，内容更靠上）。
 
         if (tracking.isEmpty()) {
             EmptyState("没有追踪中的任务\n去主页点追踪图标", Modifier.fillMaxSize())
