@@ -1295,7 +1295,10 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     var catFilter by remember { mutableStateOf("all") }
     // v5.15.26 M3（boss：所有任务也这样，总之列表的都这样）—— 分组收起状态
     val collapsedCats = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-    var searchOn by remember { mutableStateOf(false) }
+    // v5.15.28 M6（boss：搜索框「要么右上角搜索键、要么常驻搜索框+下拉隐藏+点框显示出来，
+    //   现在两个叠在一起不好」）→ 选定**常驻搜索框**：右上角那个搜索键去掉，
+    //   只留这个框（滑动自动压成细边、点它就恢复并自动聚焦）。
+    var searchOn by remember { mutableStateOf(true) }
     var keyword by remember { mutableStateOf("") }
     // v5.15.21 R4：列表 / 日历 切换
     var calView by remember { mutableStateOf(false) }
@@ -1377,7 +1380,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             //   原来是"日历/列表"二态键（点一下来回翻），现在点开拉出一个框，
             //   框里列出所有可选方式，点哪项切哪项，当前方式打勾。
             Box {
-                PressPill(onClick = { viewMenuOpen = true; searchOn = false }) {
+                PressPill(onClick = { viewMenuOpen = true }) {
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(999.dp))
@@ -1430,15 +1433,6 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         )
                     }
                 }
-            }
-            Spacer(Modifier.width(6.dp))
-            // 右上角搜索键（点开/收起搜索框）
-            PressIcon(onClick = { searchOn = !searchOn; if (!searchOn) keyword = "" }) {
-                TGIcon(
-                    drawable = if (searchOn) R.drawable.ic_close else R.drawable.ic_search,
-                    contentDescription = if (searchOn) "关闭搜索" else "搜索",
-                    tint = TGColors.GoldDeep, size = 22.dp
-                )
             }
             }
         }

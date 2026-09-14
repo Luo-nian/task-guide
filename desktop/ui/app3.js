@@ -624,9 +624,10 @@ function renderTodayView() {
     <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
   if (pinnedTasks.length) {
-    const c = _cg('__pin');
-    html += `<div class="cat-group pinned-tracking ${c ? 'collapsed' : ''}" data-cg="__pin">
-      <div class="cat-group-head" onclick="toggleCatGroup('__pin')"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
+    // v5.15.28 P3（boss：「正在追踪不用收起功能」）—— 与手机端一致：
+    //   标题不可点、不显示三角、永远展开（追踪中的任务是最需要随手看到的一组）
+    html += `<div class="cat-group pinned-tracking" data-cg="__pin">
+      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${pinnedTasks.length}</span></div>
       <div class="cg-body">${pinnedTasks.map(catTaskHtml).join('')}</div>
     </div>`;
   }
@@ -1793,6 +1794,9 @@ function applyCatLayout() {
 
 function addSelectCat(cat) {
   draftCat = cat;
+  // v5.15.28 P8（boss：「目标任务 无论是编辑还是新建都默认不限时」）——
+  //   切到「目标」时把时长重置为「不限」（切换类型时不再沿用上一个类型选过的时长）
+  if (cat === 'goal') draftDdl = 'none';
   document.querySelectorAll('#addCatRow .cat-btn').forEach(function (x) { x.classList.toggle('active', x.dataset.cat === cat); });
   document.getElementById('addSubmit').disabled = false;
   // 限时任务：禁掉「不提醒」（按钮变淡 + 不可点）
@@ -2616,9 +2620,15 @@ function updateLinkPill(connected, peer) {
   pill.classList.toggle('hidden', !hasPair);
   if (!hasPair) return;
   pill.classList.toggle('on', !!connected);
-  pill.title = connected
-    ? ('已连接手机端' + (peer ? '：' + peer : '') + (settings.pairing ? '\n' + settings.pairing.url : ''))
-    : (settings.pairing ? '未连接 — 正在自动重连\n' + settings.pairing.url : '未配对（去设置里配对手机端）');
+  // v5.15.28 P4（boss：「鼠标放到已连接上看到的端口信息不全」）——
+  //   原来把地址放在第二行、且带 http:// 前缀，系统原生 tooltip 一长就被截断。
+  //   现在把「IP:端口」放到最前面并去掉协议前缀 —— 一行短短的就够，绝不会看不到端口。
+  const _addr = (settings.pairing && settings.pairing.url)
+    ? String(settings.pairing.url).replace(/^https?:\/\//, '')
+    : '';
+  pill.title = _addr
+    ? (_addr + (connected ? ' · 已连接手机端' : ' · 未连接 — 正在自动重连'))
+    : (connected ? '已连接手机端' : '未配对（去设置里配对手机端）');
   const t = pill.querySelector('.lp-text');
   if (t) t.textContent = connected ? '已连接' : '未连接';
 }

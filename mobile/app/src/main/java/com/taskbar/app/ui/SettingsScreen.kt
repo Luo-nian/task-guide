@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -399,6 +400,66 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
+        // ===== v5.15.28 M10（boss：昵称修改还是放在设置界面）+
+        //   M3（boss：点修改昵称的时候自动唤起输入法）=====
+        Spacer(Modifier.height(10.dp))
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("用户名", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            var nick by remember { mutableStateOf("") }
+            var draft by remember { mutableStateOf("") }
+            var editing by remember { mutableStateOf(false) }
+            val nickFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(Unit) {
+                runCatching { nick = vm.getSetting("nickname", "boss") }
+                draft = nick
+            }
+            // M3：进入编辑态后立刻把焦点交给输入框 → 系统自动弹出输入法（不用再点一下）
+            LaunchedEffect(editing) {
+                if (editing) {
+                    kotlinx.coroutines.delay(60)
+                    runCatching { nickFocus.requestFocus() }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("用户名", color = TGColors.InkMute, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+                if (!editing) {
+                    Text(nick, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { draft = nick; editing = true }) {
+                        Text("修改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            if (editing) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it.take(12) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium
+                        ),
+                        modifier = Modifier.weight(1f).focusRequester(nickFocus)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(onClick = {
+                        val v = draft.trim().ifEmpty { "boss" }
+                        nick = v
+                        vm.setSyncedSetting("nickname", v)
+                        prefs.edit().putString("nickname", v).apply()
+                        editing = false
+                        ToastHelper.show(ctx, "用户名已改为「$v」")
+                    }) { Text("确定", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { draft = nick; editing = false }) {
+                        Text("取消", color = TGColors.InkMute, fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+
         // v5.15.3：起床/睡前每日提醒（AlarmManager 每日定时，TaskBarApp prefs 持久化）
         TGCard(Modifier.fillMaxWidth()) {
             Text("每日提醒", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -514,9 +575,30 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                             "已保活 ✓ 系统不会再冻结本应用",
                             color = TGColors.Jade, fontSize = 12.sp, fontWeight = FontWeight.Medium
                         )
+                        // M4（boss：保活那里的小字给个链接，点击自动找到自启动设置）——
+                        //   先试厂商「自启动管理」页；失败退到本应用的系统详情页（各家 ROM 的自启动都在那儿）
                         Text(
-                            "若仍连不上，再检查系统的「自启动 / 后台高耗电」白名单",
-                            color = TGColors.InkMute, fontSize = 11.sp
+                            "若仍连不上，点这里去系统的「自启动 / 后台高耗电」白名单 ›",
+                            color = TGColors.Azure, fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clickable {
+                                val ok = runCatching {
+                                    ctx.startActivity(android.content.Intent().apply {
+                                        setClassName(
+                                            "com.vivo.permissionmanager",
+                                            "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
+                                        )
+                                    })
+                                    true
+                                }.getOrDefault(false)
+                                if (!ok) runCatching {
+                                    ctx.startActivity(
+                                        android.content.Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.parse("package:" + ctx.packageName)
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                }
+                            }
                         )
                     } else {
                         Text("手机息屏/锁屏后桌面连不上？部分系统会冻结后台", color = TGColors.InkMute, fontSize = 11.sp)
