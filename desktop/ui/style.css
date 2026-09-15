@@ -2955,3 +2955,55 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 }
 /* 右下角留白，避免胶囊压住仪表盘最后一块内容 */
 .dash-pane { padding-bottom: 34px; }
+
+/* ==================== v5.15.29 L1 · 身份卡等级徽章（无外壳 + 入场特效 + Lv.10 粒子） ==================== */
+.dash-greet-badge {
+  width: 56px; height: 56px; flex: 0 0 56px;
+  display: flex; align-items: center; justify-content: center;
+  margin-right: 4px;
+}
+.dash-greet-badge svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* 入场特效：一次性播完即止（不是常驻动效） */
+.dash-greet-badge[class*="dgb-"] {
+  animation-duration: .95s;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(.22, .85, .3, 1);
+}
+.dash-greet-badge.dgb-rise { animation-name: dgbRise; }
+.dash-greet-badge.dgb-grow { animation-name: dgbGrow; animation-duration: 1.05s; }
+.dash-greet-badge.dgb-spin { animation-name: dgbSpin; }
+.dash-greet-badge.dgb-pop  { animation-name: dgbPop;  animation-duration: 1.1s; }
+@keyframes dgbRise { from { opacity: 0; transform: translateY(12px) scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes dgbGrow { from { opacity: 0; transform: translateY(9px) scale(.28); } 70% { transform: scale(1.1); } to { opacity: 1; transform: none; } }
+@keyframes dgbSpin { from { opacity: 0; transform: rotate(-34deg) scale(.5); } to { opacity: 1; transform: none; } }
+@keyframes dgbPop  { from { opacity: 0; transform: scale(.25); } 58% { opacity: 1; transform: scale(1.18); } to { opacity: 1; transform: none; } }
+
+/* Lv.10 星空粒子层（铺在整张身份卡上；卡片内容是它上面的一层） */
+#greetParticles {
+  position: absolute; inset: 0; overflow: hidden;
+  border-radius: inherit; pointer-events: none; z-index: 0;
+}
+#greetParticles ~ * { position: relative; z-index: 1; }
+.gp {
+  position: absolute; border-radius: 50%; background: #FFF6DC;
+  animation-name: gpDrift, gpTw;
+  animation-iteration-count: infinite, infinite;
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-direction: alternate, normal;
+  box-shadow: 0 0 5px rgba(255, 246, 220, .85);
+}
+@keyframes gpDrift { from { transform: translate(0, 0); } to { transform: translate(-20px, -27px); } }
+@keyframes gpTw { 0%, 100% { opacity: .22; } 50% { opacity: 1; } }
+.gp-sh {
+  position: absolute; left: 0; width: 96px; height: 1.6px; opacity: 0;
+  background: linear-gradient(90deg, rgba(255, 246, 220, 0), #FFF6DC);
+  --rot: 20deg; --dx: 660px; --dy: 240px;
+  animation-name: gpShoot; animation-timing-function: linear;
+  animation-iteration-count: infinite; animation-duration: 7s; animation-delay: 1.4s;
+}
+.gp-sh[data-sh="2"] { animation-duration: 8.6s; animation-delay: 5.1s; }
+@keyframes gpShoot {
+  0%, 86% { opacity: 0; transform: translate(-110px, 0) rotate(var(--rot)); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
+}

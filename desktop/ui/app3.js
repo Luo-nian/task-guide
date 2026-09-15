@@ -82,6 +82,149 @@ const LEVELS = [
   { lv:10,name:'寰宇传说',  title:'',                  ico:'lv10', min:3200,max:99999}
 ];
 
+// =============== v5.15.29 L1 · 等级徽章（第八版定案 · 不要外壳，只放本体） ===============
+// 说明：徽章只有本体 —— 没有外圈金环 / 齿边环 / 同心圆 / 角饰 / 顶冠 / 桂冠 / 羽翼 / 绶带 / 托盘。
+//   全部在 -30~30 的坐标系里绘制，两色金属 + 深色描边，直接落在深色卡面上。
+//   {M}主金 {D}暗金 {H}高光 {G}中金 {S}银(水/云专属) {O}描边
+const LEVEL_EMBLEM = {
+  1: // 历练学徒 · 嫩芽破土
+    '<path d="M-20,20 Q0,13 20,20 L20,26 L-20,26 Z" fill="{D}" stroke="{O}" stroke-width="1"/>' +
+    '<path d="M0,21 Q-2,10 0,-2" fill="none" stroke="{D}" stroke-width="4.2" stroke-linecap="round"/>' +
+    '<path d="M0,-2 Q-15,-9 -19,-1 Q-10,4 0,3 Z" fill="{M}" stroke="{O}" stroke-width="1.1"/>' +
+    '<path d="M0,-5 Q13,-14 19,-5 Q10,1 0,1 Z" fill="{M}" stroke="{O}" stroke-width="1.1"/>' +
+    '<path d="M-1,-2 Q-11,-7 -16,-3" fill="none" stroke="{D}" stroke-width="1" opacity=".8"/>' +
+    '<path d="M1,-5 Q10,-11 16,-6" fill="none" stroke="{D}" stroke-width="1" opacity=".8"/>',
+  2: // 风华游侠 · 弓与箭
+    '<path d="M6,-21 Q-18,0 6,21 Q-11,0 6,-21 Z" fill="{M}" stroke="{O}" stroke-width="1.1"/>' +
+    '<path d="M6,-21 L6,21" fill="none" stroke="{H}" stroke-width="1.6"/>' +
+    '<path d="M-16,0 L17,0" fill="none" stroke="{M}" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<path d="M17,-5.5 L27,0 L17,5.5 Z" fill="{H}" stroke="{O}" stroke-width=".9"/>' +
+    '<path d="M-16,-1 L-25,-7.5 L-11,-3.4 Z" fill="{D}"/>' +
+    '<path d="M-16,1 L-25,7.5 L-11,3.4 Z" fill="{D}"/>',
+  3: // 破浪骑士 · 盾与波浪（浪用银系）
+    '<path d="M0,-23 L16,-17 L16,1 Q16,16 0,25 Q-16,16 -16,1 L-16,-17 Z" fill="{M}" stroke="{O}" stroke-width="1.3"/>' +
+    '<path d="M0,-23 L0,25" stroke="{D}" stroke-width="1.3" opacity=".7"/>' +
+    '<path d="M-11,0 Q-5.5,-6 0,0 Q5.5,6 11,0" fill="none" stroke="{S}" stroke-width="3" stroke-linecap="round"/>' +
+    '<path d="M-11,9 Q-5.5,3 0,9 Q5.5,15 11,9" fill="none" stroke="{S}" stroke-width="3" stroke-linecap="round" opacity=".8"/>',
+  4: // 群星行者 · 交叉星轨 + 四芒星
+    '<path d="M-27,15 Q0,-17 27,15" fill="none" stroke="{M}" stroke-width="2.6" stroke-linecap="round"/>' +
+    '<path d="M-27,-15 Q0,17 27,-15" fill="none" stroke="{M}" stroke-width="2.6" stroke-linecap="round" opacity=".7"/>' +
+    '<circle cx="-18" cy="1" r="2.4" fill="{H}"/><circle cx="18" cy="1" r="2.4" fill="{H}"/>' +
+    '<path d="M0,-17 L4.8,-4.8 L17,0 L4.8,4.8 L0,17 L-4.8,4.8 L-17,0 L-4.8,-4.8 Z" fill="{H}" stroke="{O}" stroke-width="1.1"/>',
+  5: // 传奇勇者 · 交叉双剑
+    (function () {
+      const sw = '<path d="M0,-24 L4.4,-14 L4.4,3 L-4.4,3 L-4.4,-14 Z" fill="{M}" stroke="{O}" stroke-width="1"/>' +
+                 '<rect x="-11" y="3" width="22" height="4.4" rx="2.2" fill="{G}" stroke="{O}" stroke-width=".8"/>' +
+                 '<rect x="-2.6" y="7.4" width="5.2" height="8.4" rx="2" fill="{D}" stroke="{O}" stroke-width=".7"/>' +
+                 '<circle cx="0" cy="17.4" r="3.2" fill="{H}" stroke="{O}" stroke-width=".8"/>';
+      return '<g transform="translate(-9,11) rotate(33)">' + sw + '</g>' +
+             '<g transform="translate(9,11) rotate(-33)">' + sw + '</g>' +
+             '<path d="M0,-4 L4,2 L0,8 L-4,2 Z" fill="{H}" stroke="{O}" stroke-width=".9"/>';
+    })(),
+  6: // 苍穹守护者 · 双翼之盾
+    '<path d="M-5,3 Q-14,-5 -26,-3 Q-18,1 -11,6 Q-19,4 -27,8 Q-19,10 -9,12 Q-19,14 -25,19 Q-15,16 -6,13 Z" fill="{M}" stroke="{O}" stroke-width="1"/>' +
+    '<path d="M5,3 Q14,-5 26,-3 Q18,1 11,6 Q19,4 27,8 Q19,10 9,12 Q19,14 25,19 Q15,16 6,13 Z" fill="{M}" stroke="{O}" stroke-width="1"/>' +
+    '<path d="M0,-24 L16,-18 L16,0 Q16,15 0,23 Q-16,15 -16,0 L-16,-18 Z" fill="{G}" stroke="{O}" stroke-width="1.3"/>' +
+    '<path d="M0,-18 L10,-14 L10,0 Q10,10 0,16 Q-10,10 -10,0 L-10,-14 Z" fill="none" stroke="{H}" stroke-width="1.2" opacity=".55"/>' +
+    '<path d="M0,-9 L6,0 L0,9 L-6,0 Z" fill="{H}" stroke="{O}" stroke-width="1"/>',
+  7: // 深渊征服者 · 漩涡 + 三叉戟
+    '<path d="M0,-2 A2,2 0 0 1 0,2 A6,6 0 0 1 0,-6 A10,10 0 0 1 0,10 A14,14 0 0 1 0,-14" fill="none" stroke="{M}" stroke-width="3.6" stroke-linecap="round" opacity=".92"/>' +
+    '<rect x="-2.6" y="-9" width="5.2" height="34" rx="2.4" fill="{M}" stroke="{O}" stroke-width=".9"/>' +
+    '<path d="M0,-26 L3.6,-18 L0,-10 L-3.6,-18 Z" fill="{H}" stroke="{O}" stroke-width=".9"/>' +
+    '<path d="M-12,-20 Q-12,-12 -3,-9 M12,-20 Q12,-12 3,-9" fill="none" stroke="{M}" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<circle cx="0" cy="26" r="3.4" fill="{H}" stroke="{O}" stroke-width=".8"/>',
+  8: // 星辰霸主 · 权杖 + 八芒星 + 双伴星
+    '<path d="M0,-25 L5.4,-15 L0,-5 L-5.4,-15 Z" fill="{H}" stroke="{O}" stroke-width=".9"/>' +
+    '<path d="M-16,-15 L-5,-15 M16,-15 L5,-15" stroke="{H}" stroke-width="2.4" stroke-linecap="round"/>' +
+    '<rect x="-5" y="-8.5" width="10" height="5" rx="2.4" fill="{G}" stroke="{O}" stroke-width=".9"/>' +
+    '<path d="M0,-3.5 L0,22" stroke="{M}" stroke-width="4.6" stroke-linecap="round"/>' +
+    '<path d="M0,-3.5 L0,22" stroke="{H}" stroke-width="1.5" opacity=".55"/>' +
+    '<circle cx="0" cy="26" r="4.2" fill="{D}" stroke="{O}" stroke-width="1"/>' +
+    '<path d="M-23,-23 L-19,-19 L-23,-15 L-27,-19 Z" fill="{H}"/>' +
+    '<path d="M23,-23 L27,-19 L23,-15 L19,-19 Z" fill="{H}"/>',
+  9: // 天命传奇 · 命轮 + 六芒星
+    '<circle r="25" fill="none" stroke="{M}" stroke-width="2.6"/>' +
+    '<circle r="20" fill="none" stroke="{M}" stroke-width="3" stroke-dasharray="1.4 6.3" opacity=".9"/>' +
+    '<path d="M0,-16 L4.3,-6 L15,-8 L7.5,0 L15,8 L4.3,6 L0,16 L-4.3,6 L-15,8 L-7.5,0 L-15,-8 L-4.3,-6 Z" fill="{H}" stroke="{O}" stroke-width="1"/>' +
+    '<circle r="3" fill="{G}" stroke="{O}" stroke-width=".8"/>',
+  10: // 寰宇传说 · 中心恒星 + 三条轨道 + 卫星
+    '<ellipse rx="26" ry="10" fill="none" stroke="{M}" stroke-width="2.2"/>' +
+    '<ellipse rx="26" ry="10" fill="none" stroke="{M}" stroke-width="2.2" opacity=".72" transform="rotate(60)"/>' +
+    '<ellipse rx="26" ry="10" fill="none" stroke="{M}" stroke-width="2.2" opacity=".5" transform="rotate(120)"/>' +
+    '<circle cx="26" cy="0" r="3.4" fill="{H}" stroke="{O}" stroke-width=".9"/>' +
+    '<circle cx="-13" cy="22.5" r="2.8" fill="{G}" stroke="{O}" stroke-width=".9"/>' +
+    '<circle cx="13" cy="-22.5" r="2.4" fill="{G}" stroke="{O}" stroke-width=".9"/>' +
+    '<circle r="12" fill="{H}" opacity=".2"/>' +
+    '<circle r="8" fill="#FBEECB" stroke="{G}" stroke-width="1.2"/>'
+};
+
+const EMBLEM_PAL = { M: '#E8CB7F', D: '#B8892B', H: '#F7E7BB', G: '#C9A227', S: '#D9DEE6', O: '#0A0A0D' };
+
+function levelEmblemSvg(lvNum) {
+  const n = Math.max(1, Math.min(10, lvNum | 0));
+  let body = LEVEL_EMBLEM[n] || LEVEL_EMBLEM[1];
+  body = body.replace(/\{([MDHGSO])\}/g, function (m, k) { return EMBLEM_PAL[k] || m; });
+  return '<svg viewBox="-30 -30 60 60" aria-hidden="true">' + body + '</svg>';
+}
+
+// 入场特效：按等级分档（一次性，播完即止；不是常驻动效）
+function emblemFxClass(lvNum) {
+  const n = lvNum | 0;
+  if (n <= 3) return 'dgb-rise';    // 学徒/游侠/骑士：自下升起
+  if (n <= 6) return 'dgb-grow';    // 行者/勇者/守护者：由小长大
+  if (n <= 8) return 'dgb-spin';    // 征服者/霸主：旋入
+  return 'dgb-pop';                 // 传奇/传说：弹出 + 过冲
+}
+
+// =============== v5.15.29 L1 · Lv.10 身份卡星空粒子层 ===============
+// 参数已按 boss「粒子提速」定稿：漂移 8~12s、明灭 3.4~5.4s、位移 20x27；流星每轮重掷起点与角度
+const GREET_PARTICLE_SEED = [
+  [6,14,3],[12,32,2],[18,9,4],[23,26,2],[29,16,3],[34,38,2],[40,11,3],[45,29,4],
+  [51,18,2],[56,36,3],[62,12,3],[67,30,2],[73,20,4],[78,37,2],[84,14,3],[89,28,2],
+  [94,19,3],[9,46,2],[15,58,3],[21,44,4],[27,60,2],[33,50,3],[39,64,2],[45,47,3],
+  [52,62,2],[58,49,4],[64,66,2],[70,52,3],[76,68,2],[82,54,3],[88,70,2],[94,57,3],
+  [11,76,2],[19,88,3],[26,80,2],[35,92,3],[43,78,2],[54,90,3],[66,82,2],[78,92,3],[90,84,2]
+];
+
+function rerollMeteor(el) {
+  const top = Math.round(Math.random() * 72);
+  const dir = 13 + Math.random() * 25;
+  const dx = Math.round(640 + Math.random() * 140);
+  const dy = Math.round(Math.tan(dir * Math.PI / 180) * dx);
+  el.style.top = top + '%';
+  el.style.setProperty('--rot', dir.toFixed(1) + 'deg');
+  el.style.setProperty('--dx', dx + 'px');
+  el.style.setProperty('--dy', dy + 'px');
+}
+
+function renderGreetParticles(lvNum) {
+  const card = document.getElementById('dashGreeting');
+  if (!card) return;
+  const old = document.getElementById('greetParticles');
+  if ((lvNum | 0) < 10) { if (old) old.remove(); return; }   // 星空粒子是 Lv.10 专属
+  if (old) return;
+  const layer = document.createElement('div');
+  layer.id = 'greetParticles';
+  let html = '';
+  for (let i = 0; i < GREET_PARTICLE_SEED.length; i++) {
+    const q = GREET_PARTICLE_SEED[i];
+    const drift = (8 + (i % 5)).toFixed(1);
+    const tw = (3.4 + (i % 5) * 0.5).toFixed(1);
+    html += '<div class="gp" style="left:' + q[0] + '%;top:' + q[1] + '%;width:' + q[2] + 'px;height:' + q[2] +
+            'px;animation-duration:' + drift + 's,' + tw + 's"></div>';
+  }
+  html += '<div class="gp-sh" data-sh="1"></div><div class="gp-sh" data-sh="2"></div>';
+  layer.innerHTML = html;
+  card.insertBefore(layer, card.firstChild);
+  const meteors = layer.querySelectorAll('.gp-sh');
+  for (let i = 0; i < meteors.length; i++) {
+    (function (el) {
+      rerollMeteor(el);
+      el.addEventListener('animationiteration', function () { rerollMeteor(el); });
+    })(meteors[i]);
+  }
+}
+
 // =============== 内联 SVG 图标库 ===============
 // 统一线性风格：24 视口 / stroke=currentColor / 圆头圆角
 // 用 SVG 而非 Unicode 字符的原因：⏳📜🛡🗡 等字符会被系统 emoji 字体接管渲染成彩色图标，
@@ -1178,6 +1321,15 @@ function renderLevelBadge() {
       gem.style.setProperty('--gem-glow', c + 'cc');
     }
   }
+  // v5.15.29 L1：身份卡右侧徽章本体（无外壳）+ 按等级的一次性入场特效
+  const bd = document.getElementById('dashGreetBadge');
+  if (bd) {
+    bd.innerHTML = levelEmblemSvg(lv.lv || 1);
+    bd.className = 'dash-greet-badge ' + emblemFxClass(lv.lv || 1);
+    bd.title = (lv.name || '') + ' · Lv.' + (lv.lv || 1);
+  }
+  // v5.15.29 L1：Lv.10 专属星空粒子（提速参数 + 流星随机轨迹）
+  renderGreetParticles(lv.lv || 1);
   // 头像渲染（profile + dashboard 走 renderUserAvatar）
   renderUserAvatar();
 }
