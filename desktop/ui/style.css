@@ -1599,32 +1599,55 @@ input::placeholder { color: var(--ink-faint); }
   overflow: hidden;
   box-shadow: 0 0 30px rgba(216, 138, 63, 0.4);
 }
+/* v5.15.29 E1b（boss：「逾期提醒窗口还是不能一眼看到重点」）——
+   上一版只放大了任务名，但标题栏「任务即将超时」与正文「您有一个任务即将超时…」
+   是同义重复，四行字互相抢视线 → 仍然没有重点。
+   这一版重建层级：标题栏降级做"状态条"、正文只留一个视觉主角（任务名）。
+   最终层级：任务名 28px/800 墨黑 ＞ 倒计时胶囊 13px 朱砂 ＞ 小标签/脚注 11px 淡 */
 .em-bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px;
-  background: linear-gradient(90deg, rgba(184, 86, 56, 0.25), rgba(216, 138, 63, 0.18));
-  border-bottom: 1px solid var(--orange);
-  color: var(--ink); font-weight: 700;
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px;
+  background: linear-gradient(90deg, rgba(184, 86, 56, 0.13), rgba(216, 138, 63, 0.07));
+  border-bottom: 1px solid rgba(192, 122, 53, 0.45);
+  font-weight: 700;
 }
-.em-alert { color: var(--orange); font-size: 16px; }
-.em-title { flex: 1; font-size: 13px; letter-spacing: 1px; }
+.em-alert { color: var(--orange); }
+.em-title { flex: 1; font-size: 11.5px; letter-spacing: 2px; color: var(--ink-mute); }
 .em-close { background: transparent; border: none; color: var(--ink-mute); font-size: 18px; cursor: pointer; }
-.em-body { padding: 16px 16px 14px; }
-/* v5.15.29 E1（boss：「这个窗口的任务应该放大点 让用户一眼看到逾期是什么任务」）——
-   原来任务名与红色倒计时都是 16px → 扫一眼先看到时间，看不到是哪个任务。
-   现在任务名升到 25px 并改用最高对比的墨色，倒计时降到 14px（红色仍在，但不再抢戏）。
-   层级变成：任务名 25px ＞ 倒计时 14px ＞ 说明 12.5px ＞ 标题栏 13px。 */
-.em-task {
-  color: var(--ink);
-  font-size: 25px;
-  font-weight: 800;
-  line-height: 1.22;
-  letter-spacing: .4px;
-  margin-bottom: 8px;
-  word-break: break-word;
+.em-body { padding: 14px 18px 12px; }
+/* 任务名前的小标签：告诉眼睛"下一行是主角" */
+.em-label {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 3px;
 }
-.em-msg { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; margin-bottom: 8px; }
-.em-count { color: var(--crimson); font-size: 14px; font-weight: 700; letter-spacing: .3px; }
+/* ⭐ 视觉主角：全弹窗最大最重的一行 */
+.em-task {
+  color: var(--ink-black);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: .2px;
+  margin-bottom: 10px;
+  word-break: break-word;
+  border-left: 4px solid var(--gold);
+  padding-left: 11px;
+  margin-left: -4px;
+}
+/* 倒计时做成"状态胶囊"：有底色才读得出是状态，不跟标题抢 */
+.em-count {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(188, 74, 52, 0.10);
+  color: var(--crimson);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+.em-msg { color: var(--ink-faint); font-size: 11.5px; line-height: 1.6; margin-top: 9px; }
 .em-foot { display: flex; gap: 8px; padding: 10px 14px 14px; justify-content: flex-end; }
 .em-btn { padding: 7px 16px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 700; border: 1px solid transparent; }
 .em-btn.secondary { background: rgba(255, 254, 251, 0.98); color: var(--ink-soft); border-color: var(--border-soft); }

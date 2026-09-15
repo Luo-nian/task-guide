@@ -249,11 +249,12 @@
   <!-- ===== 紧急任务弹窗 ===== -->
   <div class="emergency-overlay" id="emergencyOverlay" style="display:none">
     <div class="emergency-modal">
-      <div class="em-bar"><span class="em-alert" data-icon="warn" data-icon-size="16"></span><span class="em-title">任务即将超时</span><button class="em-close" id="emClose"><span class="ico-slot" data-icon="close" data-icon-size="13" data-icon-sw="2.2"></span></button></div>
+      <div class="em-bar"><span class="em-alert" data-icon="warn" data-icon-size="15"></span><span class="em-title">超时提醒</span><button class="em-close" id="emClose"><span class="ico-slot" data-icon="close" data-icon-size="13" data-icon-sw="2.2"></span></button></div>
       <div class="em-body">
+        <div class="em-label">即将超时的任务</div>
         <div class="em-task" id="emTaskName"></div>
-        <div class="em-msg">您有一个任务即将超时，请尽快完成或处理</div>
         <div class="em-count" id="emCountdown"></div>
+        <div class="em-msg">请尽快完成或处理，逾期会记一次未完成</div>
       </div>
       <div class="em-foot">
         <button class="em-btn secondary" id="emLater">稍后</button>
@@ -762,6 +763,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v71"></script>
+<script src="app3.js?v=v72"></script>
 </body>
 </html>
