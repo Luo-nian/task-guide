@@ -1589,9 +1589,10 @@ input::placeholder { color: var(--ink-faint); }
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: none;   /* v5.15.12 关掉：透明窗 + 毛玻璃在 WebView2 上会闪白 */
 }
+/* v5.15.29 E1：任务名放大后 360px 对长标题偏挤，放宽到 400px */
 .emergency-modal {
   width: calc(100% - 28px);
-  max-width: 360px;
+  max-width: 400px;
   background: var(--panel-solid);
   border: 1px solid var(--orange);
   border-radius: 12px;
@@ -1608,10 +1609,22 @@ input::placeholder { color: var(--ink-faint); }
 .em-alert { color: var(--orange); font-size: 16px; }
 .em-title { flex: 1; font-size: 13px; letter-spacing: 1px; }
 .em-close { background: transparent; border: none; color: var(--ink-mute); font-size: 18px; cursor: pointer; }
-.em-body { padding: 14px 16px; }
-.em-task { color: var(--gold-deep); font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.em-body { padding: 16px 16px 14px; }
+/* v5.15.29 E1（boss：「这个窗口的任务应该放大点 让用户一眼看到逾期是什么任务」）——
+   原来任务名与红色倒计时都是 16px → 扫一眼先看到时间，看不到是哪个任务。
+   现在任务名升到 25px 并改用最高对比的墨色，倒计时降到 14px（红色仍在，但不再抢戏）。
+   层级变成：任务名 25px ＞ 倒计时 14px ＞ 说明 12.5px ＞ 标题栏 13px。 */
+.em-task {
+  color: var(--ink);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: .4px;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
 .em-msg { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; margin-bottom: 8px; }
-.em-count { color: var(--crimson); font-size: 16px; font-weight: 700; }
+.em-count { color: var(--crimson); font-size: 14px; font-weight: 700; letter-spacing: .3px; }
 .em-foot { display: flex; gap: 8px; padding: 10px 14px 14px; justify-content: flex-end; }
 .em-btn { padding: 7px 16px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 700; border: 1px solid transparent; }
 .em-btn.secondary { background: rgba(255, 254, 251, 0.98); color: var(--ink-soft); border-color: var(--border-soft); }
