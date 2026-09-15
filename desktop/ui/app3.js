@@ -582,9 +582,13 @@ function renderTrackingView() {
       <div class="te-sub">在任务详情页点「追踪任务」即可开始</div>
     </div>`;
   } else {
+    // v5.15.29 P1（boss：「电脑端的追踪中任务栏 UI 显示在各个分类里显示不统一」）——
+    //   本页原来用的是另一套写法：标题叫「追踪中」、且**没有 .cg-body 容器**
+    //   → 没有浅金底/描边/下圆角，和「今日待办」里同组的「正在追踪」长得不一样。
+    //   现在与 renderTodayView 的置顶组完全对齐：标题「正在追踪」+ .cg-body 大框。
     html += `<div class="cat-group">
-      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>追踪中</span><span class="gh-count">${trackTasks.length}</span></div>
-      ${trackTasks.map(catTaskHtml).join('')}
+      <div class="cat-group-head"><span class="ico ico-tracking" data-icon="crosshair" data-icon-size="13"></span><span>正在追踪</span><span class="gh-count">${trackTasks.length}</span></div>
+      <div class="cg-body">${trackTasks.map(catTaskHtml).join('')}</div>
     </div>`;
   }
   lvEl.innerHTML = html;

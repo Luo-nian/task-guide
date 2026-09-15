@@ -2535,6 +2535,9 @@ body { background-color: var(--bg-paper); }
 /* v5.15.26 P4（boss：每个分类都弄成可收起的下拉栏，电脑端也这样）——
    分组头可点；收起时只隐藏 .cg-body，分组头本身保留（随时能点开） */
 .cat-group-head { cursor: pointer; user-select: none; }
+/* v5.15.29 P1（boss：追踪中任务栏显示不统一）—— 「正在追踪」不可收起（无 onclick），
+   点它不会有任何反应，显示手型会让人以为坏了 → 这类分组头用默认光标 */
+.cat-group-head:not([onclick]) { cursor: default; }
 /* v5.15.27 P3（boss：「分类栏的三角也太小」）11 → 15px，并用金色（灰字在金色底上不显眼） */
 /* v5.15.27 P3b（boss：「三角形还是太小」）15 → 20px */
 .cat-group-head .cg-arrow { margin-left: auto; font-size: 20px; color: var(--gold-deep); font-weight: 700; line-height: 1; }
