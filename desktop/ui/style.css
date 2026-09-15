@@ -2957,6 +2957,42 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 .dash-pane { padding-bottom: 34px; }
 
 /* ==================== v5.15.29 L1 · 身份卡等级徽章（无外壳 + 入场特效 + Lv.10 粒子） ==================== */
+/* ===== v5.15.29 L3/L4：等级徽章（放回**原头像位**）===== */
+/* 身份卡环内（原头像位）：圆形深底 + 金边，里面是徽章本体（浅米白底会让近黑描边显脏→改深底） */
+.dash-greet-emb {
+  background: radial-gradient(circle at 35% 30%, #232120, #121114 68%, #07070A) !important;
+  cursor: pointer;
+}
+.dash-greet-emb .dash-greet-emb-slot { position: relative; z-index: 2; display: block; width: 34px; height: 34px; }
+.dash-greet-emb .dash-greet-emb-slot svg { width: 34px; height: 34px; display: block; overflow: visible; }
+/* 入场特效复用 dgb-*（一次性，播完即止） */
+.dash-greet-emb[class*="dgb-"] {
+  animation-duration: .95s; animation-timing-function: cubic-bezier(.22,1,.36,1);
+  animation-iteration-count: 1; animation-fill-mode: both;
+}
+.dash-greet-emb.dgb-rise { animation-name: dgbRise; }
+.dash-greet-emb.dgb-grow { animation-name: dgbGrow; animation-duration: 1.05s; }
+.dash-greet-emb.dgb-spin { animation-name: dgbSpin; }
+.dash-greet-emb.dgb-pop  { animation-name: dgbPop;  animation-duration: 1.1s; }
+
+/* 个人信息页（原头像位）= 徽章 + Lv 角标 */
+.ph-emb-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 0 0 auto; }
+.ph-emb {
+  width: 68px; height: 68px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #232120, #121114 68%, #07070A);
+  box-shadow: 0 0 0 2px var(--gold), 0 2px 10px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.ph-emb svg { width: 46px; height: 46px; display: block; overflow: visible; }
+.ph-emb-lv { font-size: 10.5px; font-weight: 800; color: var(--gold-deep); letter-spacing: .3px; }
+
+/* v5.15.29 L6：昵称编辑卡内的"高位名"提示（**只在这张卡里**出现，不拦保存） */
+.ph-nick-warn {
+  margin-top: 7px; font-size: 11px; line-height: 1.55; color: #8A6A1C;
+  background: rgba(201,162,39,.10); border-left: 2px solid var(--gold);
+  border-radius: 0 6px 6px 0; padding: 6px 8px;
+}
+
 .dash-greet-badge {
   width: 56px; height: 56px; flex: 0 0 56px;
   display: flex; align-items: center; justify-content: center;

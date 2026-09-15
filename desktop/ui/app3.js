@@ -49,7 +49,8 @@ let settings = {
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   night_notify: true,              // 22:00 未完成弹窗
   pairing: null,
-  nickname: '历练者'               // 用户昵称（自称；打卡汇报用）
+  nickname: '',                    // v5.15.29 L5：**用户自己编辑过**的昵称（空 = 没编辑过）
+  nickname_custom: ''              // v5.15.29 L5：'1' = 用户编辑过（用 nickname）；'' = 跟随当前等级名称
 };
 let selectedUuid = null;
 let emergencyQueue = [];
@@ -333,6 +334,38 @@ function initIcons(root) {
     el.dataset.iconDone = name;
   });
 }
+// =============== v5.15.29 L5/L6 · 昵称规则（与手机端完全一致） ===============
+// L5：**没编辑过**昵称 → 昵称 = 当前等级名称（随等级自动变，如「星辰霸主」）；
+//     **编辑过** → 用用户编辑的那个。
+//     判定靠 settings.nickname_custom（'' = 未编辑 / '1' = 已编辑），走与手机端同一条 setting 同步通道。
+// L6：编辑时若输入值等于**高于当前等级**的等级名称 → 只在编辑昵称的卡片里给一句提示，
+//     **不阻止保存**（编辑什么昵称都是用户的自由）。
+function activeNickname() {
+  if (settings.nickname_custom === '1' && (settings.nickname || '').trim()) return settings.nickname.trim();
+  const cur = (typeof level !== 'undefined' && level) ? level : levelOf(points);
+  return (cur && cur.name) || '历练学徒';
+}
+function higherLevelName(text) {
+  const t = (text || '').trim();
+  if (!t) return null;
+  const cur = (typeof level !== 'undefined' && level) ? level : levelOf(points);
+  const curLv = (cur && cur.lv) || 1;
+  for (let i = 0; i < LEVELS.length; i++) {
+    if (LEVELS[i].name === t && LEVELS[i].lv > curLv) return LEVELS[i];
+  }
+  return null;
+}
+function nickWarnText(info) {
+  return '这是 ' + info.lv + ' 级「' + info.name + '」的名称，您可以提前摘取高处的果实，' +
+         '但通往成功的道路仍在您的前方，愿你早日到达。';
+}
+function refreshNickWarn(inputEl, warnEl) {
+  if (!warnEl) return;
+  const hi = higherLevelName(inputEl ? inputEl.value : '');
+  if (hi) { warnEl.textContent = nickWarnText(hi); warnEl.style.display = ''; }
+  else { warnEl.textContent = ''; warnEl.style.display = 'none'; }
+}
+
 function levelOf(p) {
   let cur = LEVELS[0];
   for (const lv of LEVELS) { if (p >= lv.min) cur = lv; }
@@ -549,7 +582,8 @@ async function persistSettingsServer() {
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
       night_notify: settings.night_notify ? '1' : '0',
-      nickname: settings.nickname || '历练者',
+      nickname: settings.nickname || '',
+      nickname_custom: settings.nickname_custom || '',   // v5.15.29 L5：昵称来源标志一并落库
       avatar_idx: settings.avatar_idx != null ? settings.avatar_idx : 0,
       avatar_img: settings.avatar_img || ''   // v5.14h.13：头像 base64 同步到后端 settings 表（防清 WebView2 缓存丢头像）
     };
@@ -565,7 +599,16 @@ async function persistSettingsServer() {
 async function hydrateUserProfile() {
   try {
     const nn = await call('get_setting', { key: 'nickname' });
-    if (nn) settings.nickname = nn;
+    if (nn != null) settings.nickname = nn;
+    // v5.15.29 L5：昵称来源标志 + 老库迁移
+    //   老库里 nickname 还停在默认值（boss / 历练者）→ 视为「没编辑过」，改成跟随等级名
+    const nc = await call('get_setting', { key: 'nickname_custom' });
+    if (nc === '1') settings.nickname_custom = '1';
+    else {
+      const oldN = (settings.nickname || '').trim();
+      if (!oldN || oldN === 'boss' || oldN === '历练者') { settings.nickname = ''; settings.nickname_custom = ''; }
+      else settings.nickname_custom = '1';
+    }
     const ai = await call('get_setting', { key: 'avatar_idx' });
     if (ai != null && !isNaN(parseInt(ai))) settings.avatar_idx = parseInt(ai);
     const aimg = await call('get_setting', { key: 'avatar_img' });   // v5.14h.13：头像图从后端恢复
@@ -1224,7 +1267,7 @@ function renderDashboard() {
   const h = new Date().getHours();
   let greet = '夜深了';
   if (h < 6) greet = '夜深了'; else if (h < 11) greet = '早上好'; else if (h < 14) greet = '中午好'; else if (h < 18) greet = '下午好'; else greet = '晚上好';
-  const nick = settings.nickname || 'boss';
+  const nick = activeNickname();   // v5.15.29 L5：没编辑过昵称就显示当前等级名
   document.getElementById('dashGreetText').textContent = greet + '，' + nick;
   // v5.14h.1：完整身份卡副行 = 等级名 + 当前积分 + 距下一级
   const lv2 = level || levelOf(points);
@@ -1321,12 +1364,13 @@ function renderLevelBadge() {
       gem.style.setProperty('--gem-glow', c + 'cc');
     }
   }
-  // v5.15.29 L1：身份卡右侧徽章本体（无外壳）+ 按等级的一次性入场特效
-  const bd = document.getElementById('dashGreetBadge');
-  if (bd) {
-    bd.innerHTML = levelEmblemSvg(lv.lv || 1);
-    bd.className = 'dash-greet-badge ' + emblemFxClass(lv.lv || 1);
-    bd.title = (lv.name || '') + ' · Lv.' + (lv.lv || 1);
+  // v5.15.29 L4：徽章改为写进**原头像位**（身份卡左侧环内），不再单列在右侧
+  const embSlot = document.getElementById('dashGreetEmblem');
+  if (embSlot) {
+    embSlot.innerHTML = levelEmblemSvg(lv.lv || 1);
+    const embWrap = document.getElementById('dashGreetGfx');
+    if (embWrap) embWrap.className = 'dash-greet-avatar dash-greet-emb ' + emblemFxClass(lv.lv || 1);
+    embSlot.title = (lv.name || '') + ' · Lv.' + (lv.lv || 1);
   }
   // v5.15.29 L1：Lv.10 专属星空粒子（提速参数 + 流星随机轨迹）
   renderGreetParticles(lv.lv || 1);
@@ -2379,8 +2423,10 @@ function openProfileModal() {
   // 配对
   document.getElementById('profilePairStatus').textContent =
     settings.pairing ? ('已配对：' + settings.pairing.url) : '未配对';
-  // 昵称
-  document.getElementById('profileNickname').value = settings.nickname || '历练者';
+  // 昵称（v5.15.29 L5：没编辑过就显示当前等级名）
+  document.getElementById('profileNickname').value = activeNickname();
+  // v5.15.29 L6：打开时先清掉上一次的提示
+  refreshNickWarn(document.getElementById('profileNickname'), document.getElementById('profileNickWarn'));
   // 头像：先用用户自定义图，没有再回退字符
   avatarIdx = (settings.avatar_idx != null) ? settings.avatar_idx : 0;
   renderProfileAvatar();
@@ -2408,14 +2454,34 @@ document.querySelectorAll('[data-close-overlay="profileOverlay"]').forEach(b => 
 
 // 昵称保存：回车或失焦
 const _profileNick = document.getElementById('profileNickname');
+// 昵称保存（v5.15.29 L5/L6）
+//   · 非空 → 记为用户自定义（nickname_custom='1'）
+//   · 清空 → 回到「跟随当前等级名」（nickname_custom=''）
+//   · 输入值是**高于当前等级**的等级名 → 卡片内给一句提示，但**照常保存**
 function commitNickname() {
-  const v = (_profileNick.value || '').trim().slice(0, 12);
-  if (!v) { _profileNick.value = settings.nickname || '历练者'; return; }
-  settings.nickname = v;
+  const warnEl = document.getElementById('profileNickWarn');
+  const raw = (_profileNick.value || '').trim().slice(0, 12);
+  if (!raw) {
+    settings.nickname = '';
+    settings.nickname_custom = '';
+    _profileNick.value = activeNickname();
+    saveSettings();
+    call('set_setting', { key: 'nickname', value: '' }).catch(() => {});
+    call('set_setting', { key: 'nickname_custom', value: '' }).catch(() => {});
+    refreshNickWarn(_profileNick, warnEl);
+    render();
+    return;
+  }
+  settings.nickname = raw;
+  settings.nickname_custom = '1';
   saveSettings();
-  call('set_setting', { key: 'nickname', value: v }).catch(() => {});
+  call('set_setting', { key: 'nickname', value: raw }).catch(() => {});
+  call('set_setting', { key: 'nickname_custom', value: '1' }).catch(() => {});
+  refreshNickWarn(_profileNick, warnEl);
   render();
 }
+// L6：边输入边提示（只在这张卡里出现）
+if (_profileNick) _profileNick.addEventListener('input', () => refreshNickWarn(_profileNick, document.getElementById('profileNickWarn')));
 _profileNick.addEventListener('change', commitNickname);
 _profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _profileNick.blur(); } });
 // 昵称"保存"按钮：触发 blur → change → commit
@@ -2464,55 +2530,35 @@ if (_profileNickSave) _profileNickSave.addEventListener('click', () => { if (_pr
 })();
 
 // 头像：自定义图（base64）优先；没有则用 lucide 内置图标（按 avatar_idx）。
+// v5.15.29 L3/L4：自定义头像已**存档下架**（UI 不再展示）——
+//   个人信息页的原头像位改放等级徽章；数据层字段保留（见 renderUserAvatar 注释）。
 function renderProfileAvatar() {
-  const av = document.getElementById('profileAvatar');
-  if (!av) return;
-  if (settings.avatar_img) {
-    // boss #20 fix：彻底改用 background-image + cover 方案，避免 img 在 flex 容器内对齐问题。
-    // 容器 border-radius:50% + overflow:hidden + background-size:cover 永远完美裁圆，不会溢出。
-    av.innerHTML = '';
-    av.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
-    av.style.backgroundSize = 'cover';
-    av.style.backgroundPosition = 'center';
-    av.style.backgroundRepeat = 'no-repeat';
-  } else {
-    // v5.14h.14：头像 kind 路由（svgIcon for lucide / Text emoji for 动物 emoji）
-    const g = pickAvatarGlyph();
-    if (g.kind === 'emoji') {
-      av.style.backgroundImage = '';
-      av.innerHTML = '<span style="font-size:24px;line-height:1">' + g.ico + '</span>';
-    } else {
-      av.innerHTML = svgIcon(g.ico, 32, 1.7);
-    }
-  }
+  renderProfileEmblem();
+}
+
+// v5.15.29 L4：个人信息页「原头像位」= 等级徽章本体（无外壳，与身份卡环内同一枚）
+function renderProfileEmblem() {
+  const box = document.getElementById('profileEmblem');
+  if (!box) return;
+  const lv = (typeof level !== 'undefined' && level) ? level : levelOf(points);
+  const n = (lv && lv.lv) || 1;
+  box.innerHTML = levelEmblemSvg(n);
+  box.className = 'ph-emb ' + emblemFxClass(n);
+  const tag = document.getElementById('profileEmblemLv');
+  if (tag) tag.textContent = 'Lv.' + n;
+  box.title = ((lv && lv.name) || '') + ' · Lv.' + n;
 }
 
 // 统一头像渲染：profile .ph-avatar + dashboard 勋章环（顶栏无头像）
 // 优先级：settings.avatar_img（上传图） > settings.avatar_idx（lucide 内置） > 等级图标
 function renderUserAvatar() {
-  // 1) 顶栏（v5.14h.1 已简化为轻量文字卡，无头像元素，跳过）
-
-  // 2) 下午好总览（v5.14h.1 完整勋章 v2：conic 环 + 头像 + Lv 角标 + 稀有度宝石）
-  const greet = document.getElementById('dashGreetGfx');
-  if (greet) {
-    if (settings.avatar_img) {
-      greet.innerHTML = '';
-      greet.style.backgroundImage = "url(\"" + settings.avatar_img.replace(/"/g, '%22') + "\")";
-      greet.style.backgroundSize = 'cover';
-      greet.style.backgroundPosition = 'center';
-      greet.style.backgroundRepeat = 'no-repeat';
-    } else {
-      greet.style.backgroundImage = '';
-      const g = pickAvatarGlyph();
-      if (g.kind === 'emoji') greet.innerHTML = '<span style="font-size:18px;line-height:1">' + g.ico + '</span>';
-      else greet.innerHTML = svgIcon(g.ico, 24, 1.7);
-    }
-    // v5.14h.1：勋章进度环（距下级完成度）由 renderLevelBadge 写 ring-pct；Lv 角标 + 稀有度宝石也由它处理
-  }
-  // 3) profile modal
-  renderProfileAvatar();
-  // 4) 头像选择网格 active
-  updateAvatarGridActive();
+  // v5.15.29 L3/L4：自定义头像（上传图 settings.avatar_img / 内置头像 settings.avatar_idx）
+  //   已**存档下架** —— 顶栏、身份卡、个人信息页三处头像渲染全部停用，原位统一改放等级徽章：
+  //     · 身份卡环内（原头像位）→ 由 renderLevelBadge 写入徽章
+  //     · 个人信息页（原头像位）→ 由 renderProfileEmblem 写入徽章
+  //   数据层（avatar_img / avatar_emoji / avatar_idx 字段 + 同步通道）**完整保留**，
+  //   恢复时重贴 UI 即可（下架代码全文见 design/存档-自定义头像-UI代码-v1.md）。
+  renderProfileEmblem();
 }
 function updateAvatarGridActive() {
   document.querySelectorAll('#avatarGrid .ph-av').forEach(c => {
@@ -2558,7 +2604,12 @@ if (_profileAvatarEl) {
   });
 }
 // 上传自己的图片 → 打开裁剪器（v5.14g：head 按钮移除后仍保留该能力，file input change 触发）
-document.getElementById('profileAvatarFile').addEventListener('change', e => {
+// ⚠️ v5.15.29 L3：头像 UI 已**存档下架**（元素从 HTML 移除）→ 这里**必须空保护**：
+//   顶层无保护的事件绑定一旦拿到 null 就抛 TypeError → **顶层代码从此中断**，
+//   后面的 `DOMContentLoaded` 注册不会执行 → startApp 永远不被调用 → 整页停在静态 HTML
+//   （症状：问候语/积分一直是 index.html 里的死值、点什么都没反应）。本版真踩到过。
+const _phFileEl = document.getElementById('profileAvatarFile');
+if (_phFileEl) _phFileEl.addEventListener('change', e => {
   const f = e.target.files && e.target.files[0];
   if (!f) return;
   openCropper(f);
@@ -3112,11 +3163,15 @@ function startApp() {
 setInterval(async () => {
   try {
     const nn = await call('get_setting', { key: 'nickname' });
-    if (nn && nn !== settings.nickname) {
-      settings.nickname = nn;
+    const nc = await call('get_setting', { key: 'nickname_custom' });
+    const nnS = (nn == null ? '' : nn);
+    const ncS = (nc == null ? '' : nc);
+    if (nnS !== settings.nickname || ncS !== settings.nickname_custom) {
+      settings.nickname = nnS;
+      settings.nickname_custom = ncS;
       if (typeof renderDashboard === 'function') renderDashboard();
       const pn = document.getElementById('profileNickname');
-      if (pn && document.activeElement !== pn) pn.value = nn;
+      if (pn && document.activeElement !== pn) pn.value = activeNickname();
     }
   } catch (e) { /* 忽略 */ }
 }, 5000);
@@ -3162,7 +3217,10 @@ function onRemoteSyncApplied() {
           avChanged = true;
         }
       }
-      if (nn) settings.nickname = nn;
+      if (nn != null) settings.nickname = nn;
+      // v5.15.29 L5：手机端把昵称清空/改回默认时要能同步"未编辑"状态
+      const ncNow = await call('get_setting', { key: 'nickname_custom' });
+      if (ncNow != null) settings.nickname_custom = ncNow;
       if (avChanged) {
         if (typeof renderUserAvatar === 'function') renderUserAvatar();
         if (typeof renderProfileAvatar === 'function') renderProfileAvatar();

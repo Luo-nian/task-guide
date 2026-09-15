@@ -60,8 +60,15 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // v5.15.28 M9（boss：顶部已经有「我的」了，把最靠近头像上方那个「我的」改成电脑端同款问候语
         //   「晚上好，boss」，旁边放小字）—— 与电脑端仪表盘身份卡同款：主行=问候语+昵称，副行=等级名·积分
-        var nickName by remember { mutableStateOf("boss") }
-        LaunchedEffect(Unit) { runCatching { nickName = vm.getSetting("nickname", "boss") } }
+        // v5.15.29 L5（boss：没编辑过昵称 → 用**当前等级名**；编辑过 → 用用户编辑的那个）
+        //   nickname_custom == "1" 表示用户编辑过；否则跟随等级名（升级后会自动变）
+        var nickName by remember { mutableStateOf("") }
+        var nickCustom by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            runCatching { nickName = vm.getSetting("nickname", "") }
+            runCatching { nickCustom = vm.getSetting("nickname_custom", "") == "1" }
+        }
+        val displayName = if (nickCustom && nickName.isNotBlank()) nickName else level.name
         val hh = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         val greetNow = when {
             hh < 6 -> "夜深了"
@@ -72,7 +79,7 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
         }
         Column(Modifier.padding(4.dp, 12.dp)) {
             Text(
-                "$greetNow，$nickName",
+                "$greetNow，$displayName",
                 color = TGColors.Ink,
                 fontSize = 19.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -86,110 +93,38 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             )
         }
 
-        // ===== v5.15：自定义头像 + 8 内置头像选择（本地 prefs avatar_emoji 持久化） =====
-        // v5.15.7：电脑端裁剪上传的自定义头像（settings.avatar_img，跨端同步）优先级最高
-        val ctx = LocalContext.current
-        val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
-        var avatarEmoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
-        val syncedAvatar by vm.avatarImg.collectAsState()
-        val syncedBmp = rememberAvatarBitmap(syncedAvatar)
-        // v5.15.10：手机端也能自定义头像 —— 相册选图 → 只取中间圆形区域 → 256px PNG → 推电脑端
-        val scope = rememberCoroutineScope()
-        var uploading by remember { mutableStateOf(false) }
-        // v5.15.12：选完图先进「裁剪界面」，由用户自己拖动/缩放决定圆形范围（boss：不要自动裁）
-        // v5.15.14：改用 rememberSaveable 存 uri 字符串 —— 部分 ROM 的文件选择器返回时会重建 Activity，
-        //   普通 remember 会丢状态 → 表现为"选完图什么都没发生"（实测踩到）
-        var cropUriStr by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
-        val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.GetContent()
-        ) { uri ->
-            if (uri != null) cropUriStr = uri.toString()
-        }
-        // 裁剪确认 → 生成圆形 PNG → 走设置同步通道推给电脑端
-        cropUriStr?.let { us ->
-            val u = android.net.Uri.parse(us)
-            AvatarCropDialog(
-                uri = u,
-                onCancel = { cropUriStr = null },
-                onConfirm = { dataUrl ->
-                    cropUriStr = null
-                    uploading = true
-                    scope.launch {
-                        vm.setSyncedSetting("avatar_img", dataUrl)
-                        prefs.edit().putString("avatar_emoji", "").apply()
-                        avatarEmoji = ""
-                        uploading = false
-                    }
-                }
-            )
-        }
-        val avatarPalette = listOf("#E8CB7F", "#D8B45A", "#C9A227", "#8CE0C8", "#5BA3D0", "#B49BE0", "#E07BD0", "#FF8A5B")
-        val avatarEmojis = listOf("🦊", "🐯", "🦉", "🐺", "🐼", "🦁", "🐲", "🦅")
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+        // ===== v5.15.29 L3/L4（boss：把自定义头像**暂时存档、不实装**；原本头像的位置放等级徽章）=====
+        //   已下架：大头像 / 「上传头像」按钮 / 8 内置 emoji 网格 / 相册选图 / 圆形裁剪弹窗。
+        //   数据层（avatar_img / avatar_emoji / avatar_idx）与同步通道**保留不动** ——
+        //   恢复只需把这段 UI 重贴回来，下架代码全文见 design/存档-自定义头像-UI代码-v1.md
+        Box(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
                 .background(TGColors.Card)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center
         ) {
-            // 大头像（自定义图 > 选中 emoji > 人形），点它 = 从相册选图
-            Box(
-                Modifier.size(68.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(if (avatarEmoji.isNotEmpty() || syncedBmp != null) Color(0xFF1A1206) else TGColors.GoldLight)
-                    .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape)
-                    .clickable { pickImage.launch("image/*") },
-                contentAlignment = Alignment.Center
-            ) {
-                if (syncedBmp != null) {
-                    androidx.compose.foundation.Image(
-                        bitmap = syncedBmp,
-                        contentDescription = "头像",
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (avatarEmoji.isNotEmpty()) Text(avatarEmoji, fontSize = 32.sp)
-                else TGIcon(R.drawable.ic_avatar, "头像", tint = TGColors.Ink, size = 34.dp)
-            }
-            Spacer(Modifier.width(10.dp))
-            // 相册上传入口（自动裁中间圆形区域 + 同步电脑端）
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // 深色圆盘 + 金边（原头像位）—— 里面放等级徽章本体（无外壳）
                 Box(
-                    Modifier.clip(RoundedCornerShape(999.dp))
-                        .background(TGColors.Gold.copy(alpha = 0.18f))
-                        .border(1.dp, TGColors.Gold, RoundedCornerShape(999.dp))
-                        .clickable(enabled = !uploading) { pickImage.launch("image/*") }
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                    Modifier.size(78.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(Color(0xFF232120), Color(0xFF121114), Color(0xFF07070A))
+                            )
+                        )
+                        .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        // v5.15.21 M4（boss：头像旁边的按键改为"上传头像"）
-                        if (uploading) "处理中…" else "上传头像",
-                        color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
-                    )
+                    LevelEmblem(level.lv, size = 54.dp)
                 }
-                // v5.15.12：boss 要求去掉这行提示文案（改为裁剪界面里说明）
-
-            }
-            Spacer(Modifier.width(10.dp))
-            // 8 内置头像网格（横向）—— 选中即换头像：同时清掉自定义图
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(avatarEmojis) { i, e ->
-                    val bg = avatarPalette[i % avatarPalette.size]
-                    Box(
-                        Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(Color(android.graphics.Color.parseColor(bg)))
-                            .border(if (e == avatarEmoji && syncedBmp == null) 2.dp else 0.dp, TGColors.Ink, androidx.compose.foundation.shape.CircleShape)
-                            .clickable {
-                                avatarEmoji = e
-                                prefs.edit().putString("avatar_emoji", e).apply()
-                                // v5.15.7：推给电脑端（桌面显示同款 emoji）+ 清掉自定义图，双端头像一致
-                                vm.setSyncedSetting("avatar_emoji", e)
-                                vm.setSyncedSetting("avatar_img", "")
-                            },
-                        contentAlignment = Alignment.Center
-                    ) { Text(e, fontSize = 17.sp) }
-                }
+                Spacer(Modifier.height(9.dp))
+                Text(level.name, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(2.dp))
+                Text("$points 分 · ${level.title}", color = TGColors.InkMute, fontSize = 11.sp)
             }
         }
-
         Spacer(Modifier.height(10.dp))
 
         // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====

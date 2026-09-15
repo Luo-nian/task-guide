@@ -23,6 +23,7 @@
 | C-026 | ⭐ **开关"点不动"**：`Switch(checked = prefs.getBoolean(...))` 用的是**普通 val 不是 State** → 关掉时无状态变化 → 不重组 → 视觉纹丝不动（prefs 其实已写）。**修法：改成 `mutableStateOf`**。详见 [v5.15.27](./debug-v5.15.27.md#c-026) | v5.15.27 |
 | C-025 | **预览里的 SMIL（`<animate>`）会被渲染器丢掉** → boss 看到静态图 = "做了等于没做"。**改用 CSS 关键帧**；CSS 动 SVG 要 `transform-box:fill-box` + `transform-origin:center`。详见 [v5.15.29](./debug-v5.15.29.md#c-025) | v5.15.29 |
 | C-027 | ⭐ **CSS 注释收尾写成 `-->`** → 一次吞掉其后 4 条规则，"有的生效有的没生效"。CSS 只能 `*/` 收尾。详见 [v5.15.29](./debug-v5.15.29.md#c-027) | v5.15.29 |
+| C-028 | ⭐⭐ **删了 HTML 元素、JS 顶层还在绑事件** → `TypeError` 砍断顶层执行链 → `DOMContentLoaded` 没注册 → **整页不启动**（问候语/积分停在静态死值）。判据：手动调 `startApp()` 报 `Cannot access 'x' before initialization`（TDZ）。详见 [v5.15.29](./debug-v5.15.29.md#c-028) | v5.15.29 |
 | C-012 | **补丁"静默失败"**：后台跑补丁 + `tail -N` 看日志 → assert 报错被截掉，以为改了其实一行没动；**"编译成功"≠"改动生效"**，UI 改完必须真机确认新元素出现。详见 [v5.15.24](./debug-v5.15.24.md#c-012) | v5.15.24 |
 | C-013 | **补丁插错函数**：拿通用变量名（`listState`）当锚点，文件里有两处 → 插到了主页。锚点必须唯一；`count=1` 的替换先 `grep -c` 确认。详见 [v5.15.24](./debug-v5.15.24.md#c-013) | v5.15.24 |
 | C-007 | **adb 连不上副机**：真凶是 `adb server` 被沙箱回收（每条命令都 `daemon not running`）+ 无线调试端口漂移。修复：`wmic` 拉起常驻 server（监听默认 5037）+ 端口扫描 + `tcpip 5555` 固化 + `tools/adb-connect.sh` 四级兜底。详见 [v5.15.24](./debug-v5.15.24.md#c-007) | v5.15.24 |

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v69">
+<link rel="stylesheet" href="style.css?v=v70">
 </head>
 <body>
 <div class="widget" id="app">
@@ -136,8 +136,10 @@
       <!-- v5.14h.1：dashboard greeting = 完整身份卡（圆环头像 + Lv + 等级名 + 积分 + 距下级 + 宝石，从顶栏搬来） -->
       <div class="dash-greeting" id="dashGreeting" style="cursor:pointer">
         <!-- v5.14h.17：头像还原（boss：个人信息页头像不能删；挂件 widget 才不用头像） -->
+        <!-- v5.15.29 L4（boss：原本头像的位置放等级徽章）—— 环内（原头像位）改放等级徽章本体 -->
         <div class="dash-greet-ring" id="dashGreetRing" style="--ring-pct:0%">
-          <div class="dash-greet-avatar" id="dashGreetGfx">
+          <div class="dash-greet-avatar dash-greet-emb" id="dashGreetGfx">
+            <span class="dash-greet-emb-slot" id="dashGreetEmblem"></span>
             <span class="greet-lv-tag" id="greetLvTag">Lv4</span>
           </div>
         </div>
@@ -153,8 +155,7 @@
             <span id="dashGreetRemain">距传奇勇者差 11</span>
           </div>
         </div>
-        <!-- v5.15.29 L1（boss：徽章定在「第八版」那套 + 不要外壳，只放徽章本体；Lv.10 走粒子提速） -->
-        <div class="dash-greet-badge" id="dashGreetBadge"></div>
+        <!-- v5.15.29 L4：徽章已并入左侧环内（原头像位），此处不再放第二个徽章 -->
         <span class="greet-gem" id="greetGem" title="等级稀有度"></span>
       </div>
 
@@ -321,22 +322,21 @@
       <div class="m-body">
 
         <div class="profile-hero">
-          <div class="ph-avatar-wrap">
-            <div class="ph-avatar" id="profileAvatar" title="点换头像 / 长按选内置头像"><span class="ico-slot" data-icon="sparkle" data-icon-size="32" data-icon-sw="1.7"></span></div>
-            <span class="ph-avatar-hint" id="profileAvatarHint">点击更换</span>
-            <input type="file" id="profileAvatarFile" accept="image/*" hidden />
-          </div>
-          <!-- v5.14g：8 个 lucide 内置头像选择网格（默认折叠，点头像才展开） -->
-          <div class="ph-avatar-picker" id="avatarPicker" style="display:none">
-            <div class="ph-picker-hint">内置头像 · 点选即生效</div>
-            <div class="ph-avatar-grid" id="avatarGrid"></div>
+          <!-- v5.15.29 L3/L4：自定义头像（头像本体 / 上传入口 / 内置头像网格）已**存档下架**，
+               原位改放等级徽章。数据层（avatar_img / avatar_emoji / avatar_idx）与同步通道保留不动，
+               恢复时重贴 UI 即可 —— 下架代码全文见 design/存档-自定义头像-UI代码-v1.md -->
+          <div class="ph-emb-wrap">
+            <div class="ph-emb" id="profileEmblem"></div>
+            <span class="ph-emb-lv" id="profileEmblemLv">Lv.1</span>
           </div>
           <div class="ph-info">
             <div class="ph-nick-row">
-              <input class="ph-nick-input" id="profileNickname" placeholder="历练者" maxlength="12" />
+              <input class="ph-nick-input" id="profileNickname" placeholder="历练学徒" maxlength="12" />
               <button class="ph-nick-save-btn" id="profileNickSave">保存</button>
               <span class="ph-nick-save-hint">回车也可保存</span>
             </div>
+            <!-- v5.15.29 L6：只在编辑昵称的这张卡里出现（输入"高位等级名"时给一句提示，不拦保存） -->
+            <div class="ph-nick-warn" id="profileNickWarn" style="display:none"></div>
             <div class="ph-sub"></div>
           </div>
         </div>
@@ -765,6 +765,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v73"></script>
+<script src="app3.js?v=v75"></script>
 </body>
 </html>

@@ -400,36 +400,42 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
-        // ===== v5.15.28 M10（boss：昵称修改还是放在设置界面）+
-        //   M3（boss：点修改昵称的时候自动唤起输入法）=====
+        // ===== v5.15.28 M10：昵称编辑放在设置界面 =====
+        // ===== v5.15.29 L5（boss：没编辑过就用**当前等级名**，编辑过就用用户编辑的）=====
+        // ===== v5.15.29 L6（boss：想改成更高等级的名称时，在**这张卡里**提示一句，但不拦保存）=====
         Spacer(Modifier.height(10.dp))
         TGCard(Modifier.fillMaxWidth()) {
-            Text("用户名", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(6.dp))
+            val pointsNow by vm.totalPoints.collectAsState()
+            val curLevelName = Levels.of(pointsNow).name
             var nick by remember { mutableStateOf("") }
+            var custom by remember { mutableStateOf(false) }
             var draft by remember { mutableStateOf("") }
             var editing by remember { mutableStateOf(false) }
             val nickFocus = remember { androidx.compose.ui.focus.FocusRequester() }
             LaunchedEffect(Unit) {
-                runCatching { nick = vm.getSetting("nickname", "boss") }
+                runCatching { nick = vm.getSetting("nickname", "") }
+                runCatching { custom = vm.getSetting("nickname_custom", "") == "1" }
                 draft = nick
             }
-            // M3：进入编辑态后立刻把焦点交给输入框 → 系统自动弹出输入法（不用再点一下）
-            LaunchedEffect(editing) {
-                if (editing) {
-                    kotlinx.coroutines.delay(60)
-                    runCatching { nickFocus.requestFocus() }
-                }
+            // 展示值：编辑过 → 用户的；没编辑过 → 当前等级名（升级会自动跟着变）
+            val shown = if (custom && nick.isNotBlank()) nick else curLevelName
+            // 输入值 == 某个「高于当前等级」的等级名 → 给提示（**不拦保存**）
+            val higher = remember(draft, pointsNow, editing) {
+                if (editing) Levels.higherLevelNamed(draft, pointsNow) else null
             }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("用户名", color = TGColors.InkMute, fontSize = 12.sp)
                 Spacer(Modifier.width(8.dp))
                 if (!editing) {
-                    Text(nick, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(shown, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { draft = nick; editing = true }) {
+                    TextButton(onClick = { draft = if (custom) nick else ""; editing = true }) {
                         Text("修改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
+                } else {
+                    Text("清空即跟随等级名", color = TGColors.InkMute, fontSize = 11.sp)
+                    Spacer(Modifier.weight(1f))
                 }
             }
             if (editing) {
@@ -439,6 +445,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         value = draft,
                         onValueChange = { draft = it.take(12) },
                         singleLine = true,
+                        placeholder = { Text(curLevelName, color = TGColors.InkMute, fontSize = 14.sp) },
                         textStyle = androidx.compose.ui.text.TextStyle(
                             color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium
                         ),
@@ -446,20 +453,48 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     )
                     Spacer(Modifier.width(6.dp))
                     TextButton(onClick = {
-                        val v = draft.trim().ifEmpty { "boss" }
-                        nick = v
-                        vm.setSyncedSetting("nickname", v)
-                        prefs.edit().putString("nickname", v).apply()
-                        editing = false
-                        ToastHelper.show(ctx, "用户名已改为「$v」")
+                        val v = draft.trim().take(12)
+                        if (v.isEmpty()) {
+                            // 清空 = 回到「跟随当前等级名」
+                            nick = ""
+                            custom = false
+                            vm.setSyncedSetting("nickname", "")
+                            vm.setSyncedSetting("nickname_custom", "")
+                            prefs.edit().putString("nickname", "").apply()
+                            editing = false
+                            ToastHelper.show(ctx, "已恢复为等级名「$curLevelName」")
+                        } else {
+                            nick = v
+                            custom = true
+                            vm.setSyncedSetting("nickname", v)
+                            vm.setSyncedSetting("nickname_custom", "1")
+                            prefs.edit().putString("nickname", v).apply()
+                            editing = false
+                            ToastHelper.show(ctx, "用户名已改为「$v」")
+                        }
                     }) { Text("确定", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                     TextButton(onClick = { draft = nick; editing = false }) {
                         Text("取消", color = TGColors.InkMute, fontSize = 14.sp)
                     }
                 }
+                // L6：只在编辑昵称的这张卡里出现的提示
+                if (higher != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "这是 ${higher.lv} 级「${higher.name}」的名称，" +
+                            "您可以提前摘取高处的果实，但通往成功的道路仍在您的前方，愿你早日到达。",
+                        color = TGColors.GoldDeep,
+                        fontSize = 11.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(TGColors.Gold.copy(alpha = 0.10f))
+                            .padding(horizontal = 8.dp, vertical = 7.dp)
+                    )
+                }
             }
         }
-
         // v5.15.3：起床/睡前每日提醒（AlarmManager 每日定时，TaskBarApp prefs 持久化）
         TGCard(Modifier.fillMaxWidth()) {
             Text("每日提醒", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)

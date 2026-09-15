@@ -305,6 +305,18 @@ object Levels {
 
     /** 按积分算当前等级。
      *  进度 = 本级内完成度（(points-min)/(max-min)），与 UI 的 "X 分 / 距下一级差 Y" 文本一致 */
+    /**
+     * v5.15.29 L6：判断 text 是否是**高于当前积分对应等级**的某个等级名称。
+     * 是则返回那个等级（用于编辑昵称时的提示），否则返回 null。
+     * 说明：**只用来给提示，不阻止保存** —— 编辑什么昵称都是用户的自由。
+     */
+    fun higherLevelNamed(text: String, points: Int): LevelInfo? {
+        val t = text.trim()
+        if (t.isEmpty()) return null
+        val cur = of(points)
+        return LEVELS.firstOrNull { it.name == t && it.lv > cur.lv }
+    }
+
     fun of(points: Int): LevelInfo {
         var cur = LEVELS[0]
         for (lv in LEVELS) if (points >= lv.min) cur = lv
