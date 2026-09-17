@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v71">
+<link rel="stylesheet" href="style.css?v=v72">
 </head>
 <body>
 <div class="widget" id="app">
@@ -321,41 +321,40 @@
       <div class="m-head"><span>个人信息</span><button class="m-close" data-close-overlay="profileOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
 
-        <div class="profile-hero">
-          <!-- v5.15.29 L3/L4：自定义头像（头像本体 / 上传入口 / 内置头像网格）已**存档下架**，
-               原位改放等级徽章。数据层（avatar_img / avatar_emoji / avatar_idx）与同步通道保留不动，
-               恢复时重贴 UI 即可 —— 下架代码全文见 design/存档-自定义头像-UI代码-v1.md -->
-          <div class="ph-emb-wrap">
-            <div class="ph-emb" id="profileEmblem"></div>
-            <span class="ph-emb-lv" id="profileEmblemLv">Lv.1</span>
-          </div>
-          <div class="ph-info">
-            <div class="ph-nick-row">
-              <input class="ph-nick-input" id="profileNickname" placeholder="历练学徒" maxlength="12" />
-              <button class="ph-nick-save-btn" id="profileNickSave">保存</button>
-              <span class="ph-nick-save-hint">回车也可保存</span>
-            </div>
-            <!-- v5.15.29 L6：只在编辑昵称的这张卡里出现（输入"高位等级名"时给一句提示，不拦保存） -->
-            <div class="ph-nick-warn" id="profileNickWarn" style="display:none"></div>
-            <div class="ph-sub"></div>
-          </div>
-        </div>
-
-        <div class="profile-card">
+        <!-- v5.15.31（boss：这两个卡片合成一个）——
+             原「身份头像卡（徽章 + 昵称）」与「等级卡（等级名 + 积分 + 进度条）」合并为一张；
+             进度百分比落在**进度条右上角**（与手机端同一套布局）。
+             ⚠️ profileLevelIcon 已删除 —— 等级图形由 profileEmblem 承担；app3.js 两处引用已同步加空保护。 -->
+        <div class="profile-card profile-idcard" id="profileIdCard">
           <div class="pc-head">
-            <div class="pc-level-icon" id="profileLevelIcon"></div>
-            <div class="pc-level-text">
-              <div class="pc-level-name" id="profileLevelName">历练学徒</div>
-              <div class="pc-level-title" id="profileLevelTitle">敢开始，就已经赢了一半</div>
+            <div class="ph-emb-wrap">
+              <div class="ph-emb" id="profileEmblem"></div>
+              <span class="ph-emb-lv" id="profileEmblemLv">Lv.1</span>
+            </div>
+            <div class="ph-info">
+              <div class="ph-nick-row">
+                <span class="ph-nick-text" id="profileNickText">历练学徒</span>
+                <button class="ph-nick-edit" id="profileNickEdit" title="修改昵称">修改</button>
+                <input class="ph-nick-input" id="profileNickname" placeholder="历练学徒" maxlength="12" autocomplete="off" autocorrect="off" spellcheck="false" style="display:none" />
+                <button class="ph-nick-save-btn" id="profileNickSave" style="display:none">保存</button>
+              </div>
+              <div class="pc-level-text">
+                <span class="pc-level-name" id="profileLevelName">历练学徒</span>
+                <span class="pc-level-title" id="profileLevelTitle">敢开始，就已经赢了一半</span>
+              </div>
+              <div class="ph-nick-warn" id="profileNickWarn" style="display:none"></div>
             </div>
             <div class="pc-points">
               <div class="pc-points-num" id="profilePointsNum">0</div>
               <div class="pc-points-label">总积分</div>
             </div>
           </div>
-          <div class="pc-exp-row">
+          <div class="pc-exp-wrap">
+            <div class="pc-exp-top">
+              <span class="pc-exp-hint" id="profileExpHint">距下一级 0 分</span>
+              <span class="pc-exp-pct" id="profileExpPct">0%</span>
+            </div>
             <div class="pc-exp-bar"><div class="pc-exp-fill" id="profileExpFill" style="width:0%"></div></div>
-            <div class="pc-exp-hint" id="profileExpHint">距下一级 0 分</div>
           </div>
         </div>
 
@@ -373,7 +372,6 @@
           </div>
           <div class="pc-exp-row">
             <div class="pc-exp-bar"><div class="pc-exp-fill" id="profileTodayFill" style="width:0%"></div></div>
-            <div class="pc-exp-hint">今日任务完成比例</div>
           </div>
         </div>
 
@@ -398,6 +396,24 @@
     <div class="modal settings-modal">
       <div class="m-head"><span>设置</span><button class="m-close" data-close-overlay="settingsOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
+
+        <!-- v5.15.31 重排：分组更清（外观/任务默认/提醒/追踪/连接/关于），并修掉「关于」卡片嵌进「连接」卡片里的嵌套错位 -->
+        <div class="settings-section">
+          <div class="ss-title">外观</div>
+          <div class="setting-row">
+            <label>主题</label>
+            <div class="seg-row" id="setThemeRow">
+              <button type="button" class="seg-btn" data-theme="light">白天</button>
+              <button type="button" class="seg-btn" data-theme="dark">夜间</button>
+              <button type="button" class="seg-btn" data-theme="auto">跟随系统</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>进入桌面挂件模式</label>
+            <button class="small-btn" id="setWidgetMode">开启挂件</button>
+            <span class="hint">挂件显示今日进度</span>
+          </div>
+        </div>
 
         <div class="settings-section">
           <div class="ss-title">任务默认</div>
@@ -430,6 +446,15 @@
             </div>
           </div>
           <div class="setting-row">
+            <label>每日任务刷新时间</label>
+            <div class="time-input-row">
+              <input class="tbox" id="setDailyRefreshHour" type="text" inputmode="numeric" maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
+              <span class="tsep">:</span>
+              <input class="tbox" id="setDailyRefreshMin" type="text" inputmode="numeric" maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
+            </div>
+            <span class="hint">每天到这个点重置「每日任务」</span>
+          </div>
+          <div class="setting-row">
             <label>22:00 未完成弹窗</label>
             <label class="switch"><input type="checkbox" id="setNightNotify" /><span class="slider"></span></label>
             <span class="hint">每日任务未完成时弹窗提醒</span>
@@ -437,14 +462,13 @@
         </div>
 
         <div class="settings-section">
-          <div class="ss-title">追踪与提醒</div>
-          <!-- v5.14c：boss 要求 提醒设置：端→方式→时间 顺序 + 条件显示 + 默认值联动 -->
+          <div class="ss-title">提醒</div>
           <div class="setting-row remind-section">
             <label class="lbl-head">默认提醒</label>
             <span class="hint">新建任务自动套用这些默认设置（可在新建/编辑时单独调整）</span>
           </div>
           <div class="setting-row">
-            <label>方式</label>
+            <label>提醒方式</label>
             <div class="rem-strength-row">
               <label class="chk-pill"><input type="checkbox" id="setRemindNotif" /> <span>通知栏</span></label>
               <label class="chk-pill"><input type="checkbox" id="setRemindVibrate" /> <span>振动</span></label>
@@ -459,23 +483,6 @@
               <button type="button" class="rem-device-btn" data-device="mobile" id="setRangeMobile">仅手机端</button>
               <button type="button" class="rem-device-btn" data-device="desktop" id="setRangeDesktop">仅电脑端</button>
               <button type="button" class="rem-device-btn" data-device="both" id="setRangeBoth">双端提醒</button>
-            </div>
-          </div>
-          <!-- v5.14h.3：删除重复"接收端"行（与上方 408 提醒范围重复）；方式拆成手机端/电脑端两行 -->
-          <div class="setting-row">
-            <label>手机端默认提醒方式</label>
-            <div class="rem-strength-row">
-              <label class="chk-pill"><input type="checkbox" id="setAdvNotif" /> <span>通知栏</span></label>
-              <label class="chk-pill"><input type="checkbox" id="setAdvVibrate" /> <span>振动</span></label>
-              <label class="chk-pill"><input type="checkbox" id="setAdvSound" /> <span>响铃</span></label>
-            </div>
-          </div>
-          <div class="setting-row">
-            <label>电脑端默认提醒方式</label>
-            <div class="rem-strength-row">
-              <label class="chk-pill"><input type="checkbox" id="setPcAdvPopup" /> <span>弹窗提醒</span></label>
-              <label class="chk-pill"><input type="checkbox" id="setPcAdvFull" /> <span>全屏提醒</span></label>
-              <label class="chk-pill"><input type="checkbox" id="setPcAdvInApp" /> <span>应用内提示</span></label>
             </div>
           </div>
           <div class="setting-row">
@@ -496,6 +503,31 @@
             </div>
           </div>
           <div class="setting-row">
+            <label>手机端默认提醒方式</label>
+            <div class="rem-strength-row">
+              <label class="chk-pill"><input type="checkbox" id="setAdvNotif" /> <span>通知栏</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setAdvVibrate" /> <span>振动</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setAdvSound" /> <span>响铃</span></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>电脑端默认提醒方式</label>
+            <div class="rem-strength-row">
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvPopup" /> <span>弹窗提醒</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvFull" /> <span>全屏提醒</span></label>
+              <label class="chk-pill"><input type="checkbox" id="setPcAdvInApp" /> <span>应用内提示</span></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>紧急提醒</label>
+            <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
+            <span class="hint">即将超时的任务主动弹</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="ss-title">追踪</div>
+          <div class="setting-row">
             <label>同时追踪上限</label>
             <div class="ss-default" id="dsp_setTrackingMax">
               <span class="ss-cur" id="cur_setTrackingMax">3</span>
@@ -509,15 +541,10 @@
               <button class="small-btn" data-toggle-edit="setTrackingMax">取消</button>
             </div>
           </div>
-          <div class="setting-row">
-            <label>紧急提醒</label>
-            <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
-            <span class="hint">即将超时的任务主动弹</span>
-          </div>
         </div>
 
         <div class="settings-section">
-          <div class="ss-title">连接与外观</div>
+          <div class="ss-title">连接</div>
           <div class="setting-row">
             <label>配对状态</label>
             <span class="hint" id="setPairingStatus">未配对</span>
@@ -536,22 +563,18 @@
             <input type="text" id="setPairInput" placeholder="手机IP:端口" />
             <button class="small-btn primary" id="setPairBtn">连接</button>
           </div>
-          <div class="setting-row">
-            <label>进入桌面挂件模式</label>
-            <button class="small-btn" id="setWidgetMode">开启挂件</button>
-            <span class="hint">挂件显示今日进度</span>
-          </div>
+        </div>
+
         <div class="settings-section">
           <div class="ss-title">关于</div>
           <div class="setting-row">
-            <label>关于</label>
-            <span class="hint">任务栏 · 桌面任务追踪 v4.10</span>
+            <label>版本</label>
+            <span class="hint">任务栏 · 桌面任务追踪 v5.15.31</span>
           </div>
         </div>
 
       </div>
     </div>
-  </div>
   </div>
 
   <!-- ===== v5.15.11 延迟任务 ===== -->
@@ -768,6 +791,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v76"></script>
+<script src="app3.js?v=v77"></script>
 </body>
 </html>

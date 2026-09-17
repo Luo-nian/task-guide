@@ -93,41 +93,12 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             )
         }
 
-        // ===== v5.15.29 L3/L4（boss：把自定义头像**暂时存档、不实装**；原本头像的位置放等级徽章）=====
-        //   已下架：大头像 / 「上传头像」按钮 / 8 内置 emoji 网格 / 相册选图 / 圆形裁剪弹窗。
-        //   数据层（avatar_img / avatar_emoji / avatar_idx）与同步通道**保留不动** ——
-        //   恢复只需把这段 UI 重贴回来，下架代码全文见 design/存档-自定义头像-UI代码-v1.md
-        Box(
-            Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(TGColors.Card)
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // 深色圆盘 + 金边（原头像位）—— 里面放等级徽章本体（无外壳）
-                Box(
-                    Modifier.size(78.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(Color(0xFF232120), Color(0xFF121114), Color(0xFF07070A))
-                            )
-                        )
-                        .border(2.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LevelEmblem(level.lv, size = 54.dp)
-                }
-                Spacer(Modifier.height(9.dp))
-                Text(level.name, color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(2.dp))
-                Text("$points 分 · ${level.title}", color = TGColors.InkMute, fontSize = 11.sp)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
+        // ===== v5.15.31（boss：这两个卡片合成一个）=====
+        //   原来这里还有一张「徽章 + 等级名 + 分数·标语」的卡，和下面的黑金等级卡内容几乎完全重复；
+        //   已融合进下面那一张（徽章 / 等级名 / 积分 / 标语 / 进度条 + 右上角百分比都在一张卡里）。
+        //   顺带去掉：原卡片A 的「深色圆盘」容器（boss：徽章不该套在上面那个黑盘上）。
 
-        // ===== 等级卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====
+        // ===== 融合身份卡：黑金镜面金属（斜扫高光 + 镜面反射渐变），Lv 越高光泽越强 =====
         val gloss = 0.30f + (level.lv - 1) * 0.06f   // 镜面光泽强度随等级（克制，不挡字）
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))) {
             Canvas(Modifier.matchParentSize()) {
@@ -274,15 +245,26 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     Text(if (level.toNext > 0) "距下一级 ${level.toNext}" else "已登顶", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
                 }
                 }
-                // 等级标语：整行整宽，不再被挤压截断
+                // v5.15.31：标语与进度百分比同一行 —— 百分比落在**进度条右上角**
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    level.title,
-                    color = Color.White.copy(alpha = 0.82f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        level.title,
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${(level.progress.coerceIn(0f, 1f) * 100).toInt()}%",
+                        color = Color(0xFFE8CB7F),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
                     Box(Modifier.fillMaxWidth(level.progress.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF7A5516), Color(0xFFC9A227), Color(0xFFD8B45A)))))

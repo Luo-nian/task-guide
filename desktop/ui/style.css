@@ -3046,3 +3046,210 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
   90% { opacity: 1; }
   100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
 }
+
+
+/* ==========================================================================
+   v5.15.31 · 主题（白天 / 夜间 / 跟随系统）
+   — data-theme 挂在 <html> 上；auto 由 JS 解析 prefers-color-scheme 后落到 light/dark
+   — 夜间配色：深墨褐底 + 鎏金描边 + 米白字（与手机端深色版同调）
+   — 只覆盖变量 + 背景层，既有规则（500 行 var(--x)）自动跟随
+   ========================================================================== */
+[data-theme="dark"] {
+  --bg-paper:        #14120E;
+  --bg-paper-deep:   #0D0B08;
+  --panel:           rgba(28, 25, 20, 0.94);
+  --panel-solid:     #1B1813;
+  --bar:             rgba(36, 32, 26, 0.90);
+  --bar-hover:       rgba(48, 43, 34, 1);
+  --card:            rgba(32, 28, 23, 0.96);
+  --selected:        rgba(214, 178, 98, 0.20);
+
+  --ink:             #EFE7D6;
+  --ink-soft:        #C3B9A3;
+  --ink-mute:        #948B78;
+  --ink-faint:       #6E6758;
+
+  --ink-black:       #F7F1E2;
+  --ink-black-soft:  #D6CDBA;
+  --gold:            #D9AC4A;
+  --gold-light:      #F2DA96;
+  --gold-deep:       #B08A28;
+  --orange:          #D08A45;
+  --jade:            #5FA47C;
+  --crimson:         #D2654C;
+  --azure:           #5E93C0;
+  --violet:          #9A7CC2;
+
+  --border-soft:     rgba(200, 165, 80, 0.20);
+  --border-mid:      rgba(200, 165, 80, 0.34);
+  --border-strong:   rgba(220, 185, 100, 0.48);
+
+  --glow-gold:       rgba(217, 172, 74, 0.26);
+  --glow-azure:      rgba(94, 147, 192, 0.30);
+  --glow-violet:     rgba(154, 124, 194, 0.32);
+  --shadow-card:     0 2px 10px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(200, 165, 80, 0.12);
+  --shadow-hover:    0 8px 24px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(220, 185, 100, 0.28);
+}
+[data-theme="dark"] body::before {
+  background:
+    radial-gradient(90% 70% at 78% 12%, rgba(217, 172, 74, 0.10), transparent 55%),
+    radial-gradient(70% 60% at 12% 85%, rgba(70, 110, 150, 0.10), transparent 60%),
+    radial-gradient(60% 50% at 88% 88%, rgba(120, 100, 160, 0.09), transparent 55%),
+    linear-gradient(170deg, #17150F 0%, #14120E 45%, #0D0B08 100%);
+}
+[data-theme="dark"] body::after {
+  background: linear-gradient(175deg, rgba(217, 172, 74, 0.06) 0%, rgba(0, 0, 0, 0.22) 100%);
+}
+/* 夜间：把散落的硬编码暖白控件拉回深底（这些组件原写死了 rgba(255…)） */
+[data-theme="dark"] input[type=text],
+[data-theme="dark"] input[type=number],
+[data-theme="dark"] input[type=password],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: rgba(40, 35, 28, 0.96) !important;
+  color: var(--ink);
+  border-color: var(--border-mid);
+}
+[data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--ink-faint); }
+[data-theme="dark"] .modal,
+[data-theme="dark"] .m-body,
+[data-theme="dark"] .m-head { background: var(--card); }
+[data-theme="dark"] .m-head { border-bottom-color: var(--border-soft); }
+[data-theme="dark"] .small-btn { background: rgba(60, 52, 38, 0.72); color: var(--gold-light); }
+[data-theme="dark"] .small-btn:hover { background: rgba(90, 76, 48, 0.85); }
+[data-theme="dark"] .rem-device-btn,
+[data-theme="dark"] .rem-time-btn,
+[data-theme="dark"] .rem-cat-btn,
+[data-theme="dark"] .seg-btn { background: rgba(45, 40, 32, 0.8); color: var(--ink-soft); }
+[data-theme="dark"] .chk-pill { background: rgba(45, 40, 32, 0.7); }
+[data-theme="dark"] .overlay { background: rgba(6, 5, 4, 0.62); }
+[data-theme="dark"] .cat-btn { background: rgba(45, 40, 32, 0.8); color: var(--ink-soft); }
+[data-theme="dark"] .ddl-btn { background: rgba(45, 40, 32, 0.8); color: var(--ink-soft); }
+
+/* ==========================================================================
+   v5.15.31 · 设置界面排版重做
+   病灶（boss：「太乱、看着心烦」）：① 「关于」卡曾嵌在「连接」卡内部（嵌套错位，
+   已在 index.html 修）② 行距 9px 太挤、分组间距只有 14px ③ 行首标签宽度不统一
+   ④ 说明小字和控件挤在同一行右端。以下逐条处理。
+   ========================================================================== */
+.settings-modal { max-width: 560px; }
+.settings-modal .m-body { padding: 16px 16px 20px; }
+
+.settings-section {
+  margin-bottom: 18px;
+  border-radius: 10px;
+}
+.settings-section .ss-title {
+  padding: 10px 16px;
+  font-size: 12px;
+  letter-spacing: 1.6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.settings-section .ss-title::before { content: "◆"; font-size: 9px; }
+
+.setting-row {
+  padding: 11px 16px;
+  gap: 12px;
+  min-height: 42px;
+}
+.setting-row + .setting-row { border-top: 1px dashed var(--border-soft); }
+.setting-row > label:first-child {
+  min-width: 112px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.setting-row .hint {
+  font-size: 11px;
+  line-height: 1.5;
+  margin-left: auto;
+  text-align: right;
+}
+.setting-row input[type=text],
+.setting-row input[type=number] { max-width: 160px; }
+
+/* 按钮统一规格（原 small-btn 尺寸不一，是「按钮看着乱」的主因之一） */
+.small-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* —— 主题三选一分段控件 —— */
+.seg-row {
+  display: inline-flex;
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-solid);
+}
+.seg-btn {
+  padding: 5px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-soft);
+  border: 0;
+  border-right: 1px solid var(--border-soft);
+  transition: background .18s ease, color .18s ease;
+}
+.seg-btn:last-child { border-right: 0; }
+.seg-btn:hover { background: rgba(224, 186, 104, 0.24); color: var(--ink); }
+.seg-btn.active {
+  background: linear-gradient(160deg, var(--gold-light), var(--gold-deep));
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   v5.15.31 · 昵称改「修改键」形式（常态只显示昵称文字，点「修改」才出输入框）
+   ========================================================================== */
+.ph-nick-text {
+  font-family: var(--font-title);
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: var(--ink);
+}
+.ph-nick-edit {
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1.5;
+  padding: 2px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--gold-deep);
+  border: 1px solid var(--border-mid);
+  transition: background .18s ease, border-color .18s ease;
+}
+.ph-nick-edit:hover { background: rgba(224, 186, 104, 0.26); border-color: var(--gold); }
+
+
+/* ==========================================================================
+   v5.15.31 · 个人信息「融合身份卡」（身份卡 + 等级卡合并成一张）
+   ========================================================================== */
+.profile-idcard { padding: 16px 16px 14px; }
+.profile-idcard .pc-head { gap: 14px; margin-bottom: 14px; }
+.profile-idcard .ph-info { flex: 1; min-width: 0; }
+.profile-idcard .pc-points { text-align: right; flex: 0 0 auto; }
+
+/* 等级名 · 称号：一行小字（昵称被自定义时，等级名仍有地方显示） */
+.profile-idcard .pc-level-text {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.profile-idcard .pc-level-name { font-size: 11.5px; color: var(--ink-mute); font-weight: 500; }
+.profile-idcard .pc-level-title { font-size: 11.5px; color: var(--ink-faint); }
+.profile-idcard .pc-level-title::before { content: "·"; margin-right: 6px; color: var(--ink-faint); }
+
+/* 进度条 + 右上角百分比 */
+.pc-exp-wrap { display: flex; flex-direction: column; gap: 5px; }
+.pc-exp-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pc-exp-top .pc-exp-hint { font-size: 10.5px; color: var(--ink-faint); }
+.pc-exp-top .pc-exp-pct {
+  font-size: 12px; font-weight: 800; color: var(--gold-deep);
+  letter-spacing: .5px; font-variant-numeric: tabular-nums;
+}

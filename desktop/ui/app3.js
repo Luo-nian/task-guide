@@ -47,6 +47,7 @@ let settings = {
   time_limit_min: 5,              // 限时任务默认时长（分钟）
   count_default: 5,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
+  daily_refresh_time: '00:00',     // v5.15.31：每日任务刷新时间 HH:MM（boss：设置里要能改）
   night_notify: true,              // 22:00 未完成弹窗
   pairing: null,
   nickname: '',                    // v5.15.29 L5：**用户自己编辑过**的昵称（空 = 没编辑过）
@@ -439,6 +440,8 @@ function applySettingsToUi() {
   document.getElementById('setEmergencyOn').checked = settings.emergency_on;
   // 每日刷新 / 进度条样式已撤出设置 UI（旧字段保留用于兼容 / 不再写入）
   document.getElementById('setNightNotify').checked = settings.night_notify;
+  // v5.15.31：每日任务刷新时间回填（两个小框）
+  if (typeof _setRefreshTime === 'function') _setRefreshTime(settings.daily_refresh_time || '00:00');
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
   // 配对区条件显示：已配对时隐藏扫描设备 + 手动配对两行（防误解可同时连多个手机）
   const paired = !!settings.pairing;
@@ -581,6 +584,7 @@ async function persistSettingsServer() {
       time_limit_min: settings.time_limit_min,
       count_default: settings.count_default,
       daily_refresh: settings.daily_refresh ? '1' : '0',
+      daily_refresh_time: settings.daily_refresh_time || '00:00',   // v5.15.31：双端刷新口径要一致
       night_notify: settings.night_notify ? '1' : '0',
       nickname: settings.nickname || '',
       nickname_custom: settings.nickname_custom || '',   // v5.15.29 L5：昵称来源标志一并落库
@@ -843,7 +847,7 @@ function renderTodayView() {
   // render() 主流程已经无条件 renderDashboard()，这里不再 hide
 }
 document.querySelectorAll('.nav-item').forEach(n => {
-  n.addEventListener('click', () => {
+  n.addEventListener('click', async () => {
     // 历史任务 = 独立弹窗（不占用主视图）
     if (n.dataset.nav === 'archive') { openArchiveModal(); return; }
     nav = n.dataset.nav;
@@ -851,19 +855,29 @@ document.querySelectorAll('.nav-item').forEach(n => {
     if (nav === 'today' || nav === 'overview') _pinTracking = true;
     selectedUuid = null;
     document.getElementById('detailView').style.display = 'none';
-    render();   // v5.13：先 render() 触发 fetchAll 刷新 tasks 数据，再找 first
-    // v5.13：切分类时若该分类有任务，默认选中第一个任务进 detail（不再是空白/暂无任务）
-    const CAT_FILTER = { daily: 'daily', goal: 'goal', 'time-limited': 'time-limited', once: 'once' };
-    const target = CAT_FILTER[nav];
-    if (target && (typeof tasks !== 'undefined') && tasks.length > 0) {
-      const first = tasks.find(t => catOf(t) === target);
-      if (first) {
-        selectedUuid = first.uuid;
-        openDetail(selectedUuid);
-      }
+    await render();   // v5.13：先 render() 触发 fetchAll 刷新 tasks 数据，再找 first
+                      // v5.15.31：原来没有 await → 紧接着读 tasks 拿的是**上一轮**数据
+    // v5.15.31（boss：点总览 / 今日 / 每日任务时，都应该默认选中第一个任务并看它的详情）——
+    //   原实现只覆盖"分类页"，总览和今日漏了；统一改走 pickDefaultTask()
+    const first = pickDefaultTask(nav);
+    if (first) {
+      selectedUuid = first.uuid;
+      openDetail(selectedUuid);
     }
   });
 });
+// v5.15.31：默认选中哪一条 —— 追踪中 > 未完成 > 第一条；分类页只在**同分类**里挑
+function pickDefaultTask(navKey) {
+  if (typeof tasks === 'undefined' || !tasks || !tasks.length) return null;
+  const alive = tasks.filter(t => t.deleted !== 1);
+  if (!alive.length) return null;
+  const CAT_FILTER = { daily: 'daily', goal: 'goal', 'time-limited': 'time-limited', once: 'once' };
+  const cat = CAT_FILTER[navKey];
+  const pool = cat ? alive.filter(t => catOf(t) === cat) : alive;
+  if (!pool.length) return null;
+  return pool.find(t => isTracking(t) && !t.done) || pool.find(t => !t.done) || pool[0];
+}
+
 document.getElementById('archiveSearch').addEventListener('input', renderArchiveModal);
 document.querySelectorAll('[data-close-overlay="archiveOverlay"]').forEach(b => b.addEventListener('click', closeArchiveModal));
 
@@ -1406,6 +1420,7 @@ function renderLevelCard() {
   if (next) {
     const pct = Math.min(100, Math.max(0, ((points - lv.min) / Math.max(1, lv.max - lv.min)) * 100));
     if (pfill) pfill.style.width = pct + '%';
+    { const pp = document.getElementById('profileExpPct'); if (pp) pp.textContent = Math.round(pct) + '%'; }
     // 0 分时空态给引导文案；>0 时显示距下一级具体分数
     if (phint) phint.textContent = points <= 0
       ? '开始你的第一项任务吧'
@@ -2416,9 +2431,13 @@ function openProfileModal() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
   // v5.13j：profile 大徽章设分档 class（10 档配色）
+  // v5.15.31：profileLevelIcon 已随「身份卡+等级卡融合」删除 —— 原先是**裸访问**，
+  //   元素没了这里会 throw，直接导致整个个人信息弹窗打不开（铁律 2b）。加空保护。
   const pcIc = document.getElementById('profileLevelIcon');
-  pcIc.className = 'pc-level-icon rank-lv' + (lv.lv || 1);
-  pcIc.innerHTML = svgIcon(lv.ico || 'lv1', 36, 1.5);
+  if (pcIc) {
+    pcIc.className = 'pc-level-icon rank-lv' + (lv.lv || 1);
+    pcIc.innerHTML = svgIcon(lv.ico || 'lv1', 36, 1.5);
+  }
   document.getElementById('profileLevelName').textContent = lv.name;
   // 同步处理 title 空串隐藏（与上方 renderLevelCard 一致）
   const _pt2 = document.getElementById('profileLevelTitle');
@@ -2460,13 +2479,19 @@ function openProfileModal() {
   } else {
     pct = 100;
     document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';
+    { const pp = document.getElementById('profileExpPct'); if (pp) pp.textContent = '100%'; }
   }
   document.getElementById('profileExpFill').style.width = pct + '%';
+  // v5.15.31：进度百分比落在进度条右上角
+  { const pp = document.getElementById('profileExpPct'); if (pp) pp.textContent = Math.round(pct) + '%'; }
   // 配对
   document.getElementById('profilePairStatus').textContent =
     settings.pairing ? ('已配对：' + settings.pairing.url) : '未配对';
   // 昵称（v5.15.29 L5：没编辑过就显示当前等级名）
   document.getElementById('profileNickname').value = activeNickname();
+  { const nt = document.getElementById('profileNickText'); if (nt) nt.textContent = activeNickname(); }
+  // v5.15.31：常态只显示昵称文字 + 一枚很小的「修改」键，输入框平时藏起来
+  _nickExitEdit();
   // v5.15.29 L6：打开时先清掉上一次的提示
   refreshNickWarn(document.getElementById('profileNickname'), document.getElementById('profileNickWarn'));
   // 头像：先用用户自定义图，没有再回退字符
@@ -2511,6 +2536,7 @@ function commitNickname() {
     call('set_setting', { key: 'nickname', value: '' }).catch(() => {});
     call('set_setting', { key: 'nickname_custom', value: '' }).catch(() => {});
     refreshNickWarn(_profileNick, warnEl);
+    _nickExitEdit();
     render();
     return;
   }
@@ -2520,6 +2546,7 @@ function commitNickname() {
   call('set_setting', { key: 'nickname', value: raw }).catch(() => {});
   call('set_setting', { key: 'nickname_custom', value: '1' }).catch(() => {});
   refreshNickWarn(_profileNick, warnEl);
+  _nickExitEdit();
   render();
 }
 // L6：边输入边提示（只在这张卡里出现）
@@ -2529,6 +2556,15 @@ _profileNick.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preve
 // 昵称"保存"按钮：触发 blur → change → commit
 const _profileNickSave = document.getElementById('profileNickSave');
 if (_profileNickSave) _profileNickSave.addEventListener('click', () => { if (_profileNick) _profileNick.blur(); });
+// v5.15.31：值没改动时 change 不触发 → 用 blur 兜底退出编辑态，避免「输入框一直挂在那儿」
+if (_profileNick) _profileNick.addEventListener('blur', () => {
+  setTimeout(() => {
+    if (document.activeElement !== _profileNick) {
+      const i = document.getElementById('profileNickname');
+      if (i && i.style.display !== 'none' && typeof _nickExitEdit === 'function') _nickExitEdit();
+    }
+  }, 160);
+});
 
 // ===== 自定义软件风 tooltip（替代系统黑底白字原生 title） =====
 // boss 反馈：系统 tooltip 黑底白字太丑 + 经常被旁边挡住。改为浅底金边深字的软件风格。
@@ -3323,3 +3359,122 @@ document.getElementById('nightClose').addEventListener('click', () => {
   // 告知后端今天已提醒，避免一晚上反复弹
   call('dismiss_night_notify', {}).catch(() => {});
 });
+
+
+/* ==========================================================================
+   v5.15.31 · 主题（白天 / 夜间 / 跟随系统）
+   ⚠️ 主题**不进 settings 同步通道** —— 它是每台设备自己的显示偏好，
+      同步过去会把另一端的设置覆盖掉。只存 localStorage。
+   ⚠️ 铁律：DOM 就绪才绑定 —— 本文件在 body 末尾加载，顶层绑定安全。
+   ========================================================================== */
+const THEME_KEY = 'taskbar.theme';
+function currentThemeChoice() {
+  const v = localStorage.getItem(THEME_KEY);
+  return (v === 'light' || v === 'dark' || v === 'auto') ? v : 'auto';
+}
+function resolveTheme(choice) {
+  if (choice === 'auto') {
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  return choice;
+}
+function applyTheme(choice) {
+  const c = choice || currentThemeChoice();
+  document.documentElement.setAttribute('data-theme', resolveTheme(c));
+  document.querySelectorAll('#setThemeRow .seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === c);
+  });
+}
+function setTheme(choice) {
+  localStorage.setItem(THEME_KEY, choice);
+  applyTheme(choice);
+}
+document.querySelectorAll('#setThemeRow .seg-btn').forEach(b => {
+  b.addEventListener('click', () => setTheme(b.dataset.theme));
+});
+if (window.matchMedia) {
+  const _mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const _onSys = () => { if (currentThemeChoice() === 'auto') applyTheme('auto'); };
+  if (_mq.addEventListener) _mq.addEventListener('change', _onSys);
+  else if (_mq.addListener) _mq.addListener(_onSys);   // 老内核兜底
+}
+applyTheme();
+
+/* ==========================================================================
+   v5.15.31 · 每日任务刷新时间（时 : 分 两个小框）
+   字段 daily_refresh_time（'HH:MM'，默认 '00:00'）—— 与旧字段 daily_refresh(bool) 并存：
+   bool 管「要不要自动刷新」，本字段管「几点刷新」。走 settings 同步通道。
+   ========================================================================== */
+function _fmt2(n) { return (n < 10 ? '0' : '') + n; }
+function _setRefreshTime(v) {
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(String(v || '').trim());
+  const h = m ? Math.min(23, parseInt(m[1], 10)) : 0;
+  const mi = m ? Math.min(59, parseInt(m[2], 10)) : 0;
+  const eh = document.getElementById('setDailyRefreshHour');
+  const em = document.getElementById('setDailyRefreshMin');
+  if (eh) eh.value = _fmt2(h);
+  if (em) em.value = _fmt2(mi);
+}
+function _readRefreshTime() {
+  const eh = document.getElementById('setDailyRefreshHour');
+  const em = document.getElementById('setDailyRefreshMin');
+  let h = parseInt(((eh && eh.value) || '').trim(), 10);
+  let mi = parseInt(((em && em.value) || '').trim(), 10);
+  if (isNaN(h)) h = 0;
+  if (isNaN(mi)) mi = 0;
+  h = Math.max(0, Math.min(23, h));
+  mi = Math.max(0, Math.min(59, mi));
+  return _fmt2(h) + ':' + _fmt2(mi);
+}
+function _commitRefreshTime() {
+  const v = _readRefreshTime();
+  _setRefreshTime(v);
+  if (settings.daily_refresh_time === v) return;
+  settings.daily_refresh_time = v;
+  saveSettings();
+  call('set_setting', { key: 'daily_refresh_time', value: v }).catch(() => {});
+}
+(function bindRefreshTime() {
+  const eh = document.getElementById('setDailyRefreshHour');
+  const em = document.getElementById('setDailyRefreshMin');
+  if (!eh || !em) return;
+  [eh, em].forEach(el => {
+    el.addEventListener('focus', () => el.select());
+    el.addEventListener('input', () => { el.value = el.value.replace(/\D/g, '').slice(0, 2); });
+    el.addEventListener('blur', _commitRefreshTime);
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); return; }
+      if (el === eh && eh.value.length === 2 && e.key >= '0' && e.key <= '9') em.focus();
+    });
+  });
+})();
+_setRefreshTime(settings.daily_refresh_time || '00:00');
+
+/* ==========================================================================
+   v5.15.31 · 昵称「修改键」—— 常态只显示昵称文字 + 一枚很小的「修改」键
+   （boss：昵称应该是以修改键形式，而不是常态输入框；修改键也不用太大）
+   ========================================================================== */
+function _nickEnterEdit() {
+  const t = document.getElementById('profileNickText');
+  const b = document.getElementById('profileNickEdit');
+  const i = document.getElementById('profileNickname');
+  const s = document.getElementById('profileNickSave');
+  if (t) t.style.display = 'none';
+  if (b) b.style.display = 'none';
+  if (i) { i.style.display = ''; i.value = activeNickname(); i.focus(); i.select(); }
+  if (s) s.style.display = '';
+}
+function _nickExitEdit() {
+  const t = document.getElementById('profileNickText');
+  const b = document.getElementById('profileNickEdit');
+  const i = document.getElementById('profileNickname');
+  const s = document.getElementById('profileNickSave');
+  if (i) i.style.display = 'none';
+  if (s) s.style.display = 'none';
+  if (t) { t.textContent = activeNickname(); t.style.display = ''; }
+  if (b) b.style.display = '';
+}
+(function bindNickEdit() {
+  const b = document.getElementById('profileNickEdit');
+  if (b) b.addEventListener('click', _nickEnterEdit);
+})();
