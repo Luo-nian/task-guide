@@ -1981,6 +1981,49 @@ function renderDdlRow(forCat) {
   });
 }
 
+/** v5.15.31：每日提醒时间改为「时」「分」两个输入框 —— 读写与校验都收在这里 */
+function _clamp2(v, max) {
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  if (isNaN(n)) return '';
+  return String(Math.min(max, Math.max(0, n))).padStart(2, '0');
+}
+function _setDailyTime(h, m) {
+  const eh = document.getElementById('addDailyHour');
+  const em = document.getElementById('addDailyMin');
+  if (!eh || !em) return;
+  eh.value = String(Math.min(23, Math.max(0, h | 0))).padStart(2, '0');
+  em.value = String(Math.min(59, Math.max(0, m | 0))).padStart(2, '0');
+}
+function _readDailyTime() {
+  const eh = document.getElementById('addDailyHour');
+  const em = document.getElementById('addDailyMin');
+  const h = eh ? parseInt(eh.value, 10) : NaN;
+  const m = em ? parseInt(em.value, 10) : NaN;
+  return [isNaN(h) ? 9 : Math.min(23, Math.max(0, h)), isNaN(m) ? 0 : Math.min(59, Math.max(0, m))];
+}
+/** 只在首次进入「每日任务」时绑一次：失焦即补零并夹到合法范围；时填满 2 位自动跳到分 */
+let _dailyTimeBound = false;
+function _bindDailyTimeInput() {
+  if (_dailyTimeBound) return;
+  const eh = document.getElementById('addDailyHour');
+  const em = document.getElementById('addDailyMin');
+  if (!eh || !em) return;
+  _dailyTimeBound = true;
+  const norm = function (el, max) {
+    el.addEventListener('focus', function () { el.select(); });
+    el.addEventListener('input', function () {
+      el.value = el.value.replace(/[^0-9]/g, '').slice(0, 2);
+      if (el === eh && el.value.length === 2 && parseInt(el.value, 10) <= 2) em.focus();
+    });
+    el.addEventListener('blur', function () {
+      const v = _clamp2(el.value, max);
+      el.value = (v === '') ? '' : v;
+    });
+  };
+  norm(eh, 23);
+  norm(em, 59);
+}
+
 /** 类型联动：按类型显示/隐藏 时长 / 每日提醒时间 / 次数 */
 function applyCatLayout() {
   const cat = draftCat;
@@ -2055,7 +2098,7 @@ function resetAddForm() {
   document.getElementById('addTitle').value = '';
   document.getElementById('addDesc').value = '';
   document.getElementById('addCount').value = settings.count_default || 5;
-  document.getElementById('addDailyTime').value = '09:00';
+  _setDailyTime(9, 0);
   document.querySelectorAll('#addCatRow .cat-btn').forEach(function (b) { b.classList.remove('active'); });
   document.querySelectorAll('.prio-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.prio === 'medium'); });
   ['addRemNotif', 'addRemVibrate', 'addRemSound', 'addRemPopup', 'addRemFull', 'addRemInApp'].forEach(function (id) {
@@ -2134,7 +2177,7 @@ async function openEdit(uuid) {
   } else draftDdl = 'none';
   if (draftCat === 'daily' && t.due_at) {
     const dt = new Date(t.due_at);
-    document.getElementById('addDailyTime').value = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+    _setDailyTime(dt.getHours(), dt.getMinutes());
   }
   applyCatLayout();
   const cfg = parseReminderConfig(t.reminder_strength);
@@ -2240,10 +2283,9 @@ function collectReminder() {
 
 /** 每日任务 → 今天（已过则明天）的 HH:mm 时间戳 */
 function collectDailyDueAt() {
-  const v = document.getElementById('addDailyTime').value || '09:00';
-  const p = v.split(':');
+  const hm = _readDailyTime();
   const d = new Date();
-  d.setHours(parseInt(p[0], 10) || 0, parseInt(p[1], 10) || 0, 0, 0);
+  d.setHours(hm[0], hm[1], 0, 0);
   if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
   return d.getTime();
 }

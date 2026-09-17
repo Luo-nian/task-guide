@@ -2768,10 +2768,13 @@ body { background-color: var(--bg-paper); }
 }
 .add-modal textarea:focus { outline: none; border-color: var(--gold); background: #FFFDF7; }
 .time-input-row { display: flex; align-items: center; gap: 8px; }
-.time-input-row input[type="time"] {
+.time-input-row .tbox {
   padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.75); color: var(--ink); font-size: 12.5px;
+  width: 42px; text-align: center; font-variant-numeric: tabular-nums;
 }
+.time-input-row .tbox:focus { outline: none; border-color: var(--gold); }
+.time-input-row .tsep { color: var(--ink-mute); font-size: 13px; line-height: 1; }
 .add-rem-strength .rm-group { margin-bottom: 6px; }
 .add-rem-strength .rm-group-label {
   font-size: 10.5px; color: var(--ink-mute); margin-bottom: 3px;

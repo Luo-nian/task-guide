@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v70">
+<link rel="stylesheet" href="style.css?v=v71">
 </head>
 <body>
 <div class="widget" id="app">
@@ -617,10 +617,13 @@
         <div id="addDailyWrap" style="display:none">
           <label class="label">每天提醒时间</label>
           <div class="time-input-row">
-            <!-- v5.15.18 G1（boss）：除了原来的滚轮选择，再加"可直接输入编辑"；按删除键清空即视为不提醒。 -->
-            <input type="text" id="addDailyTime" value="09:00" inputmode="numeric"
-                   maxlength="8" placeholder="HH:MM" autocomplete="off" spellcheck="false" />
-            <span class="hint">可直接输入 HH:MM（清空 = 不提醒）；每天到这个点提醒你</span>
+            <!-- v5.15.31：boss 要求拆成「时」「分」两个编辑框；旁边小字只留后半句。 -->
+            <input type="text" id="addDailyHour" class="tbox" value="09" inputmode="numeric"
+                   maxlength="2" placeholder="09" autocomplete="off" spellcheck="false" />
+            <span class="tsep">:</span>
+            <input type="text" id="addDailyMin" class="tbox" value="00" inputmode="numeric"
+                   maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
+            <span class="hint">每天到这个点提醒你</span>
           </div>
         </div>
 
@@ -765,6 +768,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v75"></script>
+<script src="app3.js?v=v76"></script>
 </body>
 </html>
