@@ -46,3 +46,12 @@
 | A-005 | 双端同步 4 个根因（serde default / snake_case / Upsert id / 误判删除） | v5.15.7 |
 
 > 完整历史根因另见 `.workbuddy/memory/RULES-铁律.md`
+
+### B-008 · 夜间主题下主界面部分组件仍是浅色（未解决）
+
+- 现象：切到夜间后，设置弹窗已是深墨底，但主界面（列表卡/任务条/部分统计卡）仍是暖白
+- 根因：`style.css` 里有 **107 处硬编码 `rgba(255, 25x, …)`** 和 62 处 `#fff`，没走 CSS 变量，
+  所以 `[data-theme="dark"]` 覆盖变量后它们不跟着变
+- 已试：给 input/select/modal/small-btn/chk-pill/seg-btn/cat-btn/ddl-btn/overlay 加了深色覆盖（这批已好）
+- 下一步：把主容器类（列表卡、任务条、统计卡、标题栏）的硬编码暖白逐个换成变量，或统一加一层深色覆盖
+- 关键词：夜间 主题 深色 白底 没跟色 硬编码 rgba(255
