@@ -46,6 +46,14 @@ interface TaskDao {
     """)
     fun observeMainList(): Flow<List<Task>>
 
+    /** v5.18.4：提醒调度专用 —— **不过滤 track_status**。
+     *  原因：observeMainList() 的 SQL 自带 `track_status != 'done'`，
+     *  而「昨天完成的每日任务」在库里仍是 done（每日折算只发生在 UI 层）→
+     *  它在 SQL 层就被滤掉，排程逻辑看不到它 → **今天的提醒永远排不上**。
+     *  这里把带 due_at 的行全给出来，由 ReminderScheduler 自己按"每日型/今天是否完成"判断。 */
+    @Query("SELECT * FROM tasks WHERE deleted = 0 AND due_at IS NOT NULL")
+    fun observeRemindable(): Flow<List<Task>>
+
     /** 主列表（不含未来任务）：未来任务（due_at > dayEnd）由 FutureTasksSection 独占显示，
      *  避免主区和折叠区重复。dayEnd 通常是今天 23:59:59。
      *  注意：追踪中的任务不受日期限制——追踪了=今天要做，无论 due_at 都显示在主页

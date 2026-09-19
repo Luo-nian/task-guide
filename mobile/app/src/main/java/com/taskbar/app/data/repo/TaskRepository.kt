@@ -74,6 +74,9 @@ class TaskRepository(private val db: AppDatabase) {
     // ==================== 观察 ====================
     fun observeMainList(): Flow<List<Task>> = taskDao.observeMainList()
 
+    /** v5.18.4：提醒调度专用（不过滤已完成）—— 见 TaskDao.observeRemindable 的说明 */
+    fun observeRemindable(): Flow<List<Task>> = taskDao.observeRemindable()
+
     suspend fun getTask(uuid: String): Task? = taskDao.getByUuid(uuid)
 
     suspend fun getTotalPoints(): Int =

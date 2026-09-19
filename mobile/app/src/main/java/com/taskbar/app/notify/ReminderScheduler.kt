@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -40,6 +41,14 @@ object ReminderScheduler {
             t.type == com.taskbar.app.data.model.TaskType.REPEAT ||
             t.repeatRule == "daily"
 
+    /** 今天 0 点（毫秒）—— 与 TaskRepository.todayStart() 同一口径 */
+    private fun startOfToday(): Long = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     /**
      * v5.18.3：把"每天那个时刻"折算成下一次发生时间（今天该时刻已过 → 明天同名时刻）。
      * 只取 due_at 的「时:分」，日期用今天/明天 —— 这样每日任务的提醒不会因为
@@ -72,7 +81,13 @@ object ReminderScheduler {
             .setInputData(data)
             .addTag(tagFor(taskUuid))
             .build()
-        WorkManager.getInstance(context).enqueue(req)
+        // v5.18.4：改用「唯一名 + REPLACE」入队。
+        //   原来用 enqueue()，而 rescheduleAll 在**每次冷启动**都会跑 →
+        //   每开一次 App 就给同一任务再排一条同样的提醒。
+        //   真机实测：一个任务的 reminder_<uuid> 标签下堆了 20 条 WorkSpec，
+        //   表现就是"开几次 App，到点就响几次"。REPLACE 保证同一任务只有一条。
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(tagFor(taskUuid), ExistingWorkPolicy.REPLACE, req)
     }
 
     fun cancel(context: Context, taskUuid: String) {
@@ -85,9 +100,19 @@ object ReminderScheduler {
         // 全局默认提醒方式存 SharedPreferences（与 SettingsScreen/NotificationHelper 一致）
         val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
             .getString("reminder_strength", "notify") ?: "notify"
-        val tasks = repo.observeMainList().first()
+        // v5.18.4：不能用 observeMainList() —— 它的 SQL 自带 `track_status != 'done'`，
+        //   会让"昨天完成的每日任务"在 SQL 层就被滤掉（见 TaskDao.observeRemindable 注释）。
+        val tasks = repo.observeRemindable().first()
         tasks.forEach { t ->
-            if (t.dueAt != null && t.trackStatus != com.taskbar.app.data.model.TrackStatus.DONE) {
+            // v5.18.4：每日型任务「昨天已完成」在原始库里仍然是 DONE ——
+            //   每日折算（normalizeDailyReset）只发生在 UI 读取层，rescheduleAll 拿的是原始行。
+            //   于是新的一天里它被判成 DONE 直接跳过 → **今天的提醒根本排不上**，
+            //   表现就是"完成过一次之后，提醒再也不响"（全仓只有这一个排程入口，冷启动才跑）。
+            //   这里与 UI 同一口径：每日型任务只有 doneAt 落在今天 0 点之后才算已完成。
+            val dailyKind = isDailyKindForReminder(t)
+            val effectivelyDone = t.trackStatus == com.taskbar.app.data.model.TrackStatus.DONE &&
+                (!dailyKind || (t.doneAt ?: 0L) >= startOfToday())
+            if (t.dueAt != null && !effectivelyDone) {
                 // per-task 强度覆盖全局默认
                 val strength = t.reminderStrength ?: defaultStrength
                 var due = t.dueAt
@@ -101,7 +126,6 @@ object ReminderScheduler {
                 //   直接拿它比 now 会永远落在过去 → 每次冷启动/开机都走进下面那个
                 //   "已过期未完成 → 立即提醒"分支，等于天天把每日任务当逾期。
                 //   这里先折算成"今天那个时刻"（今天已过 → 明天那个时刻）。
-                val dailyKind = isDailyKindForReminder(t)
                 if (dailyKind) due = nextDailyOccurrence(due, now)
                 if (due > now) {
                     schedule(context, t.uuid, due, strength)
@@ -130,6 +154,12 @@ class ReminderWorker(
 
         // 已完成则不提醒
         if (t.trackStatus == TrackStatus.DONE) return Result.success()
+
+        // v5.18.4：已删除（软删）的任务不再提醒。
+        //   observeByUuid 是 `SELECT * ... LIMIT 1`，**不过滤 deleted**；而删除任务
+        //   并不会取消已排的提醒（删除路径里没有 cancel）→ 删掉的任务到点还会弹一次。
+        //   这里补一道守卫，顺带让历史遗留的"孤儿"提醒条目自动失效（触发后自行作废）。
+        if (t.deleted != 0) return Result.success()
 
         NotificationHelper.showReminder(applicationContext, uuid, t.title, strength)
 
