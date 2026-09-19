@@ -63,6 +63,17 @@ class TaskBarApp : Application() {
             runCatching { repo.getCustomCategories() }
         }
 
+        // v5.18.0：追踪中任务 → 通知栏常驻卡（boss：「只有追踪中的任务可以上去」）
+        //   用 Flow 订阅而不是在各个"开始/停止追踪"的入口逐个埋点 ——
+        //   这样电脑端同步过来的追踪变化、步骤推进、打卡解除追踪，全都能覆盖到。
+        appScope.launch {
+            runCatching {
+                repo.observeTrackingFeed().collect { info ->
+                    SyncService.refreshTracking(info)
+                }
+            }.onFailure { Log.e("TaskBarApp", "追踪通知观察器失败", it) }
+        }
+
         // 注意：SyncService 不在此启动！原因：
         // - 启动期任何前台服务异常都可能让 application 被系统杀（Android 14 起尤其严格）
         // - 改为在 MainActivity.onCreate 的 LaunchedEffect 里延迟启动（UI 起来后再启）

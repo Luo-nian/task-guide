@@ -15,12 +15,14 @@ import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackCardItem
 import com.taskbar.app.data.model.TrackStatus
+import com.taskbar.app.data.model.TrackingInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -154,6 +156,35 @@ class TaskRepository(private val db: AppDatabase) {
 
     suspend fun getTrackCards(): List<TrackCardItem> =
         taskDao.getTracking().map { TrackCardItem(it, stepDao.getCurrentStep(it.uuid)) }
+
+    // ==================== 通知栏追踪卡（v5.18.0）====================
+
+    /**
+     * 追踪状态或步骤变化 → 通知栏内容。
+     *
+     * 订阅两个 Flow 的理由：通知正文写的是**当前步骤**，
+     * 所以推进步骤（step 变化）也必须触发刷新，不能只盯 task.track_status。
+     */
+    fun observeTrackingFeed(): Flow<TrackingInfo> =
+        combine(taskDao.observeTracking(), stepDao.observeAll()) { tasks, _ -> tasks }
+            .map { tasks -> buildTrackingInfo(tasks) }
+
+    /** 一次性快照（服务冷启动时用；也用于 app 启动时把状态直接传给 SyncService） */
+    suspend fun trackingSnapshot(): TrackingInfo = buildTrackingInfo(taskDao.getTracking())
+
+    private suspend fun buildTrackingInfo(tasks: List<Task>): TrackingInfo {
+        if (tasks.isEmpty()) return TrackingInfo.NONE
+        // 取最近更新的那个追踪任务作为通知主体
+        val first = tasks.first()
+        val steps = stepDao.getByTask(first.uuid)
+        val cur = steps.firstOrNull { it.status == StepStatus.DOING }
+            ?: steps.firstOrNull { it.status != StepStatus.DONE }
+        val step = if (cur == null) "" else {
+            val idx = steps.indexOfFirst { it.uuid == cur.uuid } + 1
+            "$idx/${steps.size} · ${cur.title}"
+        }
+        return TrackingInfo(title = first.title, step = step, count = tasks.size)
+    }
 
     // ==================== 任务 CRUD ====================
     suspend fun createTask(

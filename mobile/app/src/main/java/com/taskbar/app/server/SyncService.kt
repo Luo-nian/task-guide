@@ -4,12 +4,17 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.taskbar.app.BuildConfig
 import com.taskbar.app.TaskBarApp
+import com.taskbar.app.data.model.TrackingInfo
 import com.taskbar.app.notify.NotificationHelper
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
@@ -34,8 +39,15 @@ class SyncService : Service() {
     // v5.15：网络变化监听（WiFi 重连/切换 → 重新注册 mDNS + 重启服务器）
     private var netCallback: ConnectivityManager.NetworkCallback? = null
 
+    // v5.18.0：追踪通知相关的状态
+    //   mainHandler —— 追踪状态在任意线程变化，通知必须在主线程更新
+    //   foregrounded —— 当前是否处于"前台服务 + 通知"状态
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var foregrounded = false
+
     override fun onCreate() {
         super.onCreate()
+        instance = this
         NotificationHelper.ensureChannels(this)
         // v5.15：WiFi 变化 → mDNS 重新广播（桌面 auto_reconnect 靠 mDNS 发现新 IP）
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -56,23 +68,75 @@ class SyncService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Android 14 (API 34) 要求 startForeground 必须传 foregroundServiceType，
-        // 否则 MissingForegroundServiceTypeException 杀整个 application。
-        try {
-            val notif = NotificationHelper.buildServiceNotification(this)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIF_ID, notif,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
-            } else {
-                startForeground(NOTIF_ID, notif)
-            }
-        } catch (e: Exception) {
-            Log.e("SyncService", "startForeground failed", e)
+        if (intent?.hasExtra(EXTRA_COUNT) == true) {
+            // 调用方（MainActivity / 追踪观察器）已经查过库 → 一步到位
+            applyTracking(
+                intent.getStringExtra(EXTRA_TITLE) ?: "",
+                intent.getStringExtra(EXTRA_STEP) ?: "",
+                intent.getIntExtra(EXTRA_COUNT, 0),
+                handshake = false,
+            )
+        } else {
+            // 系统重启服务（intent 为 null）拿不到追踪状态 → 先用上一次已知状态，
+            // 再异步查库补正。注意 Context.startForegroundService() 启的服务必须在
+            // 5 秒内调用一次 startForeground()，否则抛 RemoteServiceException 直接崩进程，
+            // 所以"确实没有追踪任务"时也要过一下桥（handshake）再撤掉。
+            val cached = lastInfo
+            applyTracking(cached.title, cached.step, cached.count, handshake = cached.count == 0)
+            scope.launch { refreshFromDb() }
         }
         if (server == null) startServer()
         return START_STICKY
+    }
+
+    // ==================== 追踪通知（v5.18.0）====================
+
+    /**
+     * 按当前追踪状态设置 / 撤销前台通知。
+     *
+     * - **有追踪** → 前台服务 + 通知（任务名 + 当前步骤）← boss R30
+     * - **无追踪** → `stopForeground(REMOVE)`，通知从通知栏消失；
+     *   服务本身继续作为**普通后台服务**提供同步（前台态一撤，同步仍可用，只是没了通知）
+     *
+     * 技术前提（Android 的硬规定）：**前台服务必须有可见通知**，
+     * 所以"既要后台常驻、又不要通知"只能取其一 —— 这里按 boss 的要求选"不要通知"。
+     */
+    private fun applyTracking(title: String, step: String, count: Int, handshake: Boolean) {
+        lastInfo = if (count > 0) TrackingInfo(title, step, count) else TrackingInfo.NONE
+        try {
+            if (count > 0) {
+                promote(NotificationHelper.buildTrackingNotification(this, title, step, count))
+                foregrounded = true
+            } else {
+                if (handshake && !foregrounded) {
+                    // 过桥用：只为了让 5 秒硬要求过关，随即被 stopForeground 撤掉
+                    promote(NotificationHelper.buildTrackingNotification(this, "任务栏", "", 0))
+                }
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                foregrounded = false
+            }
+        } catch (e: Exception) {
+            // Android 12+ 禁止后台启动前台服务 → 这里是可预期异常，记日志即可，绝不崩进程
+            Log.e("SyncService", "更新追踪通知失败", e)
+        }
+    }
+
+    private fun promote(notif: android.app.Notification) {
+        // Android 14 (API 34) 要求 startForeground 必须传 foregroundServiceType，
+        // 否则 MissingForegroundServiceTypeException 杀整个 application。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIF_ID, notif)
+        }
+    }
+
+    /** 冷启动补正：查一次库，按真实追踪状态更新通知 */
+    private suspend fun refreshFromDb() {
+        val info = runCatching { TaskBarApp.instance.repo.trackingSnapshot() }.getOrNull() ?: return
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            applyTracking(info.title, info.step, info.count, handshake = false)
+        }
     }
 
     private fun startServer() {
@@ -121,6 +185,7 @@ class SyncService : Service() {
                 (getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)?.unregisterNetworkCallback(cb)
             }
         } catch (_: Exception) {}
+        instance = null
         super.onDestroy()
     }
 
@@ -149,9 +214,42 @@ class SyncService : Service() {
     companion object {
         const val NOTIF_ID = 1001
 
-        fun start(context: Context) {
+        private const val EXTRA_TITLE = "tb_track_title"
+        private const val EXTRA_STEP = "tb_track_step"
+        private const val EXTRA_COUNT = "tb_track_count"
+
+        /** 运行中的服务实例。同进程内直接调用，免得每次刷新都 startService（后台会被限制） */
+        @Volatile
+        private var instance: SyncService? = null
+
+        /** 最近一次已知的追踪状态：服务被系统重启时先按它显示，避免通知来回跳 */
+        @Volatile
+        private var lastInfo: TrackingInfo = TrackingInfo.NONE
+
+        /**
+         * 启动同步服务。
+         * @param info 调用方查库得到的追踪状态；传 null 时服务会自己异步补正
+         */
+        fun start(context: Context, info: TrackingInfo? = null) {
             val intent = Intent(context, SyncService::class.java)
+            if (info != null) {
+                intent.putExtra(EXTRA_TITLE, info.title)
+                intent.putExtra(EXTRA_STEP, info.step)
+                intent.putExtra(EXTRA_COUNT, info.count)
+            }
             ContextCompat.startForegroundService(context, intent)
+        }
+
+        /**
+         * 追踪状态变化 → 刷新通知栏。
+         * 没有追踪任务时 info.count == 0 → 通知被撤销（这正是 boss 要的效果）。
+         * 服务没在跑就什么都不做：下次 start() 会带上最新状态。
+         */
+        fun refreshTracking(info: TrackingInfo) {
+            val inst = instance ?: return
+            inst.mainHandler.post {
+                inst.applyTracking(info.title, info.step, info.count, handshake = false)
+            }
         }
 
         /** 获取手机在局域网内的 IPv4 地址（用于设置页显示给用户） */

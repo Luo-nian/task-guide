@@ -1,5 +1,6 @@
 package com.taskbar.app.notify
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +11,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.taskbar.app.MainActivity
+import com.taskbar.app.R
 import com.taskbar.app.data.model.ReminderStrength
 
 /**
@@ -26,7 +28,12 @@ object NotificationHelper {
     const val CHANNEL_VIBRATE = "ch_vibrate"    // 振动
     const val CHANNEL_BEEP = "ch_beep"          // 提示音
     const val CHANNEL_RING = "ch_ring"          // 响铃
-    const val CHANNEL_SERVICE = "ch_service"    // 同步前台服务
+    /**
+     * 追踪中任务的常驻通知通道（前台服务用）。
+     * v5.18.0 前这条通道叫"同步服务"、常驻文案是"同步服务运行中" ——
+     * boss 明确不要看到它：现在通知只承载**追踪中的任务**，没有追踪就不显示通知。
+     */
+    const val CHANNEL_SERVICE = "ch_service"
 
     private const val DEFAULT_VIBRATE_PATTERN = "0,300,200,300,200,300"   // 短震三连
     private const val DEFAULT_RING_URI = "content://settings/system/notification_sound"  // 系统默认
@@ -80,12 +87,16 @@ object NotificationHelper {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             })
         }
-        // 5. 同步前台服务通道
-        if (nm.getNotificationChannel(CHANNEL_SERVICE) == null) {
-            nm.createNotificationChannel(NotificationChannel(
-                CHANNEL_SERVICE, "同步服务", NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "任务指南同步服务运行中" })
-        }
+        // 5. 追踪中任务的常驻通知通道
+        //    注意：这里不用 getNotificationChannel()==null 判断 —— 老装机上该通道已存在
+        //    且名字还是"同步服务"，必须重新创建一次才能把名称/描述改过来
+        //    （系统只允许更新名称与描述，不会重置用户改过的开关/重要性）。
+        nm.createNotificationChannel(NotificationChannel(
+            CHANNEL_SERVICE, "任务追踪", NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "显示正在追踪的任务"
+            setShowBadge(false)
+        })
     }
 
     /** 解析振动 pattern 字符串 "0,300,200,300" → longArray */
@@ -274,13 +285,35 @@ object NotificationHelper {
         }
     }
 
-    /** 前台服务常驻通知 */
-    fun buildServiceNotification(context: Context, text: String = "同步服务运行中") =
-        NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("任务指南")
-            .setContentText(text)
+    /**
+     * 追踪中任务的常驻通知（boss R30：下拉通知栏一直挂着任务名，有步骤时下面小字写当前步骤）。
+     *
+     * 尺寸约束：通知栏只有一两行 —— 所以
+     *   标题 = 任务名；正文 = "2/5 · 洗菜"（当前步骤）；多任务时右下角补"共 N 个追踪中"。
+     * 没有追踪任务时**不会**调用这个函数（SyncService 会直接把前台态撤掉，通知随之消失）。
+     */
+    fun buildTrackingNotification(
+        context: Context,
+        title: String,
+        sub: String = "",
+        count: Int = 1,
+    ): Notification {
+        val open = PendingIntent.getActivity(
+            context, 0,
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val b = NotificationCompat.Builder(context, CHANNEL_SERVICE)
+            .setSmallIcon(R.drawable.ic_track)
+            .setContentTitle(title)
             .setOngoing(true)
             .setSilent(true)
-            .build()
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setContentIntent(open)
+        if (sub.isNotBlank()) b.setContentText(sub)
+        if (count > 1) b.setSubText("共 $count 个追踪中")
+        return b.build()
+    }
 }

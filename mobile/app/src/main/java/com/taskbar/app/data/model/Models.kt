@@ -537,3 +537,18 @@ data class TrackCardItem(
     val currentStep: Step?
 )
 
+/**
+ * v5.18.0：通知栏追踪卡的数据。
+ *
+ * boss：「手机端的下滑通知栏里依旧有那个"同步服务运行中" 我不想看到这个
+ *        只有追踪中的任务可以上去」
+ * 通知条件：count > 0 才显示（标题 = 任务名，step = 当前步骤小字）。
+ */
+data class TrackingInfo(
+    val title: String,
+    val step: String,
+    val count: Int,
+) {
+    companion object { val NONE = TrackingInfo("", "", 0) }
+}
+

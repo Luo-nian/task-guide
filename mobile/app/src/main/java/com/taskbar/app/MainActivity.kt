@@ -93,7 +93,11 @@ class MainActivity : ComponentActivity() {
                 // UI 至少能展示给用户 + crash.log 能记录现场
                 LaunchedEffect(Unit) {
                     kotlinx.coroutines.delay(1500)
-                    runCatching { SyncService.start(this@MainActivity) }
+                    // v5.18.0：启动时直接把追踪状态带上 —— 服务不用先弹一条占位通知再补正
+                    val trackInfo = runCatching {
+                        com.taskbar.app.TaskBarApp.instance.repo.trackingSnapshot()
+                    }.getOrNull()
+                    runCatching { SyncService.start(this@MainActivity, trackInfo) }
                         .onFailure { Log.e("MainActivity", "SyncService 延迟启动失败", it) }
                     // v5.15.23 C-006：一次性修掉"今天已打卡、却还挂在追踪中"的习惯
                     //   （这类行会让完成键点了没反应 —— boss 的「完成不掉」）
