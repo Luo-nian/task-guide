@@ -627,9 +627,18 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
     // 会卡住整个 UI 直到超时（boss 实测感知为「按了没反应」）。这里立即返回、推送失败不影响主流程。
     let base_for_push = base.clone();
     let body_s = body.to_string();
+    // v5.18.1：带出日志用的标识（闭包要 move，先克隆）
+    let entity_log = entity.to_string();
+    let uuid_log = uuid.to_string();
     std::thread::spawn(move || {
         // v5.17.0：签名 + 加密
-        let _ = secure_post(&base_for_push, "/api/sync/changes", &body_s, 5);
+        // v5.18.1：失败必须留痕 —— 这里原来 `let _ =` 把结果全吞了，
+        //   "某条变更到底推没推过去"完全不可观测（排查步骤同步时吃了这个亏）
+        match secure_post(&base_for_push, "/api/sync/changes", &body_s, 5) {
+            Ok((true, _)) => {}
+            Ok((false, msg)) => log::warn!("push_change 被拒: {}/{} → {}", entity_log, uuid_log, msg),
+            Err(e) => log::warn!("push_change 失败: {}/{} → {}", entity_log, uuid_log, e),
+        }
     });
 
     // v5.15.18 P2（boss：「在客户端里点追踪任务，挂件的同步有点慢；挂件上操作同步到客户端也有点慢」）：
@@ -778,7 +787,11 @@ fn apply_change(db: &Arc<Mutex<Connection>>, op: &ChangeOp) {
                 }
             }
         }
-        ("delete", "task") => { let _ = conn.execute("UPDATE tasks SET deleted=1 WHERE uuid=?1", params![&op.uuid]); }
+        ("delete", "task") => {
+            let _ = conn.execute("UPDATE tasks SET deleted=1 WHERE uuid=?1", params![&op.uuid]);
+            // v5.18.1：级联软删该任务的步骤 —— 兜底"只推了 task 的 delete"的对端（老版本）
+            let _ = conn.execute("UPDATE steps SET deleted=1 WHERE task_uuid=?1", params![&op.uuid]);
+        }
         ("delete", "step") => { let _ = conn.execute("UPDATE steps SET deleted=1 WHERE uuid=?1", params![&op.uuid]); }
         // v5.15.7：手机端改的设置（积分/等级、头像、昵称…）→ 最新为主写本地
         ("upsert", "setting") => {

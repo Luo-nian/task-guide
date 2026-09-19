@@ -74,15 +74,15 @@ class SyncService : Service() {
                 intent.getStringExtra(EXTRA_TITLE) ?: "",
                 intent.getStringExtra(EXTRA_STEP) ?: "",
                 intent.getIntExtra(EXTRA_COUNT, 0),
-                handshake = false,
+                mustForeground = true,   // 本路径由 startForegroundService() 启动 → 必须过桥
             )
         } else {
             // 系统重启服务（intent 为 null）拿不到追踪状态 → 先用上一次已知状态，
             // 再异步查库补正。注意 Context.startForegroundService() 启的服务必须在
             // 5 秒内调用一次 startForeground()，否则抛 RemoteServiceException 直接崩进程，
-            // 所以"确实没有追踪任务"时也要过一下桥（handshake）再撤掉。
+            // 所以即使"确实没有追踪任务"，也必须先用一条极简通知过桥再撤掉。
             val cached = lastInfo
-            applyTracking(cached.title, cached.step, cached.count, handshake = cached.count == 0)
+            applyTracking(cached.title, cached.step, cached.count, mustForeground = true)
             scope.launch { refreshFromDb() }
         }
         if (server == null) startServer()
@@ -101,20 +101,27 @@ class SyncService : Service() {
      * 技术前提（Android 的硬规定）：**前台服务必须有可见通知**，
      * 所以"既要后台常驻、又不要通知"只能取其一 —— 这里按 boss 的要求选"不要通知"。
      */
-    private fun applyTracking(title: String, step: String, count: Int, handshake: Boolean) {
+    private fun applyTracking(title: String, step: String, count: Int, mustForeground: Boolean) {
         lastInfo = if (count > 0) TrackingInfo(title, step, count) else TrackingInfo.NONE
         try {
             if (count > 0) {
                 promote(NotificationHelper.buildTrackingNotification(this, title, step, count))
                 foregrounded = true
-            } else {
-                if (handshake && !foregrounded) {
-                    // 过桥用：只为了让 5 秒硬要求过关，随即被 stopForeground 撤掉
-                    promote(NotificationHelper.buildTrackingNotification(this, "任务栏", "", 0))
-                }
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                foregrounded = false
+                return
             }
+            // ── 没有追踪任务：要把前台态撤掉 ──
+            var bridged = false
+            if (mustForeground) {
+                // ⚠️ 实测踩过的崩（v5.18.0 真机第一次装就复现）：
+                //   只要是 Context.startForegroundService() 启动的，系统就要求
+                //   5 秒内必须调用过一次 startForeground()，否则抛
+                //   ForegroundServiceDidNotStartInTimeException 直接把进程干掉。
+                //   所以"确实没有追踪任务"时也得先用一条极简通知过桥，再立刻撤掉。
+                promote(NotificationHelper.buildTrackingNotification(this, "任务栏", "", 0))
+                bridged = true
+            }
+            if (foregrounded || bridged) stopForeground(STOP_FOREGROUND_REMOVE)
+            foregrounded = false
         } catch (e: Exception) {
             // Android 12+ 禁止后台启动前台服务 → 这里是可预期异常，记日志即可，绝不崩进程
             Log.e("SyncService", "更新追踪通知失败", e)
@@ -135,7 +142,7 @@ class SyncService : Service() {
     private suspend fun refreshFromDb() {
         val info = runCatching { TaskBarApp.instance.repo.trackingSnapshot() }.getOrNull() ?: return
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-            applyTracking(info.title, info.step, info.count, handshake = false)
+            applyTracking(info.title, info.step, info.count, mustForeground = false)
         }
     }
 
@@ -248,7 +255,8 @@ class SyncService : Service() {
         fun refreshTracking(info: TrackingInfo) {
             val inst = instance ?: return
             inst.mainHandler.post {
-                inst.applyTracking(info.title, info.step, info.count, handshake = false)
+                // 同进程直调（不是 startForegroundService 启动的）→ 不需要过桥
+                inst.applyTracking(info.title, info.step, info.count, mustForeground = false)
             }
         }
 

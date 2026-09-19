@@ -233,9 +233,15 @@ class TaskRepository(private val db: AppDatabase) {
 
     suspend fun deleteTask(uuid: String) {
         val t = now()
+        // v5.18.1：步骤的删除要**逐条推** —— 原来只推了任务的 delete，
+        //   电脑端那批步骤仍是 deleted=0（孤儿步骤），只能等下次全量同步才被覆盖。
+        val steps = stepDao.getByTask(uuid)
         taskDao.softDelete(uuid, t)
         // 关联步骤软删除
-        stepDao.getByTask(uuid).forEach { stepDao.softDelete(it.uuid, t) }
+        steps.forEach {
+            stepDao.softDelete(it.uuid, t)
+            emitWithData(ChangeOp("delete", "step", it.uuid))
+        }
         emitWithData(ChangeOp("delete", "task", uuid))
     }
 
@@ -791,7 +797,12 @@ class TaskRepository(private val db: AppDatabase) {
                 }
             }
             "delete" -> when (change.entity) {
-                "task" -> taskDao.softDelete(change.uuid, now())
+                "task" -> {
+                    taskDao.softDelete(change.uuid, now())
+                    // v5.18.1：级联软删步骤（兜底"只推了 task delete"的对端）
+                    val t = now()
+                    stepDao.getByTask(change.uuid).forEach { stepDao.softDelete(it.uuid, t) }
+                }
                 "step" -> stepDao.softDelete(change.uuid, now())
             }
         }

@@ -811,12 +811,26 @@ fn complete_task(state: tauri::State<AppState>, task_uuid: String) -> serde_json
 #[tauri::command]
 fn delete_task(state: tauri::State<AppState>, task_uuid: String) {
     let now = chrono::Local::now().timestamp_millis();
-    {
+    // v5.18.1：先把步骤 uuid 收集起来 —— 步骤的删除也要逐条推给手机端。
+    //   原来只推了任务的 delete，手机端那批步骤仍是 deleted=0（"孤儿步骤"）：
+    //   界面看不见（步骤按 task_uuid 查，父任务已删），但两库数据不一致，
+    //   只能等下一次全量同步才被覆盖掉。
+    let step_uuids: Vec<String> = {
         let db = state.db.lock().unwrap();
+        let mut v: Vec<String> = Vec::new();
+        if let Ok(mut st) = db.prepare("SELECT uuid FROM steps WHERE task_uuid=?1") {
+            if let Ok(rows) = st.query_map(params![&task_uuid], |r| r.get::<_, String>(0)) {
+                for r in rows.flatten() { v.push(r); }
+            }
+        }
         db.execute("UPDATE tasks SET deleted=1, updated_at=?1 WHERE uuid=?2", params![now, &task_uuid]).ok();
         db.execute("UPDATE steps SET deleted=1, updated_at=?1 WHERE task_uuid=?2", params![now, &task_uuid]).ok();
-    }
+        v
+    };
     sync::push_change(&state.db, &state.server_url, "task", &task_uuid);
+    for su in step_uuids {
+        sync::push_change(&state.db, &state.server_url, "step", &su);
+    }
 }
 
 #[tauri::command]
