@@ -1020,9 +1020,21 @@ function renderListView() {
 }
 
 // =============== v5.15.11：任务行统一的时间/逾期表达 + 三个圆形动作键 ===============
-/** 是否逾期：未完成 且 已过 due_at/deadline */
+/**
+ * v5.18.3：每日型任务（每日任务 / 习惯）—— **永远不判逾期**。
+ *
+ * boss：「为什么每日任务会出现逾期情况 不是零点刷新吗」
+ * 根因：这类任务的 due_at 是"每天几点提醒"（如 09:00），**不随天推进**；
+ *   过了提醒时刻就被判"已逾期"，第二天零点折算回待办后变成"逾期 1 天"。
+ *   但它们每天重置，本质不会逾期 —— 过点只是"今天还没做"。
+ */
+function isDailyKind(t) {
+  return !!t && (t.category === 'daily' || t.type === 'habit' || t.repeat_rule === 'daily');
+}
+/** 是否逾期：未完成 且 已过 due_at/deadline（每日型任务除外 —— 见 isDailyKind） */
 function isOverdue(t) {
   if (!t || t.done || t.track_status === 'done') return false;
+  if (isDailyKind(t)) return false;                       // v5.18.3
   const d = (typeof t.deadline === 'number') ? t.deadline : t.due_at;
   return typeof d === 'number' && d < Date.now();
 }
@@ -1063,8 +1075,9 @@ function rowActsHtml(t) {
     </div>
   </div>`;
 }
-/** 逾期文案（详情页/行内共用） */
+/** 逾期文案（详情页/行内共用）—— v5.18.3：每日型任务不给逾期文案 */
 function overdueText(t) {
+  if (isDailyKind(t)) return '';
   const d = (typeof t.deadline === 'number') ? t.deadline : t.due_at;
   if (typeof d !== 'number' || d >= Date.now()) return '';
   const diff = Date.now() - d;

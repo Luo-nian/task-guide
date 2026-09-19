@@ -30,6 +30,34 @@ object ReminderScheduler {
 
     fun tagFor(uuid: String) = PREFIX + uuid
 
+    /**
+     * v5.18.3：每日型任务（每日任务 / 习惯 / 重复）的判断。
+     * 这类任务的 due_at 表达的是"每天几点"，不是绝对截止时间。
+     */
+    private fun isDailyKindForReminder(t: com.taskbar.app.data.model.Task): Boolean =
+        t.category == "daily" ||
+            t.type == com.taskbar.app.data.model.TaskType.HABIT ||
+            t.type == com.taskbar.app.data.model.TaskType.REPEAT ||
+            t.repeatRule == "daily"
+
+    /**
+     * v5.18.3：把"每天那个时刻"折算成下一次发生时间（今天该时刻已过 → 明天同名时刻）。
+     * 只取 due_at 的「时:分」，日期用今天/明天 —— 这样每日任务的提醒不会因为
+     * due_at 不推进而永远落在过去。
+     */
+    private fun nextDailyOccurrence(dueAt: Long, now: Long): Long {
+        val src = java.util.Calendar.getInstance()
+        src.timeInMillis = dueAt
+        val dst = java.util.Calendar.getInstance()
+        dst.timeInMillis = now
+        dst.set(java.util.Calendar.HOUR_OF_DAY, src.get(java.util.Calendar.HOUR_OF_DAY))
+        dst.set(java.util.Calendar.MINUTE, src.get(java.util.Calendar.MINUTE))
+        dst.set(java.util.Calendar.SECOND, 0)
+        dst.set(java.util.Calendar.MILLISECOND, 0)
+        if (dst.timeInMillis <= now) dst.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        return dst.timeInMillis
+    }
+
     /** 为带 due_at 的任务调度到点提醒 */
     fun schedule(context: Context, taskUuid: String, dueAt: Long, strength: String) {
         val delay = dueAt - System.currentTimeMillis()
@@ -68,10 +96,18 @@ object ReminderScheduler {
                     && com.taskbar.app.data.model.ChineseHolidays.isHoliday(due)) {
                     due = com.taskbar.app.data.model.ChineseHolidays.nextWorkday(due)
                 }
+                // v5.18.3（boss：「为什么每日任务会出现逾期情况 不是零点刷新吗」）——
+                //   每日型任务的 due_at 是"每天几点提醒"且**创建后从不推进**（全仓无滚动逻辑），
+                //   直接拿它比 now 会永远落在过去 → 每次冷启动/开机都走进下面那个
+                //   "已过期未完成 → 立即提醒"分支，等于天天把每日任务当逾期。
+                //   这里先折算成"今天那个时刻"（今天已过 → 明天那个时刻）。
+                val dailyKind = isDailyKindForReminder(t)
+                if (dailyKind) due = nextDailyOccurrence(due, now)
                 if (due > now) {
                     schedule(context, t.uuid, due, strength)
-                } else {
+                } else if (!dailyKind) {
                     // 已过期未完成 → 立即提醒（未完成警告）
+                    // ⚠️ 每日型任务不走这里：它没有"逾期"这回事
                     NotificationHelper.showReminder(context, t.uuid, t.title, strength)
                 }
             }
