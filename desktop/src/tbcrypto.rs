@@ -296,16 +296,6 @@ pub fn kat_probe() -> String {
     to_hex(&buf)
 }
 
-/// SAS = SHA256(cNonce | sNonce | sessionId) 前 6 位十进制。
-/// 与手机端 `PairingState.sasOf` 逐字对应 —— 两端各自独立计算再人工核对，
-/// 数字不一致即说明 sNonce 在途中被改过（中间人）。
-pub fn sas_of(c_nonce: &str, s_nonce: &str, id: &str) -> String {
-    let h = sha256(format!("{}|{}|{}", c_nonce, s_nonce, id).as_bytes());
-    let mut v: u32 = ((h[0] as u32) << 24) | ((h[1] as u32) << 16) | ((h[2] as u32) << 8) | (h[3] as u32);
-    v &= 0x7FFF_FFFF;
-    format!("{:06}", v % 1_000_000)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

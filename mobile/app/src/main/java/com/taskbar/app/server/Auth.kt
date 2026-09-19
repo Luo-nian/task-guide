@@ -29,7 +29,7 @@ import kotlin.math.abs
  *       门1 配对模式门控：只有用户**正看着设置页**时，手机才接受配对申请
  *       门2 限流：同一 IP 每分钟最多 3 次
  *       门3 单 pending：同一时刻只允许一个待确认申请
- *       门4 SAS 双屏核对 + 2 分钟 TTL + IP 绑定轮询
+ *       门4 2 分钟 TTL + 仅发起方 IP 可轮询 + 密钥一次性交付
  *
  *  ③ **双向认证** —— v5.16.0 只做了"手机验电脑"。
  *     现在响应也由手机端签名（[respondSecure]），电脑端验签 →
@@ -121,13 +121,13 @@ object NonceCache {
  *
  * ```
  *  电脑：扫描 mDNS → 找到手机 → 点「配对」
- *        └─ POST /api/pair/request  {deviceName, deviceId, cNonce, kat}
+ *        └─ POST /api/pair/request  {deviceName, deviceId, kat}
  *                ↓
  *  手机：① 检查"配对模式"（用户正看着设置页）
  *        ② 限流（同 IP / 分钟）
  *        ③ 检查是否已有待确认申请
  *        ④ 校验 kat（两端加密实现是否一致）
- *        └─ 返回 {sessionId, sNonce, sas, ttl}
+ *        └─ 返回 {sessionId, ttl}
  *                ↓
  *  手机：弹出确认框 →【 boss 在手机上点「允许」】← 这一步才是真正的安全边界
  *                ↓
@@ -135,9 +135,9 @@ object NonceCache {
  *        └─ 拿到 master → 写入 pairing.json → 开始同步
  * ```
  *
- * ⭐ **SAS（6 位数字）**：由 cNonce（电脑给）+ sNonce（手机给）+ sessionId 共同算出，
- * 两端**各自独立计算**并显示。用户核对两个屏幕上的数字是否一致 ——
- * 既让 boss 能确认"确实是我那台电脑"，也能发现 sNonce 在途中被改过。
+ * ⭐ 安全边界只有一条：**人在手机上点「允许」**。
+ *   （v5.17.1 去掉了原先那个"两端核对 6 位数字"的设计 —— boss 指出那本质上还是配对码。）
+ *   其余防线：配对模式门控 / 限流 / 单 pending / TTL / 仅发起方 IP 可轮询 / 密钥一次性交付。
  */
 object PairingState {
     private const val TTL_MS = 120_000L
@@ -148,9 +148,6 @@ object PairingState {
         val name: String,
         val deviceId: String,
         val ip: String,
-        val cNonce: String,
-        val sNonce: String,
-        val sas: String,
         val createdAt: Long,
         @Volatile var status: String = "pending",
         @Volatile var masterHex: String? = null,
@@ -189,7 +186,7 @@ object PairingState {
      * @return Req 表示已受理（UI 会弹窗）；null 表示被四道门之一拒掉
      */
     @Synchronized
-    fun request(name: String, deviceId: String, cNonce: String, ip: String): Req? {
+    fun request(name: String, deviceId: String, ip: String): Req? {
         // 门1：配对模式
         if (!_armed.value) {
             rejected.incrementAndGet()
@@ -216,20 +213,16 @@ object PairingState {
         }
 
         val id = TbCrypto.toHex(TbCrypto.randBytes(16))
-        val sNonce = TbCrypto.toHex(TbCrypto.randBytes(16))
         val r = Req(
             id = id,
             name = name.ifBlank { "电脑" },
             deviceId = deviceId,
             ip = ip,
-            cNonce = cNonce,
-            sNonce = sNonce,
-            sas = sasOf(cNonce, sNonce, id),
             createdAt = now,
         )
         current = r
         _pending.value = r
-        android.util.Log.i("PairingState", "收到配对申请：${r.name} @ $ip，验证码 ${r.sas}")
+        android.util.Log.i("PairingState", "收到配对申请：${r.name} @ $ip")
         return r
     }
 
@@ -299,19 +292,6 @@ object PairingState {
     /** 最近被拒次数（配对失败时给用户一个解释） */
     fun rejectedCount(): Long = rejected.get()
 
-    /**
-     * SAS = SHA256(cNonce | sNonce | sessionId) 的前 6 位十进制。
-     * 两端各自独立计算 → 数字不一致即说明信道被动过手脚。
-     */
-    fun sasOf(cNonce: String, sNonce: String, id: String): String {
-        val h = TbCrypto.sha256("$cNonce|$sNonce|$id".toByteArray())
-        var v = ((h[0].toInt() and 0xFF) shl 24) or
-            ((h[1].toInt() and 0xFF) shl 16) or
-            ((h[2].toInt() and 0xFF) shl 8) or
-            (h[3].toInt() and 0xFF)
-        v = v and 0x7FFFFFFF
-        return String.format("%06d", v % 1_000_000)
-    }
 }
 
 // ═══════════════════════════ 请求级鉴权 ═══════════════════════════

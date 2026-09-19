@@ -1018,7 +1018,7 @@ fn get_widget_visible(app: tauri::AppHandle) -> bool {
 ///   ② 人在手机上核对 6 位数字并点「允许」← **这一步才是真正的安全边界**
 ///   ③ `pair_poll`：电脑轮询拿到 master → 写入 pairing.json → 立刻全量同步
 ///
-/// ⭐ 6 位数字（SAS）由两端**各自独立计算**：电脑端发 cNonce、手机端回 sNonce，
+/// ⭐ 安全边界在「人在手机上点允许」那一下 —— 不再有需要用户抄写的验证码。
 ///    SAS = sha256(cNonce|sNonce|sessionId) 前 6 位。数字不一致即说明信道上有人改过东西。
 #[tauri::command]
 fn pair_request(url: String, device_name: Option<String>, device_id: Option<String>) -> String {
@@ -1028,12 +1028,10 @@ fn pair_request(url: String, device_name: Option<String>, device_id: Option<Stri
         .filter(|s| !s.trim().is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
         .unwrap_or_else(|| "BOOS PC".to_string());
-    let c_nonce = crate::tbcrypto::to_hex(&crate::tbcrypto::rand_bytes(16));
     let body = serde_json::json!({
         "deviceName": pc_name,
         "deviceId": device_id.unwrap_or_default(),
-        "cNonce": c_nonce,
-        // 两端加密实现互校：版本错配会在这里立刻暴露，而不是等同步静默失败
+        // 两端加密实现互校：版本错配会在这里立刻暴露，而不是等同步静默失败（对用户不可见）
         "kat": crate::tbcrypto::kat_probe(),
     });
     let resp = crate::sync::lan_client()
@@ -1047,16 +1045,10 @@ fn pair_request(url: String, device_name: Option<String>, device_id: Option<Stri
             let v: serde_json::Value =
                 serde_json::from_str(&txt).unwrap_or(serde_json::Value::Null);
             let sid = v.get("sessionId").and_then(|x| x.as_str()).unwrap_or("");
-            let s_nonce = v.get("sNonce").and_then(|x| x.as_str()).unwrap_or("");
-            if sid.is_empty() || s_nonce.is_empty() {
+            if sid.is_empty() {
                 return "error:手机端返回异常，请重试".to_string();
             }
-            let sas = crate::tbcrypto::sas_of(&c_nonce, s_nonce, sid);
-            let phone_sas = v.get("sas").and_then(|x| x.as_str()).unwrap_or("");
-            if !phone_sas.is_empty() && phone_sas != sas {
-                return "error:验证码与手机端不一致，信道可能被篡改，已中止配对".to_string();
-            }
-            serde_json::json!({ "status": "pending", "sessionId": sid, "sas": sas }).to_string()
+            serde_json::json!({ "status": "pending", "sessionId": sid }).to_string()
         }
         Ok(r) if r.status().as_u16() == 403 => {
             let txt = r.text().unwrap_or_default();

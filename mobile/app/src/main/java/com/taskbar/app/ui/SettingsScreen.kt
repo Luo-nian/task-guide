@@ -435,8 +435,6 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    // v5.17.0 文案精简：第③条原本写"核对数字后点允许"，
-                    //   但确认框里已经逐字说了同样的话 —— 重复，删掉
                     "在电脑端点「扫描设备」，选中本机后点「配对」",
                     color = TGColors.InkMute, fontSize = 11.sp
                 )
@@ -465,17 +463,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         Text("来源 " + req.ip, color = TGColors.InkMute, fontSize = 12.sp)
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "请核对电脑屏幕上显示的 6 位数字，是否与下面一致：",
-                            color = TGColors.InkMute, fontSize = 12.sp
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            req.sas,
-                            color = TGColors.Ink, fontSize = 32.sp, fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            "如果数字不一致，或者你并没有在电脑上发起配对 —— 请点「拒绝」。",
+                            "如果不是你发起的，请点「拒绝」。",
                             color = TGColors.Crimson, fontSize = 11.sp
                         )
                     }

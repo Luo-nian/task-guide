@@ -1083,7 +1083,7 @@ document.addEventListener('click', async function (ev) {
   const what = actEl.dataset.act;
   if (actEl.classList.contains('disabled')) {
     if (what === 'stop') showToast('这个任务当前没有在追踪');
-    else if (what === 'advance') showToast('这个任务还没有步骤，没有可推进的进度');
+    else if (what === 'advance') showToast('这个任务还没有步骤');
     return;
   }
   try {
@@ -1428,7 +1428,7 @@ function renderLevelCard() {
       : '距下一级（' + next.name + '）还差 ' + Math.max(0, next.min - points) + ' 分';
   } else {
     if (pfill) pfill.style.width = '100%';
-    if (phint) phint.textContent = '已至巅峰，满级成就达成';
+    if (phint) phint.textContent = '已至巅峰';
   }
 }
 
@@ -1581,7 +1581,7 @@ window.advanceFromDetail = async function (uuid) {
   const d = await call('get_task_detail', { taskUuid: uuid });
   const steps = (d && d.steps) || [];
   const next = steps.find(s => s.status !== 'done');
-  if (!next) { showToast('这个任务还没有步骤，没有可推进的进度'); return; }
+  if (!next) { showToast('这个任务还没有步骤'); return; }
   await call('advance_step', { stepUuid: next.uuid, taskUuid: uuid, status: 'done' });
   showToast('已推进：' + next.title);
   await render();
@@ -2479,7 +2479,7 @@ function openProfileModal() {
       : '距下一级（' + next.name + '）还差 ' + Math.max(0, next.min - points) + ' 分';
   } else {
     pct = 100;
-    document.getElementById('profileExpHint').textContent = '已至巅峰，满级成就达成';
+    document.getElementById('profileExpHint').textContent = '已至巅峰';
     { const pp = document.getElementById('profileExpPct'); if (pp) pp.textContent = '100%'; }
   }
   document.getElementById('profileExpFill').style.width = pct + '%';
@@ -2840,8 +2840,8 @@ document.getElementById('profileGoSettings').addEventListener('click', () => {
  * v5.17.0 双向确认配对（boss：取消配对码 → 「一端发申请、另一端弹窗确认」）
  *
  *   ① 电脑调 pair_request → 手机弹确认框
- *   ② 手机屏幕显示 6 位验证码，**电脑这边也显示同一个数字**，人工核对
- *   ③ 人在手机上点「允许」→ 电脑轮询到 master → 配对完成
+ *   ② 人在手机上点「允许」← 这一步就是安全边界
+ *   ③ 电脑轮询到 master → 配对完成（v5.17.1：已去掉需要抄写的验证码）
  *
  * 注意：手机端只有在**用户打开着设置页**时才受理申请，所以发起前请先把手机
  * 「设置」页打开，否则会收到「手机端不在配对状态」的提示。
@@ -2870,8 +2870,7 @@ window.startPairing = async function (fullUrl, deviceId) {
   if (!obj || !obj.sessionId) { put('配对失败：手机端返回格式异常'); if (st) st.textContent = '未配对'; return false; }
 
   const sid = obj.sessionId;
-  put('请在手机上点「允许」，<b>并核对两边数字一致</b><br>验证码：' +
-      '<b style="font-size:18px;letter-spacing:4px;">' + obj.sas + '</b>');
+  put('请在手机上点「允许」');
 
   const t0 = Date.now();
   while (Date.now() - t0 < 120000) {

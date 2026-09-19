@@ -90,7 +90,6 @@ fun Application.configureServer() {
             }
             val name = obj["deviceName"]?.jsonPrimitive?.contentOrNull ?: "电脑"
             val deviceId = obj["deviceId"]?.jsonPrimitive?.contentOrNull ?: ""
-            val cNonce = obj["cNonce"]?.jsonPrimitive?.contentOrNull ?: ""
             val kat = obj["kat"]?.jsonPrimitive?.contentOrNull ?: ""
 
             if (kat != TbCrypto.katProbe()) {
@@ -101,13 +100,8 @@ fun Application.configureServer() {
                 )
                 return@post
             }
-            if (cNonce.length < 16) {
-                call.respondText("""{"status":"bad_request"}""", status = HttpStatusCode.BadRequest)
-                return@post
-            }
-
             val ip = call.request.origin.remoteHost
-            val r = PairingState.request(name, deviceId, cNonce, ip)
+            val r = PairingState.request(name, deviceId, ip)
             if (r == null) {
                 call.respondText(
                     """{"status":"rejected","armed":${PairingState.armed.value}}""",
@@ -115,10 +109,7 @@ fun Application.configureServer() {
                 )
                 return@post
             }
-            call.respondText(
-                """{"status":"pending","sessionId":"${r.id}","sNonce":"${r.sNonce}",""" +
-                    """"sas":"${r.sas}","ttl":120}"""
-            )
+            call.respondText("""{"status":"pending","sessionId":"${r.id}","ttl":120}""")
         }
 
         /** 取配对结果：仅发起方 IP 可查；approved 时**一次性**交付 master */
