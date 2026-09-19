@@ -14,6 +14,23 @@ pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLo
 pub static PAIRED_DEVICE_ID: std::sync::OnceLock<Mutex<String>> = std::sync::OnceLock::new();
 
 /// 写入已配对手机的 deviceId（lib.rs 在加载/保存配对时调用）
+/// ═══ v5.16.0 安全加固：长期共享密钥 ═══
+/// 配对成功后由手机端 `/api/pair` 下发，此后**所有** HTTP/WS 请求都要带上它。
+/// 手机端若收不到合法 token 一律 401（原先 API 全裸，同 WiFi 下任何人可读写数据）。
+static AUTH_TOKEN: Mutex<String> = Mutex::new(String::new());
+
+pub fn set_auth_token(tok: &str) {
+    if let Ok(mut g) = AUTH_TOKEN.lock() { *g = tok.to_string(); }
+}
+
+pub fn auth_token() -> String {
+    AUTH_TOKEN.lock().map(|g| g.clone()).unwrap_or_default()
+}
+
+pub fn has_auth_token() -> bool {
+    auth_token().len() >= 32
+}
+
 pub fn set_paired_device_id(id: &str) {
     let cell = PAIRED_DEVICE_ID.get_or_init(|| Mutex::new(String::new()));
     if let Ok(mut g) = cell.lock() {
@@ -236,6 +253,7 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
     if base.is_empty() { return Err("未设置服务器地址".into()); }
     let resp: FullSyncPayload = lan_client()
         .get(format!("{}/api/sync/full", base))
+        .header("X-TB-Token", auth_token())          // v5.16.0
         .timeout(Duration::from_secs(10))
         .send().map_err(|e| e.to_string())?
         .json().map_err(|e| e.to_string())?;
@@ -390,6 +408,7 @@ pub fn push_full_to_mobile(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>
         let t0 = std::time::Instant::now();
         let resp = lan_client()
             .post(format!("{}/api/sync/changes", base))
+            .header("X-TB-Token", auth_token())      // v5.16.0
             .timeout(Duration::from_secs(25))
             .json(&body)
             .send();
@@ -476,6 +495,7 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
     std::thread::spawn(move || {
         let _ = lan_client()
             .post(url)
+            .header("X-TB-Token", auth_token())      // v5.16.0
             .timeout(Duration::from_secs(5))
             .json(&body)
             .send();
@@ -503,35 +523,18 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
             std::thread::sleep(Duration::from_secs(5));
             continue;
         }
-        let ws_url = base.replace("http://", "ws://") + "/ws";
+        // v5.16.0：WS 握手要带 token（手机端未授权会直接关闭连接）
+        let ws_url = format!("{}?token={}",
+            base.replace("http://", "ws://") + "/ws", auth_token());
         WS_CONNECTED.store(false, Ordering::Relaxed);
         match tungstenite::connect(&ws_url) {
             Ok((mut socket, _)) => {
                 log::info!("WS 已连接: {}", ws_url);
                 sync_debug_log(&format!("WS 已连接: {}", ws_url));
                 WS_CONNECTED.store(true, Ordering::Relaxed);
-                // v5.15.19：每次 WS 连上后都补一次 /api/pair —— 让手机端 settings.paired_device
-                //   有值。旧实现只在「手动配对那一刻」发一次，导致自动重连后手机端
-                //   paired_device 为空 → 手机端显示"未配对"（boss：手机端没显示已连接）。
-                //   同时补 deviceName —— 手机端 ApiRoutes 读的是 deviceName。
-                {
-                    let base2 = base.clone();
-                    std::thread::spawn(move || {
-                        if base2.is_empty() { return; }
-                        let pc_name = std::env::var("COMPUTERNAME")
-                            .unwrap_or_else(|_| "BOOS PC".to_string());
-                        let did = read_device_id().unwrap_or_default();
-                        let _ = lan_client()
-                            .post(format!("{}/api/pair", base2))
-                            .timeout(std::time::Duration::from_secs(4))
-                            .json(&serde_json::json!({
-                                "name": pc_name,
-                                "deviceName": pc_name,
-                                "deviceId": did
-                            }))
-                            .send();
-                    });
-                }
+                // v5.16.0：此处原先会在每次 WS 连上后"补发 /api/pair"。
+                //   由于配对现在需要**一次性配对码**（不可重放），该补发已删除 ——
+                //   paired_device 在正式配对时由手机端自己写入，无需每次重连再报。
                 // v5.15.7：刚连上时补一次全量拉取 —— ws 断开期间手机端的改动不会补发，
                 //   靠这次 pull 收敛（LWW 保证本地更新的不会被覆盖）
                 {

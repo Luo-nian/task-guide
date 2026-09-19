@@ -1007,6 +1007,53 @@ fn get_widget_visible(app: tauri::AppHandle) -> bool {
     } else { false }
 }
 
+/// v5.16.0 安全加固：用**一次性配对码**完成配对。
+///
+/// 旧流程只要点一下「配对」就成功（手机端 `/api/pair` 不校验任何凭证），
+/// 等于没有安全边界。现在必须：
+///   手机端设置页显示 6 位码 → 用户输入到这里 → 提交给手机端校验 →
+///   通过后才下发长期密钥（token），此后所有请求都带着它。
+#[tauri::command]
+fn pair_with_code(
+    state: tauri::State<AppState>,
+    url: String,
+    code: String,
+    device_id: Option<String>,
+) -> String {
+    let base = crate::sync::server_base(&url);
+    if base.is_empty() { return "error:手机地址为空".to_string(); }
+    let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
+    let resp = crate::sync::lan_client()
+        .post(format!("{}/api/pair", base))
+        .timeout(std::time::Duration::from_secs(6))
+        .json(&serde_json::json!({ "code": code.trim(), "deviceName": pc_name }))
+        .send();
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            let txt = r.text().unwrap_or_default();
+            let v: serde_json::Value =
+                serde_json::from_str(&txt).unwrap_or(serde_json::Value::Null);
+            let tok = v.get("token").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if tok.len() < 32 { return "error:手机端未返回密钥，请重试".to_string(); }
+            crate::sync::set_auth_token(&tok);
+            if let Some(did) = device_id {
+                if !did.is_empty() {
+                    *state.device_id.lock().unwrap() = did.clone();
+                    crate::sync::set_paired_device_id(&did);
+                }
+            }
+            *state.server_url.lock().unwrap() = url;
+            save_pairing_to_disk(&state);
+            let db = state.db.clone();
+            let u = state.server_url.clone();
+            std::thread::spawn(move || { let _ = sync::full_sync(&db, &u); });
+            "ok".to_string()
+        }
+        Ok(r) => format!("error:配对码错误或已过期（{}）", r.status()),
+        Err(e) => format!("error:连不上手机：{}", e),
+    }
+}
+
 #[tauri::command]
 fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<String>) -> String {
     // v5.15 P0：记住配对的手机 deviceId（mDNS TXT 的 ANDROID_ID），
@@ -1020,28 +1067,9 @@ fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<
     }
     *state.server_url.lock().unwrap() = url.clone();
     save_pairing_to_disk(&state);
-    // boss #40：反向通知手机端"已配对"，让手机 SettingsScreen 显示"已配对：BOOS PC"
-    //   修复"配对后仍显示未配对" —— 桌面 settings.pairing 与手机 settings.paired_device
-    //   原本是两个独立状态，互不通知，现在连接成功后反向 POST 手机 /api/pair
-    let url_arc = state.server_url.clone();
-    let did_arc = state.device_id.clone();   // v5.15 P0：闭包外 clone，避免 move state
-    let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        let base = {
-            let g = url_arc.lock().unwrap();
-            sync::server_base(&g)
-        };
-        if base.is_empty() { return; }
-        // v5.15 P0：改 /api/pair 的 body 为 { name, deviceName, deviceId } —— 手机端 ApiRoutes
-        //   读的是 deviceName（旧实现只发 name，手机端永远收到 null → 记成默认"电脑"）；
-        //   deviceId 用于桌面重新发现配对（安卓在 SyncService 里读同一 ANDROID_ID）
-        let _ = crate::sync::lan_client()
-            .post(format!("{}/api/pair", base))
-            .timeout(std::time::Duration::from_secs(5))
-            .json(&serde_json::json!({ "name": pc_name, "deviceName": pc_name, "deviceId": did_arc.lock().unwrap().clone() }))
-            .send();
-    });
+    // v5.16.0：此处原会"反向 POST /api/pair"告知手机端已配对。
+    //   配对现在必须携带一次性配对码（不可重放），故该逻辑已移到 pair_with_code，
+    //   connect_server 只负责"用已有密钥续连"。
     // 启动时也尝试立即同步一次
     let db_arc = state.db.clone();
     let url_arc2 = state.server_url.clone();
@@ -1562,7 +1590,9 @@ fn save_pairing_to_disk(state: &AppState) {
     let url = state.server_url.lock().unwrap().clone();
     let device = state.device_id.lock().unwrap().clone();
     if let Ok(json) = serde_json::to_string_pretty(&serde_json::json!({
-        "url": url, "deviceId": device, "savedAt": chrono::Local::now().timestamp_millis()
+        "url": url, "deviceId": device, "savedAt": chrono::Local::now().timestamp_millis(),
+        // v5.16.0：长期共享密钥（配对时由手机端下发），重启后要恢复
+        "token": crate::sync::auth_token()
     })) {
         let _ = std::fs::write(&path, json);
     }
@@ -1577,6 +1607,10 @@ fn load_pairing_from_disk(state: &AppState) -> Option<String> {
     let raw = std::fs::read_to_string(&path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
     let url = v.get("url")?.as_str()?.to_string();
+    // v5.16.0：恢复长期密钥（老 pairing.json 没有该字段 → 需重新配对）
+    if let Some(tok) = v.get("token").and_then(|x| x.as_str()) {
+        if tok.len() >= 32 { crate::sync::set_auth_token(tok); }
+    }
     // v5.15 P0：读回手机 deviceId（若旧 pairing.json 只有 url 没有 deviceId，则保持空）
     if let Some(d) = v.get("deviceId").and_then(|x| x.as_str()) {
         if !d.is_empty() {

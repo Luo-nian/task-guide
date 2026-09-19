@@ -2837,14 +2837,23 @@ document.getElementById('profileGoSettings').addEventListener('click', () => {
 
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();
+  const code = (document.getElementById('setPairCode').value || '').trim();
   if (!url) return;
+  // v5.16.0 安全加固：配对必须带手机端显示的 6 位码
+  if (!/^\d{6}$/.test(code)) {
+    alert('请先在手机端「设置 → 配对」里查看 6 位配对码，填入后再连接');
+    document.getElementById('setPairCode').focus();
+    return;
+  }
   const full = url.startsWith('http') ? url : 'http://' + url;
   try {
-    await call('connect_server', { url: full, deviceId: '' });
+    const r = await call('pair_with_code', { url: full, code: code, deviceId: '' });
+    if (r !== 'ok') { alert(String(r).replace(/^error:/, '')); return; }
     settings.pairing = { url: full, deviceId: '' };
     saveSettings();
     persistSettingsServer();
     document.getElementById('setPairingStatus').textContent = '已配对：' + full;
+    document.getElementById('setPairCode').value = '';
   } catch (e) { alert('连接失败：' + e.message); }
 });
 
@@ -2971,7 +2980,15 @@ document.getElementById('setScanBtn').addEventListener('click', async () => {
     btn.textContent = '配对';
     btn.onclick = async () => {
       try {
-        // v5.15 P0：把 mDNS 发现的手机 deviceId 存起来 → 手机 IP 变了也能自动重连同一台
+        // v5.16.0：配对需要手机端显示的 6 位码 —— 这里只把地址填好，
+        //   由用户看手机屏幕输入配对码后点「连接」完成（不再能一键配对）。
+        document.getElementById('setPairInput').value = d.url.replace(/^https?:\/\//, '');
+        window._pendingPairDeviceId = d.deviceId || '';
+        box.innerHTML = '← 已填入地址。请在手机端「设置 → 配对」查看 6 位码，填入后点「连接」';
+        document.getElementById('setPairCode').focus();
+        document.getElementById('setPairingStatus').textContent = '待输入配对码';
+        return;
+        // eslint-disable-next-line no-unreachable
         await call('connect_server', { url: d.url, deviceId: d.deviceId || '' });
         settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
         saveSettings();

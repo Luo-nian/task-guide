@@ -34,7 +34,11 @@ import com.taskbar.app.R
 import com.taskbar.app.TaskBarApp
 import com.taskbar.app.data.model.Levels
 import com.taskbar.app.data.model.ReminderStrength
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 import com.taskbar.app.data.repo.LinkState
+import com.taskbar.app.server.AuthState
+import com.taskbar.app.server.PairCode
 import com.taskbar.app.notify.DailyReminderScheduler
 import com.taskbar.app.server.SyncService
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -357,6 +361,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = {
+                        coScope.launch { AuthState.clear() }   // v5.16.0：密钥一并作废
                         vm.setSetting("paired_device", "")
                         pairedDevice = ""
                     }) { Text("解除配对", color = TGColors.Crimson) }
@@ -384,6 +389,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = {
+                        coScope.launch { AuthState.clear() }   // v5.16.0：密钥一并作废
                         vm.setSetting("paired_device", "")
                         pairedDevice = ""
                     }) { Text("解除配对", color = TGColors.Crimson) }
@@ -393,9 +399,38 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     color = TGColors.InkMute, fontSize = 11.sp
                 )
             } else {
-                Text("未连接", color = TGColors.InkMute, fontSize = 13.sp)
-                Spacer(Modifier.height(4.dp))
-                Text("电脑端在设置里点「扫描设备」即可自动发现本机并配对，无需手动输地址", color = TGColors.InkMute, fontSize = 11.sp)
+                // v5.16.0 安全加固：配对改为「一次性配对码」流程 ——
+                //   原实现桌面端点一下就直接配对成功，等于没有安全边界（详见 docs/安全审计与加固方案.md）。
+                //   现在必须把下面这个 6 位码手动输入到电脑端，5 分钟内有效、用过即废。
+                val codeState = remember { mutableStateOf(PairCode.current()) }
+                val remainState = remember { mutableStateOf(PairCode.remainSeconds()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        remainState.value = PairCode.remainSeconds()
+                        if (remainState.value <= 0) codeState.value = PairCode.current()
+                        delay(1000)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("未连接", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        codeState.value = PairCode.refresh()
+                        remainState.value = PairCode.remainSeconds()
+                    }) { Text("换一个", color = TGColors.InkMute, fontSize = 12.sp) }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    codeState.value.chunked(3).joinToString(" "),
+                    color = TGColors.Ink,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "在电脑端点「扫描设备」，选中本机后输入这个配对码" +
+                        "（剩余 " + (remainState.value / 60) + ":" + "%02d".format(remainState.value % 60) + "）",
+                    color = TGColors.InkMute, fontSize = 11.sp
+                )
             }
         }
 
