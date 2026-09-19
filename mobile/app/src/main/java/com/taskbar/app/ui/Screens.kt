@@ -1328,8 +1328,25 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     val focusRequester = remember { FocusRequester() }
     val calScroll = rememberScrollState()
     val scrolling = listState.isScrollInProgress || calScroll.isScrollInProgress
+    // v5.18.2（boss：「滑动缩小成功了 但点击恢复没做出来」）——
+    //   两个辅助状态：
+    //   needSearchFocus —— 点击回调里**不能**直接 requestFocus()：那一刻恢复态的输入框
+    //     还没被组合出来，FocusRequester 未 attach 会抛 "FocusRequester is not initialized"。
+    //     改成打标记，由下面这个 LaunchedEffect 在「组合已应用」之后去要焦点。
+    //   lastExpandAt —— 用户可能在列表还在惯性滑动时点开，此时 scrolling 仍是 true，
+    //     不加防抖会立刻又把它压回去（看起来像"点了没反应"）。800ms 内不重复压缩。
+    var needSearchFocus by remember { mutableStateOf(false) }
+    var lastExpandAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(searchCompact, needSearchFocus) {
+        if (needSearchFocus && !searchCompact) {
+            runCatching { focusRequester.requestFocus() }
+            needSearchFocus = false
+        }
+    }
     LaunchedEffect(scrolling) {
-        if (scrolling && searchOn) searchCompact = true
+        if (scrolling && searchOn && System.currentTimeMillis() - lastExpandAt > 800) {
+            searchCompact = true
+        }
     }
     val searchHeight by animateDpAsState(
         targetValue = if (searchCompact) 18.dp else 56.dp,
@@ -1436,34 +1453,55 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
             }
             }
         }
-        // 搜索框（展开时）
-        // v5.15.24 F5：外层是一个高度可动画的裁切盒 —— 滑动时高度收到 18dp（约原生 1/3），
-        //   视觉上只剩一条细边；点它就还原并发起聚焦。内部输入框保持 56dp 不变，超出的部分被裁掉。
+        // 搜索框（常驻；滑动时压成细边）
+        // v5.15.24 F5：滑动 → 高度收到 18dp（约原生 1/3），把阅览面积还给列表。
+        // ⚠️ v5.18.2 修复（boss：「滑动缩小成功了 但是点击恢复这个功能没做出来」）——
+        //   原来压缩态里**仍然放着那个 OutlinedTextField**（只是被父级约束压到 18dp），
+        //   而 Compose 的点击是「子节点先吃」：输入框把那次 tap 吞掉并拿去聚焦，
+        //   父级 .clickable 永远收不到事件 → 点了没反应。
+        //   现在压缩态**不渲染输入框**，只画一条细边，并把 clickable 挂在这条细边上。
         if (searchOn) {
             Box(
                 Modifier
                     .fillMaxWidth()
                     .height(searchHeight)
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable(enabled = searchCompact) {
-                        searchCompact = false          // 点一下 → 恢复原本体积
-                        focusRequester.requestFocus()  // 顺手把光标放进去，省一次点击
-                    }
             ) {
-                OutlinedTextField(
-                    value = keyword,
-                    onValueChange = { keyword = it },
-                    placeholder = { Text("搜索任务名…", color = TGColors.InkFaint, fontSize = 14.sp) },
-                    singleLine = true,
-                    leadingIcon = { TGIcon(R.drawable.ic_search, contentDescription = null, tint = TGColors.InkMute, size = 18.dp) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .align(Alignment.TopStart)
-                        .focusRequester(focusRequester)
-                        // v5.15.24 F5b：压缩时把内部内容淡出 —— 否则会残留"半个放大镜"很难看
-                        .alpha(if (searchCompact) 0.25f else 1f)
-                )
+                if (searchCompact) {
+                    Row(
+                        Modifier
+                            .matchParentSize()
+                            .background(TGColors.Gold.copy(alpha = 0.10f))
+                            .border(1.dp, TGColors.Gold.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .clickable {
+                                lastExpandAt = System.currentTimeMillis()
+                                searchCompact = false
+                                needSearchFocus = true   // 恢复后顺手聚焦（由 LaunchedEffect 执行）
+                            }
+                            .padding(start = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TGIcon(
+                            drawable = R.drawable.ic_search,
+                            contentDescription = "搜索",
+                            tint = TGColors.GoldDeep.copy(alpha = 0.75f),
+                            size = 13.dp
+                        )
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = keyword,
+                        onValueChange = { keyword = it },
+                        placeholder = { Text("搜索任务名…", color = TGColors.InkFaint, fontSize = 14.sp) },
+                        singleLine = true,
+                        leadingIcon = { TGIcon(R.drawable.ic_search, contentDescription = null, tint = TGColors.InkMute, size = 18.dp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .align(Alignment.TopStart)
+                            .focusRequester(focusRequester)
+                    )
+                }
             }
         }
         // 分类筛选条（与主页同一套口径；本页含未来任务，首项保持"全部"）
