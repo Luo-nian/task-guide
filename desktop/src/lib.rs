@@ -14,6 +14,7 @@ use tauri::Manager;
 use chrono::{Datelike, Local, TimeZone, Timelike};
 
 mod sync;
+pub mod tbcrypto;   // v5.17.0 传输加密 / 请求签名（ChaCha20 + HMAC-SHA256）
 
 // =============== 数据结构 ===============
 // 协议说明：手机端（Kotlin kotlinx）Task/Step 序列化为 camelCase；桌面端收数据必须 camelCase。
@@ -1007,49 +1008,109 @@ fn get_widget_visible(app: tauri::AppHandle) -> bool {
     } else { false }
 }
 
-/// v5.16.0 安全加固：用**一次性配对码**完成配对。
+/// ══════════════════════════════════════════════════════════════════
+/// v5.17.0 配对改版（boss：取消配对码 → 「一端发申请、另一端弹窗确认」）
+/// ══════════════════════════════════════════════════════════════════
 ///
-/// 旧流程只要点一下「配对」就成功（手机端 `/api/pair` 不校验任何凭证），
-/// 等于没有安全边界。现在必须：
-///   手机端设置页显示 6 位码 → 用户输入到这里 → 提交给手机端校验 →
-///   通过后才下发长期密钥（token），此后所有请求都带着它。
+/// 流程：
+///   ① `pair_request`：电脑发申请 → 手机弹确认框
+///      （手机端只有在**人正看着设置页**时才受理，且同 IP 限流、同时只允许一个 pending）
+///   ② 人在手机上核对 6 位数字并点「允许」← **这一步才是真正的安全边界**
+///   ③ `pair_poll`：电脑轮询拿到 master → 写入 pairing.json → 立刻全量同步
+///
+/// ⭐ 6 位数字（SAS）由两端**各自独立计算**：电脑端发 cNonce、手机端回 sNonce，
+///    SAS = sha256(cNonce|sNonce|sessionId) 前 6 位。数字不一致即说明信道上有人改过东西。
 #[tauri::command]
-fn pair_with_code(
-    state: tauri::State<AppState>,
-    url: String,
-    code: String,
-    device_id: Option<String>,
-) -> String {
+fn pair_request(url: String, device_name: Option<String>, device_id: Option<String>) -> String {
     let base = crate::sync::server_base(&url);
     if base.is_empty() { return "error:手机地址为空".to_string(); }
-    let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
+    let pc_name = device_name
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
+        .unwrap_or_else(|| "BOOS PC".to_string());
+    let c_nonce = crate::tbcrypto::to_hex(&crate::tbcrypto::rand_bytes(16));
+    let body = serde_json::json!({
+        "deviceName": pc_name,
+        "deviceId": device_id.unwrap_or_default(),
+        "cNonce": c_nonce,
+        // 两端加密实现互校：版本错配会在这里立刻暴露，而不是等同步静默失败
+        "kat": crate::tbcrypto::kat_probe(),
+    });
     let resp = crate::sync::lan_client()
-        .post(format!("{}/api/pair", base))
+        .post(format!("{}/api/pair/request", base))
         .timeout(std::time::Duration::from_secs(6))
-        .json(&serde_json::json!({ "code": code.trim(), "deviceName": pc_name }))
+        .json(&body)
         .send();
     match resp {
         Ok(r) if r.status().is_success() => {
             let txt = r.text().unwrap_or_default();
             let v: serde_json::Value =
                 serde_json::from_str(&txt).unwrap_or(serde_json::Value::Null);
-            let tok = v.get("token").and_then(|x| x.as_str()).unwrap_or("").to_string();
-            if tok.len() < 32 { return "error:手机端未返回密钥，请重试".to_string(); }
-            crate::sync::set_auth_token(&tok);
-            if let Some(did) = device_id {
-                if !did.is_empty() {
-                    *state.device_id.lock().unwrap() = did.clone();
-                    crate::sync::set_paired_device_id(&did);
-                }
+            let sid = v.get("sessionId").and_then(|x| x.as_str()).unwrap_or("");
+            let s_nonce = v.get("sNonce").and_then(|x| x.as_str()).unwrap_or("");
+            if sid.is_empty() || s_nonce.is_empty() {
+                return "error:手机端返回异常，请重试".to_string();
+            }
+            let sas = crate::tbcrypto::sas_of(&c_nonce, s_nonce, sid);
+            let phone_sas = v.get("sas").and_then(|x| x.as_str()).unwrap_or("");
+            if !phone_sas.is_empty() && phone_sas != sas {
+                return "error:验证码与手机端不一致，信道可能被篡改，已中止配对".to_string();
+            }
+            serde_json::json!({ "status": "pending", "sessionId": sid, "sas": sas }).to_string()
+        }
+        Ok(r) if r.status().as_u16() == 403 => {
+            let txt = r.text().unwrap_or_default();
+            if txt.contains("not_armed") {
+                "error:手机端不在配对状态 —— 请先在手机上打开「设置」页，再点配对".to_string()
+            } else {
+                "error:手机端拒绝了申请（可能已有待确认的配对，或请求过于频繁）".to_string()
+            }
+        }
+        Ok(r) => {
+            // 注意：reqwest 的 Response::text(self) 会取得所有权，status 必须先取出
+            let code = r.status();
+            let txt = r.text().unwrap_or_default();
+            if txt.contains("crypto_mismatch") {
+                "error:两端加密实现不一致，请把电脑端和手机端升级到同一版本".to_string()
+            } else {
+                format!("error:配对申请失败（HTTP {}）", code)
+            }
+        }
+        Err(e) => format!("error:连不上手机：{}", e),
+    }
+}
+
+/// 轮询配对结果。`approved` 时拿到 master 并落盘，随后立即全量同步。
+#[tauri::command]
+fn pair_poll(state: tauri::State<AppState>, url: String, session_id: String) -> String {
+    let base = crate::sync::server_base(&url);
+    if base.is_empty() { return "error:手机地址为空".to_string(); }
+    let resp = crate::sync::lan_client()
+        .get(format!("{}/api/pair/poll?sessionId={}", base, session_id))
+        .timeout(std::time::Duration::from_secs(6))
+        .send();
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            let txt = r.text().unwrap_or_default();
+            let v: serde_json::Value =
+                serde_json::from_str(&txt).unwrap_or(serde_json::Value::Null);
+            let st = v.get("status").and_then(|x| x.as_str()).unwrap_or("expired");
+            if st != "approved" {
+                return serde_json::json!({ "status": st }).to_string();
+            }
+            let master = v.get("master").and_then(|x| x.as_str()).unwrap_or("");
+            if !crate::sync::set_master_hex(master) {
+                return "error:手机端下发的密钥无效".to_string();
             }
             *state.server_url.lock().unwrap() = url;
             save_pairing_to_disk(&state);
+            let fp: String = master.chars().take(4).collect::<String>().to_uppercase();
             let db = state.db.clone();
             let u = state.server_url.clone();
             std::thread::spawn(move || { let _ = sync::full_sync(&db, &u); });
-            "ok".to_string()
+            serde_json::json!({ "status": "approved", "fingerprint": fp }).to_string()
         }
-        Ok(r) => format!("error:配对码错误或已过期（{}）", r.status()),
+        Ok(r) => format!("error:HTTP {}", r.status()),
         Err(e) => format!("error:连不上手机：{}", e),
     }
 }
@@ -1068,7 +1129,7 @@ fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<
     *state.server_url.lock().unwrap() = url.clone();
     save_pairing_to_disk(&state);
     // v5.16.0：此处原会"反向 POST /api/pair"告知手机端已配对。
-    //   配对现在必须携带一次性配对码（不可重放），故该逻辑已移到 pair_with_code，
+    //   配对已改为「弹窗确认」（见 pair_request / pair_poll），故该逻辑已移除，
     //   connect_server 只负责"用已有密钥续连"。
     // 启动时也尝试立即同步一次
     let db_arc = state.db.clone();
@@ -1081,21 +1142,20 @@ fn connect_server(state: tauri::State<AppState>, url: String, device_id: Option<
 
 #[tauri::command]
 fn disconnect_server(state: tauri::State<AppState>) {
+    // ⚠️ v5.17.0 顺手修掉一处"从来没生效过"的逻辑：
+    //   旧实现**先**把 server_url 置空、**再**读它拼 base —— base 永远是空串，
+    //   于是"通知手机端解除配对"这段从来没真正发出过（手机端会一直显示已配对）。
+    let base_for_clear = {
+        let g = state.server_url.lock().unwrap();
+        sync::server_base(&g)
+    };
     *state.server_url.lock().unwrap() = String::new();
     let _ = clear_pairing_from_disk(&state);
-    // boss #40：断开时反向通知手机端解除配对
-    let url_arc = state.server_url.clone();
+    // 断开时反向通知手机端解除配对（v5.17.0：带签名 + 加密）
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(500));
-        let base = {
-            let g = url_arc.lock().unwrap();
-            sync::server_base(&g)
-        };
-        if base.is_empty() { return; }
-        let _ = crate::sync::lan_client()
-            .post(format!("{}/api/pair/clear", base))
-            .timeout(std::time::Duration::from_secs(3))
-            .send();
+        if base_for_clear.is_empty() { return; }
+        let _ = crate::sync::secure_post(&base_for_clear, "/api/pair/clear", "{}", 3);
     });
 }
 
@@ -1501,12 +1561,9 @@ fn push_avatar_emoji(state: tauri::State<AppState>, emoji: String) {
             sync::server_base(&g)
         };
         if base.is_empty() { return; }
-        let url = format!("{}/api/settings/upsert", base);
-        let _ = crate::sync::lan_client()
-            .post(&url)
-            .timeout(std::time::Duration::from_secs(4))
-            .json(&serde_json::json!({"key":"avatar_emoji","value":emoji}))
-            .send();
+        // v5.17.0：带签名 + 加密（否则手机会 401）
+        let body = serde_json::json!({"key":"avatar_emoji","value":emoji}).to_string();
+        let _ = crate::sync::secure_post(&base, "/api/settings/upsert", &body, 4);
     });
 }
 
@@ -1591,8 +1648,8 @@ fn save_pairing_to_disk(state: &AppState) {
     let device = state.device_id.lock().unwrap().clone();
     if let Ok(json) = serde_json::to_string_pretty(&serde_json::json!({
         "url": url, "deviceId": device, "savedAt": chrono::Local::now().timestamp_millis(),
-        // v5.16.0：长期共享密钥（配对时由手机端下发），重启后要恢复
-        "token": crate::sync::auth_token()
+        // v5.17.0：长期密钥 master（配对时由手机端下发），重启后要恢复
+        "master": crate::sync::master_hex()
     })) {
         let _ = std::fs::write(&path, json);
     }
@@ -1607,9 +1664,11 @@ fn load_pairing_from_disk(state: &AppState) -> Option<String> {
     let raw = std::fs::read_to_string(&path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
     let url = v.get("url")?.as_str()?.to_string();
-    // v5.16.0：恢复长期密钥（老 pairing.json 没有该字段 → 需重新配对）
-    if let Some(tok) = v.get("token").and_then(|x| x.as_str()) {
-        if tok.len() >= 32 { crate::sync::set_auth_token(tok); }
+    // v5.17.0：恢复长期密钥（老 pairing.json 无 master 字段 → 需要重新配对一次）
+    if let Some(m) = v.get("master").and_then(|x| x.as_str()) {
+        if !crate::sync::set_master_hex(m) {
+            crate::sync::sync_debug_log("pairing.json 的 master 格式非法，视为未配对");
+        }
     }
     // v5.15 P0：读回手机 deviceId（若旧 pairing.json 只有 url 没有 deviceId，则保持空）
     if let Some(d) = v.get("deviceId").and_then(|x| x.as_str()) {
@@ -1744,26 +1803,9 @@ fn auto_reconnect_loop(
             // v5.14g：重连成功 → 清失败计数
             fail_count = 0;
             { let conn = db.lock().unwrap(); let _ = conn.execute("UPDATE settings SET value='0' WHERE key='reconnect_fail'", []); }
-            // 反 POST 手机 /api/pair（手机端 settings.paired_device 记录，让手机显示"已配对"）
-            // v5.15.19：① 补发 deviceName —— 手机端 ApiRoutes 读的是 deviceName，旧实现只发
-            //   name + deviceId → 手机端收到 null → 记成默认"电脑"（boss：手机端不显示已连接）。
-            //   ② 自动重连后也必须补发，否则手机端 paired_device 为空 → 显示"未配对"。
-            let url_arc2 = url.clone();
-            let did_arc2 = device_id.clone();
-            let pc_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "BOOS PC".to_string());
-            let pc_name2 = pc_name.clone();
-            std::thread::spawn(move || {
-                let base = { sync::server_base(&url_arc2.lock().unwrap()) };
-                let _ = crate::sync::lan_client()
-                    .post(format!("{}/api/pair", base))
-                    .timeout(std::time::Duration::from_secs(4))
-                    .json(&serde_json::json!({
-                        "name": pc_name2,
-                        "deviceName": pc_name2,
-                        "deviceId": did_arc2.lock().unwrap().clone()
-                    }))
-                    .send();
-            });
+            // v5.17.0：此处原会"反 POST /api/pair"补写手机端的 paired_device。
+            //   该接口已随配对改版移除（改为弹窗确认），且自动重连属于"已配对设备重连"，
+            //   手机端本来就知道自己配过谁 —— 因此整段删除。
             // full_sync 拉手机数据到本地（last-write-wins 在 sync::full_sync 内做）
             let _ = sync::full_sync(&db, &url);
             // 更新 pairing.json 里的 url（保留 deviceId）
@@ -1982,6 +2024,7 @@ pub fn run() {
             set_display_mode, set_window_size,
             show_widget, hide_widget, show_main_window, get_widget_visible, win_minimize, win_toggle_maximize, win_hide, win_start_dragging,
             connect_server, disconnect_server, get_server_url,
+            pair_request, pair_poll,   // v5.17.0 双向确认配对
             set_setting, get_setting, save_pairing, load_pairing,
             is_ws_connected, get_ws_peer, push_avatar_emoji,
             discover_devices, seed_default_tasks

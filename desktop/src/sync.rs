@@ -14,21 +14,38 @@ pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLo
 pub static PAIRED_DEVICE_ID: std::sync::OnceLock<Mutex<String>> = std::sync::OnceLock::new();
 
 /// 写入已配对手机的 deviceId（lib.rs 在加载/保存配对时调用）
-/// ═══ v5.16.0 安全加固：长期共享密钥 ═══
-/// 配对成功后由手机端 `/api/pair` 下发，此后**所有** HTTP/WS 请求都要带上它。
-/// 手机端若收不到合法 token 一律 401（原先 API 全裸，同 WiFi 下任何人可读写数据）。
-static AUTH_TOKEN: Mutex<String> = Mutex::new(String::new());
+/// ═══ v5.17.0 传输加密：长期密钥（master，32 字节）═══
+/// 配对获批时由手机端生成并下发；由它派生出 sign / enc 两把子密钥。
+/// 此后**所有** HTTP 请求都签名 + 加密，WS 帧也加密（见 [crate::tbcrypto]）。
+static AUTH_KEYS: Mutex<Option<crate::tbcrypto::Keys>> = Mutex::new(None);
 
-pub fn set_auth_token(tok: &str) {
-    if let Ok(mut g) = AUTH_TOKEN.lock() { *g = tok.to_string(); }
+/// 设置 master（hex）。格式非法返回 false。
+pub fn set_master_hex(hex: &str) -> bool {
+    match crate::tbcrypto::Keys::from_master_hex(hex) {
+        Some(k) => {
+            if let Ok(mut g) = AUTH_KEYS.lock() { *g = Some(k); }
+            true
+        }
+        None => false,
+    }
 }
 
+pub fn keys() -> Option<crate::tbcrypto::Keys> {
+    AUTH_KEYS.lock().ok().and_then(|g| g.clone())
+}
+
+/// master 的 hex（持久化到 pairing.json）
+pub fn master_hex() -> String {
+    keys().map(|k| k.master_hex()).unwrap_or_default()
+}
+
+/// WS 握手用的 token（base64(master)，手机端 wsTokenOk 会解码比对）
 pub fn auth_token() -> String {
-    AUTH_TOKEN.lock().map(|g| g.clone()).unwrap_or_default()
+    keys().map(|k| k.token()).unwrap_or_default()
 }
 
 pub fn has_auth_token() -> bool {
-    auth_token().len() >= 32
+    keys().is_some()
 }
 
 pub fn set_paired_device_id(id: &str) {
@@ -251,12 +268,9 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
         server_base(&g)
     };
     if base.is_empty() { return Err("未设置服务器地址".into()); }
-    let resp: FullSyncPayload = lan_client()
-        .get(format!("{}/api/sync/full", base))
-        .header("X-TB-Token", auth_token())          // v5.16.0
-        .timeout(Duration::from_secs(10))
-        .send().map_err(|e| e.to_string())?
-        .json().map_err(|e| e.to_string())?;
+    // v5.17.0：签名 + 解密 + 验签（白名单外的设备既看不懂也改不了）
+    let plain = secure_get(&base, "/api/sync/full", 10)?;
+    let resp: FullSyncPayload = serde_json::from_str(&plain).map_err(|e| e.to_string())?;
 
     let conn = db.lock().map_err(|e| e.to_string())?;
     for mut t in resp.tasks {
@@ -311,9 +325,116 @@ pub fn lan_client() -> reqwest::blocking::Client {
         .expect("reqwest client 初始化失败")
 }
 
+// ══════════════════════════════════════════════════════════════════
+// v5.17.0 传输加密 / 请求签名（"明文传输"整改，双向认证）
+// ══════════════════════════════════════════════════════════════════
+
+/// 给请求加上签名四件套。
+/// 签名覆盖 `METHOD | PATH | TS | NONCE | sha256(body)`，
+/// 所以改一个字节的 body 就会验签失败；nonce + 时间戳防重放。
+fn signed_headers(
+    rb: reqwest::blocking::RequestBuilder,
+    method: &str,
+    path: &str,
+    body_wire: &str,
+) -> reqwest::blocking::RequestBuilder {
+    let ts = chrono::Local::now().timestamp_millis();
+    let nonce = crate::tbcrypto::rand_nonce_hex();
+    let (tok, sig) = match keys() {
+        Some(k) => (
+            k.token(),
+            crate::tbcrypto::sign(&k, method, path, ts, &nonce, body_wire),
+        ),
+        None => (String::new(), String::new()),
+    };
+    rb.header("X-TB-Token", tok)
+        .header("X-TB-Ts", ts.to_string())
+        .header("X-TB-Nonce", nonce)
+        .header("X-TB-Sig", sig)
+}
+
+/// 验签 + 解密响应（**双向认证的"电脑验手机"半边**）
+fn open_response(
+    k: &crate::tbcrypto::Keys,
+    path: &str,
+    headers: &reqwest::header::HeaderMap,
+    wire: &str,
+) -> Result<String, String> {
+    let hs = |n: &str| {
+        headers
+            .get(n)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string()
+    };
+    let ts: i64 = hs("X-TB-Ts").parse().unwrap_or(0);
+    let nonce = hs("X-TB-Nonce");
+    let sig = hs("X-TB-Sig");
+    let want = crate::tbcrypto::sign(k, "R", path, ts, &nonce, wire);
+    if sig != want {
+        return Err("响应验签失败（回话方可能不是本机配对的那台手机）".into());
+    }
+    crate::tbcrypto::open(k, wire).ok_or_else(|| "响应解密失败".to_string())
+}
+
+/// 带签名 + 加密的 GET，返回解密后的明文
+pub fn secure_get(base: &str, path: &str, timeout_secs: u64) -> Result<String, String> {
+    let k = keys().ok_or_else(|| "未配对（无密钥），请先完成配对".to_string())?;
+    let rb = signed_headers(lan_client().get(format!("{}{}", base, path)), "GET", path, "")
+        .timeout(Duration::from_secs(timeout_secs));
+    let resp = rb.send().map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let headers = resp.headers().clone();
+    let wire = resp.text().map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!(
+            "HTTP {} {}",
+            status,
+            wire.chars().take(160).collect::<String>()
+        ));
+    }
+    open_response(&k, path, &headers, &wire)
+}
+
+/// 带签名 + 加密请求体的 POST。返回 (是否成功, 明文响应)
+pub fn secure_post(
+    base: &str,
+    path: &str,
+    json: &str,
+    timeout_secs: u64,
+) -> Result<(bool, String), String> {
+    let k = keys().ok_or_else(|| "未配对（无密钥），请先完成配对".to_string())?;
+    let wire = crate::tbcrypto::seal(&k, json);
+    let rb = signed_headers(
+        lan_client().post(format!("{}{}", base, path)),
+        "POST",
+        path,
+        &wire,
+    )
+    .header("X-TB-Enc", "1")
+    .timeout(Duration::from_secs(timeout_secs))
+    .body(wire);
+    let resp = rb.send().map_err(|e| e.to_string())?;
+    // 注意：reqwest 的 Response::text(self) 会取得所有权 —— status 必须先取出
+    let code = resp.status();
+    let ok = code.is_success();
+    let headers = resp.headers().clone();
+    let body = resp.text().unwrap_or_default();
+    if !ok {
+        return Ok((false, format!("HTTP {}", code)));
+    }
+    match open_response(&k, path, &headers, &body) {
+        Ok(plain) => Ok((true, plain)),
+        Err(e) => {
+            sync_debug_log(&format!("响应校验失败 ({}): {}", path, e));
+            Ok((true, String::new()))
+        }
+    }
+}
+
 /// v5.15.22：同步调试日志（log crate 没接 logger，log::info! 全是空操作 ——
 ///   排查"推送到底跑没跑/为什么失败"必须落文件）。写在 exe 同目录 sync-debug.log。
-fn sync_debug_log(msg: &str) {
+pub fn sync_debug_log(msg: &str) {
     use std::io::Write;
     let path = std::env::current_exe()
         .ok()
@@ -404,23 +525,18 @@ pub fn push_full_to_mobile(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>
     // 分批推送（单批 120 条，避免一次性 body 过大 / 手机端逐条 apply 阻塞太久）
     let mut sent = 0usize;
     for (bi, chunk) in payload.chunks(120).enumerate() {
-        let body = serde_json::json!({ "changes": chunk, "client_time": now_ms() });
+        let body = serde_json::json!({ "changes": chunk, "client_time": now_ms() }).to_string();
         let t0 = std::time::Instant::now();
-        let resp = lan_client()
-            .post(format!("{}/api/sync/changes", base))
-            .header("X-TB-Token", auth_token())      // v5.16.0
-            .timeout(Duration::from_secs(25))
-            .json(&body)
-            .send();
+        let resp = secure_post(&base, "/api/sync/changes", &body, 25);   // v5.17.0
         match resp {
-            Ok(r) if r.status().is_success() => {
+            Ok((true, _)) => {
                 sent += chunk.len();
                 sync_debug_log(&format!(
                     "push_full batch#{} {}条 ok ({}ms)", bi, chunk.len(), t0.elapsed().as_millis()
                 ));
             }
-            Ok(r) => {
-                sync_debug_log(&format!("push_full batch#{} 失败: HTTP {}", bi, r.status()));
+            Ok((false, msg)) => {
+                sync_debug_log(&format!("push_full batch#{} 失败: {}", bi, msg));
                 break;
             }
             Err(e) => {
@@ -489,16 +605,13 @@ pub fn push_change(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>, entity
     let op = if is_delete { "delete" } else { "upsert" };
     let change = ChangeOp { op: op.into(), entity: entity.into(), uuid: uuid.into(), data };
     let body = serde_json::json!({ "changes": [change], "client_time": chrono::Local::now().timestamp_millis() });
-    let url = format!("{}/api/sync/changes", base);
     // 网络推送放后台线程：手机不在线时最多拖 5s 超时，若阻塞在主线程，点「添加步骤/完成任务」
     // 会卡住整个 UI 直到超时（boss 实测感知为「按了没反应」）。这里立即返回、推送失败不影响主流程。
+    let base_for_push = base.clone();
+    let body_s = body.to_string();
     std::thread::spawn(move || {
-        let _ = lan_client()
-            .post(url)
-            .header("X-TB-Token", auth_token())      // v5.16.0
-            .timeout(Duration::from_secs(5))
-            .json(&body)
-            .send();
+        // v5.17.0：签名 + 加密
+        let _ = secure_post(&base_for_push, "/api/sync/changes", &body_s, 5);
     });
 
     // v5.15.18 P2（boss：「在客户端里点追踪任务，挂件的同步有点慢；挂件上操作同步到客户端也有点慢」）：
@@ -532,9 +645,8 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                 log::info!("WS 已连接: {}", ws_url);
                 sync_debug_log(&format!("WS 已连接: {}", ws_url));
                 WS_CONNECTED.store(true, Ordering::Relaxed);
-                // v5.16.0：此处原先会在每次 WS 连上后"补发 /api/pair"。
-                //   由于配对现在需要**一次性配对码**（不可重放），该补发已删除 ——
-                //   paired_device 在正式配对时由手机端自己写入，无需每次重连再报。
+                // v5.17.0：配对改为「弹窗确认」（见 lib.rs pair_request/pair_poll）。
+                //   paired_device 在人在手机上点「允许」时由手机端自己写入，重连不再需要上报。
                 // v5.15.7：刚连上时补一次全量拉取 —— ws 断开期间手机端的改动不会补发，
                 //   靠这次 pull 收敛（LWW 保证本地更新的不会被覆盖）
                 {
@@ -569,7 +681,12 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                 loop {
                     match socket.read() {
                         Ok(Message::Text(txt)) => {
-                            if let Ok(op) = serde_json::from_str::<ChangeOp>(&txt) {
+                            // v5.17.0：手机端推送的帧已加密（"E1:" 前缀）；无前缀按明文兼容
+                            let plain = match keys() {
+                                Some(k) => crate::tbcrypto::open(&k, &txt).unwrap_or_default(),
+                                None => txt.clone(),
+                            };
+                            if let Ok(op) = serde_json::from_str::<ChangeOp>(&plain) {
                                 apply_change(&db, &op);
                                 // v5.15.7：立刻通知前端刷新（否则要等 setInterval 15s 轮询）
                                 notify_changed();

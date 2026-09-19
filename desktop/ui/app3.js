@@ -454,10 +454,11 @@ function applySettingsToUi() {
       try {
         const connected = await call('is_ws_connected');
         const peer = await call('get_ws_peer');
-        if (connected) ps.textContent = '已配对 · 实时连接中：' + (peer || settings.pairing?.url || '');
+        // v5.17.0 文案精简：连接与否已由右下角状态胶囊常驻显示，这里只说"配给了谁"
+        if (connected) ps.textContent = '已配对：' + (peer || settings.pairing?.url || '');
         // v5.15.19：不再写"点击下方扫描设备重连" —— 现在会自动扫描重连，
         //   提示改成"正在自动重连"，避免 boss 以为必须手点（旧文案正是误解来源）。
-        else if (settings.pairing) ps.textContent = '已配对（缓存）· 当前未连接 — 正在自动扫描重连…';
+        else if (settings.pairing) ps.textContent = '已配对：' + settings.pairing.url;
         else ps.textContent = '未配对';
       } catch(e) { /* 启动期 ignore */ }
     }, 3000);
@@ -2835,26 +2836,72 @@ document.getElementById('profileGoSettings').addEventListener('click', () => {
 });
 // 「进度条样式选择器」已撤（统一条形），旧 key 保留兼容、不再绑定 UI
 
+/**
+ * v5.17.0 双向确认配对（boss：取消配对码 → 「一端发申请、另一端弹窗确认」）
+ *
+ *   ① 电脑调 pair_request → 手机弹确认框
+ *   ② 手机屏幕显示 6 位验证码，**电脑这边也显示同一个数字**，人工核对
+ *   ③ 人在手机上点「允许」→ 电脑轮询到 master → 配对完成
+ *
+ * 注意：手机端只有在**用户打开着设置页**时才受理申请，所以发起前请先把手机
+ * 「设置」页打开，否则会收到「手机端不在配对状态」的提示。
+ */
+window.startPairing = async function (fullUrl, deviceId) {
+  const wrap = document.getElementById('setPairProgressWrap');
+  const boxEl = document.getElementById('setPairProgress');
+  const st = document.getElementById('setPairingStatus');
+  if (wrap) wrap.style.display = '';
+  const put = (h) => { if (boxEl) boxEl.innerHTML = h; };
+  put('正在向手机发送配对申请…');
+  if (st) st.textContent = '等待手机确认';
+
+  let res;
+  try {
+    res = await call('pair_request', { url: fullUrl, deviceName: '', deviceId: deviceId || '' });
+  } catch (e) { put('配对失败：' + e.message); if (st) st.textContent = '未配对'; return false; }
+
+  if (typeof res === 'string' && res.indexOf('error:') === 0) {
+    put('<span style="color:#C0392B;">' + res.replace(/^error:/, '') + '</span>');
+    if (st) st.textContent = '未配对';
+    return false;
+  }
+  let obj = null;
+  try { obj = JSON.parse(res); } catch (e) { }
+  if (!obj || !obj.sessionId) { put('配对失败：手机端返回格式异常'); if (st) st.textContent = '未配对'; return false; }
+
+  const sid = obj.sessionId;
+  put('请在手机上点「允许」，<b>并核对两边数字一致</b><br>验证码：' +
+      '<b style="font-size:18px;letter-spacing:4px;">' + obj.sas + '</b>');
+
+  const t0 = Date.now();
+  while (Date.now() - t0 < 120000) {
+    await new Promise(function (r) { setTimeout(r, 1200); });
+    let pr = null;
+    try { pr = await call('pair_poll', { url: fullUrl, sessionId: sid }); } catch (e) { continue; }
+    let po = null;
+    try { po = JSON.parse(pr); } catch (e) { continue; }
+    if (po.status === 'approved') {
+      settings.pairing = { url: fullUrl, deviceId: deviceId || '' };
+      saveSettings();
+      persistSettingsServer();
+      put('✅ 配对成功' + (po.fingerprint ? '（密钥指纹 ' + po.fingerprint + '）' : ''));
+      if (st) st.textContent = '已配对：' + fullUrl;
+      showToast('已与手机配对成功');
+      return true;
+    }
+    if (po.status === 'denied') { put('手机端拒绝了本次配对'); if (st) st.textContent = '未配对'; return false; }
+    if (po.status === 'expired') { put('配对申请已超时，请重新发起'); if (st) st.textContent = '未配对'; return false; }
+  }
+  put('配对超时：手机端迟迟未确认（请确认手机停留在「设置」页）');
+  if (st) st.textContent = '未配对';
+  return false;
+};
+
 document.getElementById('setPairBtn').addEventListener('click', async () => {
   const url = document.getElementById('setPairInput').value.trim();
-  const code = (document.getElementById('setPairCode').value || '').trim();
   if (!url) return;
-  // v5.16.0 安全加固：配对必须带手机端显示的 6 位码
-  if (!/^\d{6}$/.test(code)) {
-    alert('请先在手机端「设置 → 配对」里查看 6 位配对码，填入后再连接');
-    document.getElementById('setPairCode').focus();
-    return;
-  }
   const full = url.startsWith('http') ? url : 'http://' + url;
-  try {
-    const r = await call('pair_with_code', { url: full, code: code, deviceId: '' });
-    if (r !== 'ok') { alert(String(r).replace(/^error:/, '')); return; }
-    settings.pairing = { url: full, deviceId: '' };
-    saveSettings();
-    persistSettingsServer();
-    document.getElementById('setPairingStatus').textContent = '已配对：' + full;
-    document.getElementById('setPairCode').value = '';
-  } catch (e) { alert('连接失败：' + e.message); }
+  await window.startPairing(full, window._pendingPairDeviceId || '');
 });
 
 // mDNS 自动发现手机
@@ -2980,21 +3027,13 @@ document.getElementById('setScanBtn').addEventListener('click', async () => {
     btn.textContent = '配对';
     btn.onclick = async () => {
       try {
-        // v5.16.0：配对需要手机端显示的 6 位码 —— 这里只把地址填好，
-        //   由用户看手机屏幕输入配对码后点「连接」完成（不再能一键配对）。
+        // v5.17.0：点「配对」= 立即发申请（不再需要手工输码）
         document.getElementById('setPairInput').value = d.url.replace(/^https?:\/\//, '');
         window._pendingPairDeviceId = d.deviceId || '';
-        box.innerHTML = '← 已填入地址。请在手机端「设置 → 配对」查看 6 位码，填入后点「连接」';
-        document.getElementById('setPairCode').focus();
-        document.getElementById('setPairingStatus').textContent = '待输入配对码';
-        return;
-        // eslint-disable-next-line no-unreachable
-        await call('connect_server', { url: d.url, deviceId: d.deviceId || '' });
-        settings.pairing = { url: d.url, deviceId: d.deviceId || '' };
-        saveSettings();
-        persistSettingsServer();
-        box.innerHTML = '✓ 已配对：' + d.url;
-        document.getElementById('setPairingStatus').textContent = '已配对：' + d.url;
+        box.innerHTML = '已向手机发送配对申请…';
+        const ok = await window.startPairing(d.url, d.deviceId || '');
+        box.innerHTML = ok ? '✓ 已配对：' + d.url
+                           : '配对未完成，详见下方「配对」进度提示';
       } catch (e) { alert('配对失败：' + e.message); }
     };
     row.appendChild(name);

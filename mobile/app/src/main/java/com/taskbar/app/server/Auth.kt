@@ -1,105 +1,49 @@
 package com.taskbar.app.server
 
 import com.taskbar.app.TaskBarApp
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.header
+import io.ktor.server.request.path
+import io.ktor.server.response.header
 import io.ktor.server.response.respondText
-import java.security.SecureRandom
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import java.util.Base64
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 /**
- * v5.16.0 安全加固（P0）
+ * ══════════════════════════════════════════════════════════════════
+ * v5.17.0 安全加固（P0 复修）
+ * ══════════════════════════════════════════════════════════════════
  *
- * 修复的漏洞：
- *   ① 手机端 Ktor 监听 0.0.0.0 且 **API 全裸无鉴权** —— 同一 WiFi 下任何人可
- *      `GET /api/sync/full` 拿走全部数据、`POST /api/sync/changes` 清空/篡改数据。
- *   ② 配对机制形同虚设 —— 原 `/api/pair` 直接接受任意 deviceName 即配对成功，
- *      配对码从未被使用（安全边界等于零）。
+ * 相对 v5.16.0 的三处改动（按 boss 指示）：
  *
- * 本文件的三个部件：
- *   [constantTimeEquals] 常量时间比较（防时序侧信道）
- *   [PairCode]           一次性配对码：6 位 / 5 分钟 / 最多试 5 次 / 用过即废
- *   [AuthState]          长期共享密钥：配对成功后下发，双方持久化
- *   [requireAuth]        路由级鉴权：`if (!call.requireAuth()) return@get`
+ *  ① **取消 6 位配对码** —— 改为「扫描设备 → 一端发申请 → 另一端弹窗确认」。
+ *     [PairingState] 负责这次改版：配对**必须由人在手机上点「允许」**。
+ *
+ *  ② **把"确认之前"的锁做扎实** —— v5.16.0 的风险主要在"确认之前"这一段，
+ *     现在用四道门把它围起来（详见 [PairingState.request]）：
+ *       门1 配对模式门控：只有用户**正看着设置页**时，手机才接受配对申请
+ *       门2 限流：同一 IP 每分钟最多 3 次
+ *       门3 单 pending：同一时刻只允许一个待确认申请
+ *       门4 SAS 双屏核对 + 2 分钟 TTL + IP 绑定轮询
+ *
+ *  ③ **双向认证** —— v5.16.0 只做了"手机验电脑"。
+ *     现在响应也由手机端签名（[respondSecure]），电脑端验签 →
+ *     证明回话的确实是那台配过对的手机，而不是伪冒的局域网设备。
  */
 
-/** 常量时间字符串比较 —— 避免用 `==` 时因提前返回而泄露前缀信息 */
-fun constantTimeEquals(a: String, b: String): Boolean {
-    val x = a.toByteArray(Charsets.UTF_8)
-    val y = b.toByteArray(Charsets.UTF_8)
-    if (x.size != y.size) return false
-    var diff = 0
-    for (i in x.indices) diff = diff or (x[i].toInt() xor y[i].toInt())
-    return diff == 0
-}
+/** 允许的时钟偏差（毫秒）。超出即拒，配合 nonce 去重防重放。 */
+private const val ALLOWED_SKEW_MS = 180_000L
+
+// ═══════════════════════════ 长期密钥 ═══════════════════════════
 
 /**
- * 一次性配对码。
+ * 长期密钥（master 32 字节，hex 存在 settings 表 `auth_secret`）。
  *
- * 流程：手机端显示 6 位码 → 用户输入到桌面端 → 桌面端 `POST /api/pair {code}` →
- * 校验通过才下发 [AuthState.secret]。
- *
- * 安全设计：
- *   - **5 分钟过期**（超时自动换新码）
- *   - **最多尝试 5 次**（防 6 位码被暴力枚举；1e6 组合 ÷ 5 次 ≈ 可忽略）
- *   - **用过即废**（成功一次后立刻失效，不能重复用同一码再配一台设备）
- */
-object PairCode {
-    private const val TTL_MS = 5 * 60 * 1000L
-    private const val MAX_ATTEMPTS = 5
-    private val rnd = SecureRandom()
-
-    private var code: String = ""
-    private var expireAt: Long = 0L
-    private var attempts: Int = 0
-
-    /** 取当前码（已过期则自动生成新码） */
-    @Synchronized
-    fun current(): String {
-        if (code.isEmpty() || System.currentTimeMillis() > expireAt) newCodeLocked()
-        return code
-    }
-
-    /** 主动刷新（设置页「换一个」按钮） */
-    @Synchronized
-    fun refresh(): String {
-        newCodeLocked()
-        return code
-    }
-
-    private fun newCodeLocked() {
-        code = (rnd.nextInt(900_000) + 100_000).toString()
-        expireAt = System.currentTimeMillis() + TTL_MS
-        attempts = 0
-    }
-
-    /** 剩余有效秒数（UI 倒计时用） */
-    @Synchronized
-    fun remainSeconds(): Int {
-        val r = (expireAt - System.currentTimeMillis()) / 1000
-        return if (r < 0) 0 else r.toInt()
-    }
-
-    /** 校验并消耗 */
-    @Synchronized
-    fun verify(input: String): Boolean {
-        if (code.isEmpty() || System.currentTimeMillis() > expireAt) return false
-        if (attempts >= MAX_ATTEMPTS) return false
-        attempts++
-        val ok = constantTimeEquals(code, input.trim())
-        if (ok) {
-            code = ""
-            expireAt = 0L
-            attempts = 0
-        }
-        return ok
-    }
-}
-
-/**
- * 长期共享密钥（配对成功后双方各存一份）。
- *
- * 存放位置：settings 表，key = `auth_secret`。
  * 注意：**它不参与同步**（`applySettingFromSync` 只处理白名单 key），
  * 否则会出现"要同步得先有密钥、要密钥得先同步"的自锁。
  */
@@ -107,52 +51,357 @@ object AuthState {
     private const val KEY = "auth_secret"
 
     @Volatile
-    private var cached: String? = null
+    private var cached: TbCrypto.Keys? = null
 
-    suspend fun secret(): String {
+    /** 已配对的密钥；未配对返回 null */
+    suspend fun keys(): TbCrypto.Keys? {
         cached?.let { return it }
-        val s = TaskBarApp.instance.repo.getSetting(KEY, "")
-        cached = s
-        return s
+        val hex = TaskBarApp.instance.repo.getSetting(KEY, "")
+        if (hex.isEmpty()) return null
+        val k = TbCrypto.keysOfHex(hex) ?: return null
+        cached = k
+        return k
     }
 
-    suspend fun isPaired(): Boolean = secret().isNotEmpty()
+    suspend fun isPaired(): Boolean = keys() != null
 
-    /** 生成并下发新密钥（配对成功时调用） */
-    suspend fun issue(): String {
-        val bytes = ByteArray(32)
-        SecureRandom().nextBytes(bytes)
-        val s = bytes.joinToString("") { "%02x".format(it) }
-        TaskBarApp.instance.repo.setSetting(KEY, s)
-        cached = s
-        return s
+    /** 配对获批时调用：把手机端生成的 master 存下来 */
+    suspend fun issue(masterHex: String) {
+        TaskBarApp.instance.repo.setSetting(KEY, masterHex)
+        cached = TbCrypto.keysOfHex(masterHex)
     }
 
-    /** 作废（解除配对 / 换设备） */
+    /** 作废（解除配对 / 换设备）—— 旧 token 立即失效 */
     suspend fun clear() {
         TaskBarApp.instance.repo.setSetting(KEY, "")
-        cached = ""
+        cached = null
     }
+
+    /** 密钥指纹（前 4 位），设置页显示用 */
+    suspend fun fingerprint(): String {
+        val k = keys() ?: return ""
+        return k.masterHex().take(4).uppercase()
+    }
+}
+
+// ═══════════════════════════ 重放保护 ═══════════════════════════
+
+/**
+ * 请求 nonce 去重（LRU，上限 2048 条）。
+ * 没有它的话，攻击者抓到一次合法请求就能无限重放（例如反复提交"删除任务"）。
+ */
+object NonceCache {
+    private const val CAP = 2048
+    private const val TTL_MS = 300_000L
+    private val seen = LinkedHashMap<String, Long>(512, 0.75f, true)
+
+    /** @return true = 首次见到（放行）；false = 重放（拒绝） */
+    @Synchronized
+    fun checkAndPut(nonce: String): Boolean {
+        val now = System.currentTimeMillis()
+        if (seen.containsKey(nonce)) return false
+        seen[nonce] = now
+        if (seen.size > CAP) {
+            val it = seen.entries.iterator()
+            var removed = 0
+            while (it.hasNext() && seen.size - removed > CAP / 2) {
+                it.next()
+                it.remove()
+                removed++
+            }
+        }
+        return true
+    }
+}
+
+// ═══════════════════════════ 配对状态机 ═══════════════════════════
+
+/**
+ * 配对流程（**双向确认**）：
+ *
+ * ```
+ *  电脑：扫描 mDNS → 找到手机 → 点「配对」
+ *        └─ POST /api/pair/request  {deviceName, deviceId, cNonce, kat}
+ *                ↓
+ *  手机：① 检查"配对模式"（用户正看着设置页）
+ *        ② 限流（同 IP / 分钟）
+ *        ③ 检查是否已有待确认申请
+ *        ④ 校验 kat（两端加密实现是否一致）
+ *        └─ 返回 {sessionId, sNonce, sas, ttl}
+ *                ↓
+ *  手机：弹出确认框 →【 boss 在手机上点「允许」】← 这一步才是真正的安全边界
+ *                ↓
+ *  电脑：GET /api/pair/poll?sessionId=…（仅发起方 IP 可查，2 分钟内有效）
+ *        └─ 拿到 master → 写入 pairing.json → 开始同步
+ * ```
+ *
+ * ⭐ **SAS（6 位数字）**：由 cNonce（电脑给）+ sNonce（手机给）+ sessionId 共同算出，
+ * 两端**各自独立计算**并显示。用户核对两个屏幕上的数字是否一致 ——
+ * 既让 boss 能确认"确实是我那台电脑"，也能发现 sNonce 在途中被改过。
+ */
+object PairingState {
+    private const val TTL_MS = 120_000L
+    private const val MAX_PER_IP_PER_MIN = 3
+
+    data class Req(
+        val id: String,
+        val name: String,
+        val deviceId: String,
+        val ip: String,
+        val cNonce: String,
+        val sNonce: String,
+        val sas: String,
+        val createdAt: Long,
+        @Volatile var status: String = "pending",
+        @Volatile var masterHex: String? = null,
+        @Volatile var delivered: Boolean = false,
+    )
+
+    /** 配对模式：只有为 true 时才接受配对申请（由设置页进入/离开控制） */
+    private val _armed = MutableStateFlow(false)
+    val armed: StateFlow<Boolean> = _armed
+
+    /** 待确认的申请（UI 观察它来弹确认框） */
+    private val _pending = MutableStateFlow<Req?>(null)
+    val pending: StateFlow<Req?> = _pending
+
+    @Volatile
+    private var current: Req? = null
+
+    private val rate = HashMap<String, MutableList<Long>>()
+    private val rejected = AtomicLong(0)
+
+    fun setArmed(on: Boolean) {
+        _armed.value = on
+        if (!on) {
+            val r = current
+            if (r != null && r.status == "pending") {
+                r.status = "denied"
+                r.masterHex = null
+            }
+            current = if (r != null && !r.delivered) null else current
+            _pending.value = null
+        }
+    }
+
+    /**
+     * 收到配对申请。
+     * @return Req 表示已受理（UI 会弹窗）；null 表示被四道门之一拒掉
+     */
+    @Synchronized
+    fun request(name: String, deviceId: String, cNonce: String, ip: String): Req? {
+        // 门1：配对模式
+        if (!_armed.value) {
+            rejected.incrementAndGet()
+            android.util.Log.w("PairingState", "拒绝配对申请：当前不在配对模式 (ip=$ip)")
+            return null
+        }
+        val now = System.currentTimeMillis()
+
+        // 门2：限流
+        val l = rate.getOrPut(ip) { mutableListOf() }
+        l.removeAll { now - it > 60_000 }
+        if (l.size >= MAX_PER_IP_PER_MIN) {
+            rejected.incrementAndGet()
+            android.util.Log.w("PairingState", "拒绝配对申请：IP 触发限流 (ip=$ip)")
+            return null
+        }
+        l.add(now)
+
+        // 门3：同一时刻只允许一个待确认申请
+        val cur = current
+        if (cur != null && cur.status == "pending" && now - cur.createdAt < TTL_MS) {
+            android.util.Log.w("PairingState", "拒绝配对申请：已有待确认申请 (ip=$ip)")
+            return null
+        }
+
+        val id = TbCrypto.toHex(TbCrypto.randBytes(16))
+        val sNonce = TbCrypto.toHex(TbCrypto.randBytes(16))
+        val r = Req(
+            id = id,
+            name = name.ifBlank { "电脑" },
+            deviceId = deviceId,
+            ip = ip,
+            cNonce = cNonce,
+            sNonce = sNonce,
+            sas = sasOf(cNonce, sNonce, id),
+            createdAt = now,
+        )
+        current = r
+        _pending.value = r
+        android.util.Log.i("PairingState", "收到配对申请：${r.name} @ $ip，验证码 ${r.sas}")
+        return r
+    }
+
+    /** boss 在手机上点了「允许」→ 生成并下发长期密钥 */
+    suspend fun approve(id: String): Boolean {
+        val r = current ?: return false
+        if (r.id != id || r.status != "pending") return false
+        val master = TbCrypto.newMasterHex()
+        AuthState.issue(master)
+        TaskBarApp.instance.repo.setSetting("paired_device", r.name)
+        r.masterHex = master
+        r.status = "approved"
+        _pending.value = null
+        android.util.Log.i("PairingState", "已允许配对：${r.name} @ ${r.ip}")
+        return true
+    }
+
+    /** boss 点了「拒绝」 */
+    fun deny(id: String) {
+        val r = current ?: return
+        if (r.id != id) return
+        r.status = "denied"
+        r.masterHex = null
+        _pending.value = null
+        android.util.Log.i("PairingState", "已拒绝配对：${r.name} @ ${r.ip}")
+    }
+
+    /**
+     * 电脑端轮询配对结果。
+     * ⚠️ **只允许发起配对的那个 IP 查询** —— 否则同网段其他人拿到 sessionId 就能把密钥领走。
+     */
+    fun poll(id: String, ip: String): Req? {
+        val r = current ?: return null
+        if (r.id != id) return null
+        if (r.ip != ip) {
+            android.util.Log.w("PairingState", "轮询 IP 不匹配，忽略 (期望 ${r.ip}，实际 $ip)")
+            return null
+        }
+        if (r.status == "pending" && System.currentTimeMillis() - r.createdAt > TTL_MS) {
+            r.status = "expired"
+        }
+        return r
+    }
+
+    /** 密钥交付后作废该 session（一次性） */
+    @Synchronized
+    fun consume(id: String) {
+        val r = current ?: return
+        if (r.id == id) {
+            r.delivered = true
+            r.masterHex = null
+            current = null
+        }
+    }
+
+    /** 电脑端主动取消 */
+    fun cancel(id: String) {
+        val r = current ?: return
+        if (r.id == id) {
+            r.status = "denied"
+            r.masterHex = null
+            current = null
+            _pending.value = null
+        }
+    }
+
+    /** 最近被拒次数（配对失败时给用户一个解释） */
+    fun rejectedCount(): Long = rejected.get()
+
+    /**
+     * SAS = SHA256(cNonce | sNonce | sessionId) 的前 6 位十进制。
+     * 两端各自独立计算 → 数字不一致即说明信道被动过手脚。
+     */
+    fun sasOf(cNonce: String, sNonce: String, id: String): String {
+        val h = TbCrypto.sha256("$cNonce|$sNonce|$id".toByteArray())
+        var v = ((h[0].toInt() and 0xFF) shl 24) or
+            ((h[1].toInt() and 0xFF) shl 16) or
+            ((h[2].toInt() and 0xFF) shl 8) or
+            (h[3].toInt() and 0xFF)
+        v = v and 0x7FFFFFFF
+        return String.format("%06d", v % 1_000_000)
+    }
+}
+
+// ═══════════════════════════ 请求级鉴权 ═══════════════════════════
+
+/**
+ * 受保护路由的统一入口（**双向认证的"手机验电脑"半边**）。
+ *
+ * 依次校验：密钥存在 → token → 时间戳 → nonce 未用过 → 签名 → 解密 body。
+ *
+ * @param method  HTTP 方法（大写）
+ * @param rawBody **原始** body（未解密）—— 签名是对密文做的
+ * @return 解密后的明文 body；返回 null 表示已回 401，调用方直接 `return@get`
+ */
+suspend fun ApplicationCall.guard(method: String, rawBody: String): String? {
+    val keys = AuthState.keys()
+    if (keys == null) {
+        deny("not_paired")
+        return null
+    }
+
+    // ① 身份
+    val tok = request.header("X-TB-Token") ?: ""
+    val tokBytes = runCatching { Base64.getDecoder().decode(tok) }.getOrNull()
+    if (tokBytes == null || !TbCrypto.ctEq(tokBytes, keys.master)) {
+        deny("bad_token")
+        return null
+    }
+
+    // ② 新鲜度
+    val ts = request.header("X-TB-Ts")?.toLongOrNull() ?: 0L
+    if (abs(System.currentTimeMillis() - ts) > ALLOWED_SKEW_MS) {
+        deny("stale")
+        return null
+    }
+
+    // ③ 防重放
+    val nonce = request.header("X-TB-Nonce") ?: ""
+    if (nonce.length < 8 || !NonceCache.checkAndPut(nonce)) {
+        deny("replay")
+        return null
+    }
+
+    // ④ 签名（对密文签名 → 篡改密文即验签失败）
+    val sig = request.header("X-TB-Sig") ?: ""
+    val want = TbCrypto.sign(keys, method, request.path(), ts, nonce, rawBody)
+    if (!TbCrypto.ctEq(sig.toByteArray(), want.toByteArray())) {
+        deny("bad_sig")
+        return null
+    }
+
+    // ⑤ 解密
+    if (rawBody.isEmpty()) return ""
+    return TbCrypto.open(keys, rawBody) ?: run {
+        deny("bad_cipher")
+        null
+    }
+}
+
+private suspend fun ApplicationCall.deny(reason: String) {
+    android.util.Log.w("auth", "拒绝请求 ${request.path()}：$reason")
+    response.header("X-TB-Deny", reason)
+    respondText(
+        """{"status":"unauthorized","reason":"$reason"}""",
+        status = HttpStatusCode.Unauthorized,
+    )
 }
 
 /**
- * 路由级鉴权。
- *
- * - 放行：`X-TB-Token` 头 或 `?token=` 查询参数 与本地密钥**常量时间相等**
- * - 拒绝：回 401（body 里不放任何有效信息）
- *
- * 用法：`get("/api/xxx") { if (!call.requireAuth()) return@get; ... }`
+ * 加密 + 签名响应（**双向认证的"电脑验手机"半边**）。
+ * 电脑端会验签，失败即认为回话方不是真手机。
  */
-suspend fun ApplicationCall.requireAuth(): Boolean {
-    val tok = request.header("X-TB-Token") ?: request.queryParameters["token"] ?: ""
-    val secret = AuthState.secret()
-    if (secret.isNotEmpty() && constantTimeEquals(secret, tok)) return true
-    respondText("""{"status":"unauthorized"}""", status = HttpStatusCode.Unauthorized)
-    return false
+suspend fun ApplicationCall.respondSecure(json: String) {
+    val keys = AuthState.keys()
+    if (keys == null) {
+        respondText("""{"status":"unauthorized"}""", status = HttpStatusCode.Unauthorized)
+        return
+    }
+    val ts = System.currentTimeMillis()
+    val nonce = TbCrypto.randNonceHex()
+    val wire = TbCrypto.seal(keys, json)
+    response.header("X-TB-Ts", ts.toString())
+    response.header("X-TB-Nonce", nonce)
+    response.header("X-TB-Sig", TbCrypto.sign(keys, "R", request.path(), ts, nonce, wire))
+    respondText(wire, status = HttpStatusCode.OK, contentType = ContentType.Application.Json)
 }
 
-/** WebSocket 握手鉴权（token 走查询参数，WS 不能自定义头） */
+/** WebSocket 握手鉴权（WS 不能自定义头，token 走查询参数） */
 suspend fun wsTokenOk(token: String?): Boolean {
-    val secret = AuthState.secret()
-    return secret.isNotEmpty() && token != null && constantTimeEquals(secret, token)
+    val keys = AuthState.keys() ?: return false
+    if (token.isNullOrEmpty()) return false
+    val b = runCatching { Base64.getDecoder().decode(token) }.getOrNull() ?: return false
+    return TbCrypto.ctEq(b, keys.master)
 }

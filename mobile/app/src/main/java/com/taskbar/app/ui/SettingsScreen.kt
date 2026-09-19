@@ -38,7 +38,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 import com.taskbar.app.data.repo.LinkState
 import com.taskbar.app.server.AuthState
-import com.taskbar.app.server.PairCode
+import com.taskbar.app.server.PairingState
 import com.taskbar.app.notify.DailyReminderScheduler
 import com.taskbar.app.server.SyncService
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -331,13 +331,24 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         }
                     }
                 }
+                // v5.17.0：进入设置页 = 打开「配对模式」。
+                //   配对申请只在配对模式打开时受理（门1）—— 人没看着手机时，
+                //   局域网里的设备连申请都递不进来，更不会弹窗。
+                PairingState.setArmed(true)
                 refresh()
                 val observer = LifecycleEventObserver { _, e ->
-                    if (e == Lifecycle.Event.ON_RESUME) refresh()
-                    if (e == Lifecycle.Event.ON_PAUSE) job?.cancel()
+                    if (e == Lifecycle.Event.ON_RESUME) {
+                        PairingState.setArmed(true)
+                        refresh()
+                    }
+                    if (e == Lifecycle.Event.ON_PAUSE) {
+                        PairingState.setArmed(false)
+                        job?.cancel()
+                    }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
+                    PairingState.setArmed(false)
                     job?.cancel()
                     lifecycleOwner.lifecycle.removeObserver(observer)
                 }
@@ -367,8 +378,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     }) { Text("解除配对", color = TGColors.Crimson) }
                 }
                 Text(
-                    if (pairedDevice.isNotEmpty()) "已配对：$pairedDevice · 实时同步中"
-                    else "电脑端已连上本机 · 实时同步中",
+                    // v5.17.0 文案精简：上面已亮绿点 + 写「已连接」，不必再补"实时同步中"
+                    if (pairedDevice.isNotEmpty()) "已配对：$pairedDevice"
+                    else "电脑端已连上本机",
                     color = TGColors.InkMute, fontSize = 11.sp
                 )
             } else if (pairedDevice.isNotEmpty()) {
@@ -395,43 +407,90 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     }) { Text("解除配对", color = TGColors.Crimson) }
                 }
                 Text(
-                    "已配对：$pairedDevice — 电脑端未连接，等待自动重连…",
+                    // v5.17.0 文案精简：上面那行已经明确显示「未连接」了，不用再说一遍
+                    "已配对：$pairedDevice",
                     color = TGColors.InkMute, fontSize = 11.sp
                 )
             } else {
-                // v5.16.0 安全加固：配对改为「一次性配对码」流程 ——
-                //   原实现桌面端点一下就直接配对成功，等于没有安全边界（详见 docs/安全审计与加固方案.md）。
-                //   现在必须把下面这个 6 位码手动输入到电脑端，5 分钟内有效、用过即废。
-                val codeState = remember { mutableStateOf(PairCode.current()) }
-                val remainState = remember { mutableStateOf(PairCode.remainSeconds()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        remainState.value = PairCode.remainSeconds()
-                        if (remainState.value <= 0) codeState.value = PairCode.current()
-                        delay(1000)
-                    }
-                }
+                // ══ v5.17.0 配对改版（boss：取消配对码，改「一端发申请、另一端弹窗确认」）══
+                //   实际上这一段的"锁"不止在 UI：手机端只有在**这个页面停留时**才受理配对申请
+                //   （PairingState.setArmed，见上面的 DisposableEffect），
+                //   受理之后才会弹出下面的确认框。
+                val armed by PairingState.armed.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("未连接", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = {
-                        codeState.value = PairCode.refresh()
-                        remainState.value = PairCode.remainSeconds()
-                    }) { Text("换一个", color = TGColors.InkMute, fontSize = 12.sp) }
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (armed) TGColors.Jade else TGColors.InkFaint)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (armed) "等待电脑申请配对…" else "未连接",
+                        color = if (armed) TGColors.Jade else TGColors.InkMute,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    codeState.value.chunked(3).joinToString(" "),
-                    color = TGColors.Ink,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "在电脑端点「扫描设备」，选中本机后输入这个配对码" +
-                        "（剩余 " + (remainState.value / 60) + ":" + "%02d".format(remainState.value % 60) + "）",
+                    // v5.17.0 文案精简：第③条原本写"核对数字后点允许"，
+                    //   但确认框里已经逐字说了同样的话 —— 重复，删掉
+                    "在电脑端点「扫描设备」，选中本机后点「配对」",
                     color = TGColors.InkMute, fontSize = 11.sp
                 )
             }
+        }
+
+        // ══════════ v5.17.0 配对确认框 ══════════
+        // boss 要求："一端发出申请，另一端弹出确认窗口进行确认"。
+        // 这个弹窗就是那"另一端"——**只有人在这里点「允许」，配对才会成立**。
+        // 6 位数字（SAS）由两端各自独立计算，用来核对信道没被动过手脚。
+        val pairScope = rememberCoroutineScope()
+        val pendingPair by PairingState.pending.collectAsState()
+        val req = pendingPair
+        if (req != null) {
+            AlertDialog(
+                // 不允许点外部消失：这是安全决策，必须显式选「允许」或「拒绝」
+                onDismissRequest = { },
+                title = { Text("配对请求", color = TGColors.Ink, fontSize = 17.sp) },
+                text = {
+                    Column {
+                        Text(
+                            "「" + req.name + "」请求与本机配对",
+                            color = TGColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("来源 " + req.ip, color = TGColors.InkMute, fontSize = 12.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "请核对电脑屏幕上显示的 6 位数字，是否与下面一致：",
+                            color = TGColors.InkMute, fontSize = 12.sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            req.sas,
+                            color = TGColors.Ink, fontSize = 32.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "如果数字不一致，或者你并没有在电脑上发起配对 —— 请点「拒绝」。",
+                            color = TGColors.Crimson, fontSize = 11.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pairScope.launch { PairingState.approve(req.id) }
+                    }) { Text("允许", color = TGColors.Jade, fontWeight = FontWeight.Medium) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { PairingState.deny(req.id) }) {
+                        Text("拒绝", color = TGColors.Crimson)
+                    }
+                }
+            )
         }
 
         Spacer(Modifier.height(10.dp))
