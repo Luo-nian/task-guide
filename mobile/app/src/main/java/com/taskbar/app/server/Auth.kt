@@ -382,6 +382,12 @@ suspend fun ApplicationCall.respondSecure(json: String) {
 suspend fun wsTokenOk(token: String?): Boolean {
     val keys = AuthState.keys() ?: return false
     if (token.isNullOrEmpty()) return false
-    val b = runCatching { Base64.getDecoder().decode(token) }.getOrNull() ?: return false
+    // v5.17.2：同时接受标准 base64 与 URL-safe base64（有无 padding 都认）。
+    //   起因：桌面端曾把含 `+` 的 token 原样拼进 query，被解成空格 → 校验失败 → 每 5s 重连。
+    //   桌面端已改为百分号编码；这里做容错，避免以后再因编码细节互相踢线。
+    val raw = token.replace(" ", "+")          // 万一又被解成空格（旧端）：还原成 +
+    val b = runCatching { Base64.getDecoder().decode(raw) }.getOrNull()
+        ?: runCatching { Base64.getUrlDecoder().decode(raw.trimEnd('=')) }.getOrNull()
+        ?: return false
     return TbCrypto.ctEq(b, keys.master)
 }

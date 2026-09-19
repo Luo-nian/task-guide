@@ -432,6 +432,24 @@ pub fn secure_post(
     }
 }
 
+/// v5.17.2：URL query 参数百分号编码（只保留 RFC 3986 unreserved 字符）。
+///
+/// 起因：WS 握手的 token 是标准 base64，含 `+` `/` `=`。
+/// `+` 直接拼进 query 会被对端按 x-www-form-urlencoded 解成**空格**，
+/// 于是手机端 token 校验失败 → 101 升级成功后立刻发关闭帧(1008) →
+/// 桌面端 read() 立刻报错 → 睡 5 秒重连 → **表现为"每 5 秒断联重连一次"**，
+/// 而每次重连都会全量拉取一次数据（写库 + 重渲染）→ 肉眼可见的卡顿。
+fn url_encode(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() * 2);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => o.push(b as char),
+            _ => o.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    o
+}
+
 /// v5.15.22：同步调试日志（log crate 没接 logger，log::info! 全是空操作 ——
 ///   排查"推送到底跑没跑/为什么失败"必须落文件）。写在 exe 同目录 sync-debug.log。
 pub fn sync_debug_log(msg: &str) {
@@ -637,8 +655,11 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
             continue;
         }
         // v5.16.0：WS 握手要带 token（手机端未授权会直接关闭连接）
+        // ⚠️ v5.17.2 修复：token 必须**百分号编码**再拼进 query ——
+        //   标准 base64 里的 `+` 会被对端解成空格 → 手机端判 unauthorized(1008) 立刻断开
+        //   → 桌面端每 5 秒重连一次（连带每轮全量拉取），这就是"一直断联重连很卡"的根因。
         let ws_url = format!("{}?token={}",
-            base.replace("http://", "ws://") + "/ws", auth_token());
+            base.replace("http://", "ws://") + "/ws", url_encode(&auth_token()));
         WS_CONNECTED.store(false, Ordering::Relaxed);
         match tungstenite::connect(&ws_url) {
             Ok((mut socket, _)) => {
@@ -649,7 +670,18 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                 //   paired_device 在人在手机上点「允许」时由手机端自己写入，重连不再需要上报。
                 // v5.15.7：刚连上时补一次全量拉取 —— ws 断开期间手机端的改动不会补发，
                 //   靠这次 pull 收敛（LWW 保证本地更新的不会被覆盖）
+                // v5.17.2：重连拉取加 20s 节流。
+                //   原先"每次连上都全量拉一次"在网络抖动时会把桌面拖卡（连接不稳定 → 反复
+                //   全量拉取 → 写库 + 通知前端重渲染）。抖动期间只需要合并成一次。
                 {
+                    use std::sync::atomic::AtomicI64 as A64;
+                    static LAST_PULL_MS: A64 = A64::new(0);
+                    let nowp = now_ms();
+                    let lastp = LAST_PULL_MS.load(Ordering::Relaxed);
+                    if lastp > 0 && nowp - lastp < 20_000 {
+                        sync_debug_log("ws 连上：距上次拉取 <20s，跳过 full_sync（防抖动风暴）");
+                    } else {
+                    LAST_PULL_MS.store(nowp, Ordering::Relaxed);
                     let db2 = db.clone();
                     let url2 = url.clone();
                     std::thread::spawn(move || {
@@ -676,6 +708,7 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                             }
                         }
                     });
+                    }   // v5.17.2：节流分支结束
                 }
                 use tungstenite::Message;
                 loop {
