@@ -31,3 +31,8 @@ node_modules/
 *.db-wal
 *.db-shm
 .tmp-data/
+
+# 授权码私钥（真实位置在仓库之外，这里是防呆）
+secrets/
+*.pem
+license-public.b64
