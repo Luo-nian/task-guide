@@ -61,12 +61,6 @@
             android:name=".notify.DailyReminderReceiver"
             android:exported="false" />
 
-        <!-- v5.18.5：任务提醒（系统精确闹钟）——
-             实测 WorkManager 排的提醒到点 15 小时都没执行，必须走 AlarmManager -->
-        <receiver
-            android:name=".notify.ReminderAlarmReceiver"
-            android:exported="false" />
-
         <!-- 开机自启：恢复提醒调度 + 启动同步服务 -->
         <receiver
             android:name=".notify.BootReceiver"

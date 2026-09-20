@@ -58,6 +58,7 @@ debug/
 
 | ID | 一句话 | 版本 |
 | --- | --- | --- |
+| C-030 | ⭐⭐ **提醒到点根本不执行（真根因）**：任务提醒用 `OneTimeWorkRequest`，而它本质是"不精确的后台任务"——实测「健身」的提醒**逾期 15 小时仍未执行**（state=0 / run_attempt=0；手机一直开着、App 在电池白名单、未 Doze、权限已声明）。**修：改用 `AlarmManager.setExactAndAllowWhileIdle`（与起床提醒同一套）+ 新增 `ReminderAlarmReceiver` + 把提醒逻辑抽成 `fireNow()` 两路共用**。⚠️ 教训：**"逻辑修好了"不等于"功能修好了" —— 排程机制本身也要验证**。详见 [v5.18.5](../requirements/项目需求-v5.18.5.md) | v5.18.5 |
 | C-029 | ⭐⭐ **提醒系统四连（v5.18.4，真机 A/B 实测）**：①每日任务被当"已过期未完成"→每次冷启动立即提醒；②裸 `enqueue()`+每次冷启动都跑 → 同一任务堆 20 条，开几次 App 响几次；③⭐⭐ **`observeMainList()` 的 SQL 自带 `track_status != 'done'`** → "昨天完成的每日任务"在 SQL 层就被滤掉 （每日折算只在 UI 层）→ **今天的提醒永远排不上**；⚠️ **排程/后台任务不能复用 UI 的列表查询**；④`observeByUuid` 不过滤 `deleted` 且删除路径没有 `cancel` → 删掉的任务到点还弹提醒。详见 [v5.18.4](../requirements/项目需求-v5.18.4.md) | v5.18.4 |
 | C-023 | **AlarmManager 类功能"突然失效"**：「每日提醒」的闹钟只在 BOOT_COMPLETED 恢复 → **重装/强停/被清**后台后闹钟全丢，不重启手机就再也不响。**修法：应用冷启动也 restore 一次**。详见 [v5.15.27](./debug-v5.15.27.md#c-023) | v5.15.27 |
 | C-024 | **收起/展开导致页面抖动**：`toggleCatGroup` 调了 `render()` 整页重渲染（重建 innerHTML → 滚动重置 + 闪）。**修法：就地切 class，绝不重渲染**。详见 [v5.15.27](./debug-v5.15.27.md#c-024) | v5.15.27 |

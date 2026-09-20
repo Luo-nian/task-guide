@@ -1,7 +1,5 @@
 package com.taskbar.app.notify
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,8 +28,6 @@ object ReminderScheduler {
     internal const val KEY_UUID = "task_uuid"
     internal const val KEY_REPEAT = "repeat_count"
     internal const val MAX_REPEAT = 3
-    internal const val EXTRA_STRENGTH = "strength"
-    internal const val ACTION_ALARM = "com.taskbar.app.ACTION_REMINDER_ALARM"
 
     fun tagFor(uuid: String) = PREFIX + uuid
 
@@ -92,47 +88,10 @@ object ReminderScheduler {
         //   表现就是"开几次 App，到点就响几次"。REPLACE 保证同一任务只有一条。
         WorkManager.getInstance(context)
             .enqueueUniqueWork(tagFor(taskUuid), ExistingWorkPolicy.REPLACE, req)
-
-        // ⭐⭐ v5.18.5 关键修复：闹钟类功能必须用 AlarmManager，不能靠 WorkManager。
-        //   实测（2026-09-20）：WorkManager 排的任务**到点 15 小时仍未执行**
-        //   （计划触发 09-20 09:00，次日 00:12 查仍是 state=0「等待中」、run_attempt=0），
-        //   而手机自 09-16 就开着、App 也在电池白名单里 → 不是关机、不是省电限制，
-        //   而是 **OneTimeWorkRequest 本质是"不精确的后台任务"，系统可以无限期推迟**
-        //   （vivo/OriginOS 尤其激进）。等于"提醒永远不响"。
-        //   这里与 DailyReminderScheduler（起床/睡前提醒）保持同一套做法。
-        //   WorkManager 那条**保留作兜底**：两路都触发时通知 id 相同（uuid.hashCode()），
-        //   后一次只是覆盖前一次，用户只看到一条。
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = alarmPending(context, taskUuid, strength)
-        try {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dueAt, pi)
-        } catch (e: Exception) {
-            // Android 12+ 未授予 SCHEDULE_EXACT_ALARM 时降级为不精确闹钟（仍远优于 WorkManager）
-            try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dueAt, pi) } catch (_: Exception) {}
-        }
     }
 
     fun cancel(context: Context, taskUuid: String) {
         WorkManager.getInstance(context).cancelAllWorkByTag(tagFor(taskUuid))
-        // v5.18.5：闹钟一并撤销 —— 否则「点完成 / 删除任务」之后到点还会响一次
-        //  （PendingIntent 相等性只看 action/component/requestCode，不看 extras，所以传什么都匹配）
-        runCatching {
-            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            am.cancel(alarmPending(context, taskUuid, ""))
-        }
-    }
-
-    /** v5.18.5：闹钟用的 PendingIntent（requestCode 用 uuid 哈希，与通知 id 同源） */
-    private fun alarmPending(context: Context, uuid: String, strength: String): PendingIntent {
-        val i = Intent(context, ReminderAlarmReceiver::class.java).apply {
-            action = ACTION_ALARM
-            putExtra(KEY_UUID, uuid)
-            putExtra(EXTRA_STRENGTH, strength)
-        }
-        return PendingIntent.getBroadcast(
-            context, uuid.hashCode(), i,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
     }
 
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
@@ -178,25 +137,31 @@ object ReminderScheduler {
             }
         }
     }
+}
 
-    /**
-     * v5.18.5：**到点提醒的真正逻辑** —— 系统闹钟（主）与 WorkManager（兜底）共用这一套。
-     * 抽出来是为了不出现两份会走偏的实现（本项目吃过多份实现不同步的亏）。
-     */
-    suspend fun fireNow(ctx: Context, uuid: String, strength: String, repeatCount: Int) {
-        val app = ctx.applicationContext as TaskBarApp
-        val t = app.repo.observeTask(uuid).first() ?: return
+class ReminderWorker(
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val uuid = inputData.getString(ReminderScheduler.KEY_UUID) ?: return Result.success()
+        val strength = inputData.getString("strength") ?: "notify"
+        val repeatCount = inputData.getInt(ReminderScheduler.KEY_REPEAT, 0)
+
+        val app = applicationContext as TaskBarApp
+        val t = app.repo.observeTask(uuid).first() ?: return Result.success()
 
         // 已完成则不提醒
-        if (t.trackStatus == TrackStatus.DONE) return
+        if (t.trackStatus == TrackStatus.DONE) return Result.success()
 
         // v5.18.4：已删除（软删）的任务不再提醒。
         //   observeByUuid 是 `SELECT * ... LIMIT 1`，**不过滤 deleted**；而删除任务
         //   并不会取消已排的提醒（删除路径里没有 cancel）→ 删掉的任务到点还会弹一次。
         //   这里补一道守卫，顺带让历史遗留的"孤儿"提醒条目自动失效（触发后自行作废）。
-        if (t.deleted != 0) return
+        if (t.deleted != 0) return Result.success()
 
-        NotificationHelper.showReminder(ctx.applicationContext, uuid, t.title, strength)
+        NotificationHelper.showReminder(applicationContext, uuid, t.title, strength)
 
         // repeat 模式（旧版兼容）：5 分钟后再提醒一次，最多 MAX_REPEAT 次
         if (strength == "repeat" && repeatCount < ReminderScheduler.MAX_REPEAT) {
@@ -210,11 +175,11 @@ object ReminderScheduler {
                 .setInputData(data)
                 .addTag(ReminderScheduler.tagFor(uuid))
                 .build()
-            WorkManager.getInstance(ctx.applicationContext).enqueue(req)
+            WorkManager.getInstance(applicationContext).enqueue(req)
         }
 
         // 未受理升级：N 分钟后若还没处理，按最高档升一级（notify→vibrate→beep→ring）
-        val prefs = ctx.applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+        val prefs = applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
         val escalateOn = prefs.getBoolean("reminder_escalate_enabled", true)
         if (escalateOn && strength != "repeat") {   // 旧 repeat 已有独立链式，不叠加升级
             val minutes = prefs.getInt("reminder_escalate_minutes", 5)
@@ -235,25 +200,9 @@ object ReminderScheduler {
                     .setInputData(data)
                     .addTag(ReminderScheduler.tagFor(uuid))
                     .build()
-                WorkManager.getInstance(ctx.applicationContext).enqueue(req)
+                WorkManager.getInstance(applicationContext).enqueue(req)
             }
         }
-        return
-    }
-
-}
-
-class ReminderWorker(
-    context: Context,
-    params: WorkerParameters
-) : CoroutineWorker(context, params) {
-
-    override suspend fun doWork(): Result {
-        val uuid = inputData.getString(ReminderScheduler.KEY_UUID) ?: return Result.success()
-        val strength = inputData.getString(ReminderScheduler.EXTRA_STRENGTH) ?: "notify"
-        val repeatCount = inputData.getInt(ReminderScheduler.KEY_REPEAT, 0)
-        // v5.18.5：逻辑已抽到 fireNow（与系统闹钟共用），这里只做转发
-        ReminderScheduler.fireNow(applicationContext, uuid, strength, repeatCount)
         return Result.success()
     }
 }
@@ -324,28 +273,5 @@ class BootReceiver : BroadcastReceiver() {
         }
         // v5.15.3：恢复起床/睡前每日提醒
         DailyReminderScheduler.restoreAll(context)
-    }
-}
-
-/**
- * v5.18.5：系统闹钟到点 → 直接执行提醒（不再绕 WorkManager，避免被系统无限期推迟）。
- * 用 goAsync() 把广播生命周期延长到协程跑完。
- */
-class ReminderAlarmReceiver : BroadcastReceiver() {
-
-    override fun onReceive(context: Context, intent: Intent) {
-        val uuid = intent.getStringExtra(ReminderScheduler.KEY_UUID) ?: return
-        val strength = intent.getStringExtra(ReminderScheduler.EXTRA_STRENGTH) ?: "notify"
-        val app = context.applicationContext
-        val pending = goAsync()
-        ioScope.launch {
-            try {
-                ReminderScheduler.fireNow(app, uuid, strength, 0)
-            } catch (e: Exception) {
-                android.util.Log.w("ReminderAlarm", "闹钟触发提醒失败", e)
-            } finally {
-                runCatching { pending.finish() }
-            }
-        }
     }
 }
