@@ -36,3 +36,7 @@ node_modules/
 secrets/
 *.pem
 license-public.b64
+
+# 我的临时备份（防呆）
+*.bak
+*.bak-v*
