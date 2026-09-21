@@ -47,6 +47,12 @@ object License {
 
     const val TIER_PRO = "pro"
 
+    /**
+     * 支持/购买页（爱发电主页）。**这是全项目唯一的付款入口**，改地址只改这里。
+     * 未认证状态下爱发电不能发动态，所以买断说明写在「方案奖励详情」里。
+     */
+    const val PAY_URL = "https://afdian.com/a/nexttask"
+
     /** 授权码里带的全部信息 */
     data class Info(val tier: String, val issuedAt: String, val order: String, val to: String) {
         val isPro get() = tier == TIER_PRO

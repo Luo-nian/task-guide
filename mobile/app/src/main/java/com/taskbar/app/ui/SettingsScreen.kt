@@ -991,6 +991,21 @@ fun LicenseDialog(
                         "（多个任务同时追踪、数据导出、外观主题）。",
                     color = TGColors.InkSoft, fontSize = 12.sp
                 )
+                Spacer(Modifier.height(8.dp))
+                // v5.21.0：没买过的用户得有地方去 —— 点这行打开爱发电支持页
+                val lctx = androidx.compose.ui.platform.LocalContext.current
+                Text(
+                    "还没有授权码？点这里去爱发电支持一下",
+                    color = TGColors.GoldDeep, fontSize = 13.sp,
+                    modifier = Modifier.clickable {
+                        runCatching {
+                            lctx.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(com.taskbar.app.billing.License.PAY_URL))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = code,
