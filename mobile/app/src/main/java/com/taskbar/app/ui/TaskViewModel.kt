@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskbar.app.TaskBarApp
+import com.taskbar.app.billing.License
+import com.taskbar.app.data.model.DEFAULT_TRACK_LIMIT
 import com.taskbar.app.data.model.HabitLog
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.Task
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,8 +50,34 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     val futureTasks: StateFlow<List<Task>> = repo.observeFutureTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val trackLimit: StateFlow<Int> = repo.observeTrackLimit()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+    /** v5.21.0：买断状态（授权码离线验签，不需要联网） */
+    private val _isPro = MutableStateFlow(License.isPro(ctx))
+    val isPro: StateFlow<Boolean> = _isPro.asStateFlow()
+
+    /** 设置里存的那个上限值（买断用户可自由调 1~10） */
+    private val settingsTrackLimit: StateFlow<Int> = repo.observeTrackLimit()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_TRACK_LIMIT)
+
+    /**
+     * v5.21.0：**生效的**同时追踪上限。
+     *   未买断 → 免费额度（[License.FREE_TRACK_LIMIT]，现为 1）
+     *   已买断 → 设置里的值（默认 3，可调 1~10）
+     * 这样"同时追踪上限"就是买断的权益点，而**任务数量仍然不限**。
+     */
+    val trackLimit: StateFlow<Int> =
+        combine(settingsTrackLimit, _isPro) { limit, pro ->
+            if (pro) limit else License.FREE_TRACK_LIMIT
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), License.FREE_TRACK_LIMIT)
+
+    /** v5.21.0：兑换授权码；成功即刷新买断状态（返回 null = 码无效） */
+    fun redeemLicense(code: String): License.Info? {
+        val info = License.redeem(ctx, code)
+        _isPro.value = info != null
+        return info
+    }
+
+    /** v5.21.0：当前已激活的信息（未激活给 null） */
+    fun licenseInfo(): License.Info? = License.info(ctx)
 
     /** 总积分（积分系统） */
     val totalPoints: StateFlow<Int> = repo.observeSetting("total_points")

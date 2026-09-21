@@ -273,6 +273,8 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
+        // v5.21.0：买断状态（未买断时同时追踪上限受免费额度限制）
+        val isPro by vm.isPro.collectAsState()
         // 追踪上限：直接显示当前值 + 更改按钮（点更改弹窗输入新值）
         var showLimitDialog by remember { mutableStateOf(false) }
         TGCard(Modifier.fillMaxWidth()) {
@@ -286,7 +288,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         Text("个任务", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
                     }
                 }
-                TextButton(onClick = { showLimitDialog = true }) {
+                TextButton(onClick = {
+                    if (isPro) showLimitDialog = true
+                    else ToastHelper.show(ctx, "买断后可自由调上限；免费版同时追踪 1 个任务")
+                }) {
                     Text("更改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
@@ -300,6 +305,43 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     vm.setTrackLimit(n.coerceIn(1, 10))
                     showLimitDialog = false
                     ToastHelper.show(ctx, "追踪上限已设为 $n")
+                }
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        // v5.21.0：买断授权（离线授权码）—— 买家付款拿到码后就输在这里
+        var showLicenseDialog by remember { mutableStateOf(false) }
+        TGCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("买断授权", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (isPro) "已激活 · 同时追踪不限" else "未激活 · 免费版同时追踪 1 个任务",
+                        color = if (isPro) TGColors.Jade else TGColors.InkMute,
+                        fontSize = 13.sp
+                    )
+                }
+                TextButton(onClick = { showLicenseDialog = true }) {
+                    Text(
+                        if (isPro) "查看" else "输入授权码",
+                        color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+        if (showLicenseDialog) {
+            LicenseDialog(
+                current = if (isPro) vm.licenseInfo() else null,
+                onDismiss = { showLicenseDialog = false },
+                onSubmit = { code ->
+                    val info = vm.redeemLicense(code)
+                    showLicenseDialog = false
+                    ToastHelper.show(
+                        ctx,
+                        if (info != null) "已激活，感谢支持！" else "授权码无效，请核对后重试"
+                    )
                 }
             )
         }
@@ -906,6 +948,74 @@ fun LimitDialog(current: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)
                 ) { Text("确定", color = TGColors.Ink, fontWeight = FontWeight.Medium) }
+            }
+        }
+    }
+}
+
+/**
+ * v5.21.0：授权码对话框。
+ *   current == null → 让用户粘贴授权码
+ *   current != null → 展示已激活的信息（授权对象 / 订单号 / 签发日期）
+ */
+@Composable
+fun LicenseDialog(
+    current: com.taskbar.app.billing.License.Info?,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit
+) {
+    var code by remember { mutableStateOf("") }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(TGColors.Card)
+                .border(1.5.dp, TGColors.Gold, RoundedCornerShape(16.dp))
+                .shadow(8.dp, RoundedCornerShape(16.dp))
+                .padding(18.dp)
+        ) {
+            Text(
+                if (current != null) "已激活" else "输入授权码",
+                color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            if (current != null) {
+                Text("授权对象：${current.to}", color = TGColors.InkSoft, fontSize = 13.sp)
+                Text("订单号：${current.order}", color = TGColors.InkMute, fontSize = 12.sp)
+                Text("签发日期：${current.issuedAt}", color = TGColors.InkMute, fontSize = 12.sp)
+                Spacer(Modifier.height(6.dp))
+                Text("授权码永久有效，离线验证，不需要联网。", color = TGColors.Jade, fontSize = 12.sp)
+            } else {
+                Text(
+                    "付款后把订单号发给作者，你会收到一串授权码。粘贴到这里即可解锁" +
+                        "（多个任务同时追踪、数据导出、外观主题）。",
+                    color = TGColors.InkSoft, fontSize = 12.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.trim() },
+                    placeholder = { Text("粘贴授权码", color = TGColors.InkMute, fontSize = 13.sp) },
+                    singleLine = false,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.InkSoft)
+                ) { Text("关闭") }
+                if (current == null) {
+                    Button(
+                        onClick = { onSubmit(code) },
+                        modifier = Modifier.weight(1f),
+                        enabled = code.isNotBlank()
+                    ) { Text("激活") }
+                }
             }
         }
     }
