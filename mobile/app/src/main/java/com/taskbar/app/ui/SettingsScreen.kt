@@ -257,6 +257,55 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
         }
         Spacer(Modifier.height(10.dp))
+        // v5.22.2（boss：「手机端也要切换外观啊 夜间模式加进来」）——
+        //   与电脑端「设置 → 外观」同一套三个选项：白天 / 夜间 / 跟随系统。
+        TGCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("外观", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    when (TgAppearance.mode) {
+                        TgAppearance.NIGHT -> "夜间"
+                        TgAppearance.AUTO -> "跟随系统"
+                        else -> "白天"
+                    },
+                    color = TGColors.InkMute, fontSize = 12.sp
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    TgAppearance.LIGHT to "白天",
+                    TgAppearance.NIGHT to "夜间",
+                    TgAppearance.AUTO to "跟随系统"
+                ).forEach { (mode, label) ->
+                    val active = TgAppearance.mode == mode
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (active) TGColors.Gold.copy(alpha = 0.18f) else TGColors.Card)
+                            .border(
+                                1.dp,
+                                if (active) TGColors.Gold.copy(alpha = 0.55f) else TGColors.BorderSoft,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { TgAppearance.set(ctx, mode) }
+                            .padding(vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            color = if (active) TGColors.GoldDeep else TGColors.InkSoft,
+                            fontSize = 13.sp,
+                            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 演示键）——全局默认
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒方式（默认）", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)

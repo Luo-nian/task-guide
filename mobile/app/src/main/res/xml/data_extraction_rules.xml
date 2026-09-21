@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v5.22.4（体验测试发现）：原 allowBackup=true 且无任何备份规则 →
+     任务库与配对密钥（auth_secret 与任务同库）会被系统云备份带走，
+     和 App 对外宣称的"数据只在你自己的设备里、不经过云端"直接冲突。
+     现在明确：**什么都不进系统备份**（用户要备份请用 App 内的导出/LAN 同步）。 -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

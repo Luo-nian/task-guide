@@ -3294,3 +3294,9 @@ input[type=text], input[type=number], input[type=password], select, textarea {
 
 /* —— 5. 分隔线统一：分组行之间一律实线 1px（原来这里是虚线，与别处的实线不一致）—— */
 .setting-row + .setting-row { border-top: 1px solid var(--border-soft); }
+
+/* v5.22.3：侧栏「所有任务」分组（四类任务收进一组，默认收起） */
+.nav-group { display: flex; flex-direction: column; gap: 4px; }
+.nav-group.collapsed { display: none; }
+.nav-group-arrow { margin-left: auto; font-size: 9px; color: var(--ink-faint); line-height: 1; }
+.side-nav .nav-group-head.active .nav-group-arrow { color: var(--gold); }

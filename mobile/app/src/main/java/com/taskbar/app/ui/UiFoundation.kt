@@ -136,83 +136,212 @@ fun PressPill(
 // 设计思路：2026 流行 Terracotta Modern 撞色——米白底 + 暖赤陶主 + 桃黏土强调 + 鼠尾草绿完成 + 浓缩咖啡深底
 // 蓝调（冰川蓝）取消，整体偏暖不冷；金调（之前的金色仍保留少量做"荣誉"色，不作主色）
 // 旧冰川蓝方案 v5.0/v5.3 在 git 142292a 留档可一键回退
-object TGColors {
-    // ---- 背景（暖米白底，更柔） ----
-    val BgPaper     = Color(0xFFF5F0E8)   // 主背景 暖白米色（Terracotta Modern 暖白 #F5F0E8）
-    val BgPaperDeep = Color(0xFFEAE2D2)   // 深一档
-    val Panel       = Color(0xFFFCF8EE)   // 面板
-    val PanelSolid  = Color(0xFFF9F2E2)   // 面板实色
-    val Card        = Color(0xFFFFFCF3)   // 卡片
-    val Bar         = Color(0xFFE8DDC2)   // 任务条
-    val BarHover    = Color(0xFFE4D5AF)   // 任务条按下
-    val Selected    = Color(0xFFE6D9BC)   // 选中
+/** 一套调色板（键名与 TGColors 的属性一一对应）。v5.22.2 新增夜间版。 */
+internal data class TgPalette(
+    val BgPaper: Color, val BgPaperDeep: Color, val Panel: Color, val PanelSolid: Color,
+    val Card: Color, val Bar: Color, val BarHover: Color, val Selected: Color,
+    val Ink: Color, val InkSoft: Color, val InkMute: Color, val InkFaint: Color,
+    val Black: Color, val BlackSoft: Color,
+    val Gold: Color, val GoldLight: Color, val GoldDeep: Color,
+    val Orange: Color, val OrangeLight: Color,
+    val Jade: Color, val JadeDeep: Color, val Crimson: Color, val Azure: Color, val Violet: Color,
+    val BorderSoft: Color, val BorderMid: Color, val BorderStrong: Color
+)
 
-    // ---- 文字（暖深咖啡，告别蓝灰冷感） ----
-    val Ink         = Color(0xFF3B2A20)   // 主文字 浓缩咖啡（Terracotta Modern #3B2A20）
-    val InkSoft     = Color(0xFF6B574A)   // 副文字
-    val InkMute     = Color(0xFF9C8B7A)   // 三级
-    val InkFaint    = Color(0xFFC2B59E)   // 四级/分隔
+internal val TgLightPalette = TgPalette(
+    BgPaper = Color(0xFFF5F0E8), BgPaperDeep = Color(0xFFEAE2D2),
+    Panel = Color(0xFFFCF8EE), PanelSolid = Color(0xFFF9F2E2), Card = Color(0xFFFFFCF3),
+    Bar = Color(0xFFE8DDC2), BarHover = Color(0xFFE4D5AF), Selected = Color(0xFFE6D9BC),
+    Ink = Color(0xFF3B2A20), InkSoft = Color(0xFF6B574A), InkMute = Color(0xFF9C8B7A), InkFaint = Color(0xFFC2B59E),
+    Black = Color(0xFF3B2A20), BlackSoft = Color(0xFF5A463A),
+    Gold = Color(0xFFC1603F), GoldLight = Color(0xFFE8A87C), GoldDeep = Color(0xFF8E4424),
+    Orange = Color(0xFFD4795A), OrangeLight = Color(0xFFE8A87C),
+    Jade = Color(0xFF7D9B76), JadeDeep = Color(0xFF3F6B4A), Crimson = Color(0xFFB85638),
+    Azure = Color(0xFF6B8E9E), Violet = Color(0xFFA38FA0),
+    BorderSoft = Color(0x38C1603F), BorderMid = Color(0x598E4424), BorderStrong = Color(0x8C8E4424)
+)
 
-    // ---- 招牌位（深底：浓缩咖啡） ----
-    val Black       = Color(0xFF3B2A20)   // 招牌位深底（深咖啡，告别纯黑/蓝灰）
-    val BlackSoft   = Color(0xFF5A463A)   // 浅深咖
+/** 夜间调色板：**暖深咖底色**（不是纯黑，和白天同一套"纸+赤陶"气质），
+ *  文字用米白；赤陶提亮到 #E0714A 保证深底上可读；边框反过来用"亮赤陶 + alpha"。 */
+internal val TgNightPalette = TgPalette(
+    BgPaper = Color(0xFF17120E), BgPaperDeep = Color(0xFF100C09),
+    Panel = Color(0xFF1F1813), PanelSolid = Color(0xFF241C16), Card = Color(0xFF261E18),
+    Bar = Color(0xFF2E241C), BarHover = Color(0xFF392D23), Selected = Color(0xFF3B2D22),
+    Ink = Color(0xFFF2E9DC), InkSoft = Color(0xFFCDBBA7), InkMute = Color(0xFF9A8674), InkFaint = Color(0xFF6E5D4D),
+    Black = Color(0xFF100C09), BlackSoft = Color(0xFF2A1F17),
+    Gold = Color(0xFFE0714A), GoldLight = Color(0xFFF2A87E), GoldDeep = Color(0xFFEDA47C),
+    Orange = Color(0xFFE8836A), OrangeLight = Color(0xFFF2A87E),
+    Jade = Color(0xFF93B98A), JadeDeep = Color(0xFF8FBE88), Crimson = Color(0xFFE0704C),
+    Azure = Color(0xFF93B2C0), Violet = Color(0xFFBCA7B9),
+    BorderSoft = Color(0x3DE08A63), BorderMid = Color(0x5CE08A63), BorderStrong = Color(0x8CE08A63)
+)
 
-    // ---- 主色：赤陶（取代冰川蓝作"主调/描边/点缀"） ----
-    val Gold        = Color(0xFFC1603F)   // 主色 赤陶 Terracotta Modern #C1603F
-    val GoldLight   = Color(0xFFE8A87C)   // 浅赤陶 桃黏土 Peach Clay
-    val GoldDeep    = Color(0xFF8E4424)   // 深赤陶 浅底可读字
+// ---- 外观模式（light / night / auto）与"当前是否夜间"两个全局状态 ----
+private var tgThemeModeState = mutableStateOf("light")
+private val tgIsNightState = mutableStateOf(false)
 
-    // ---- 强调色：桃黏土（辅助高亮） ----
-    val Orange      = Color(0xFFD4795A)   // 暖橙偏赤陶（重要提示）
-    val OrangeLight = Color(0xFFE8A87C)   // 桃黏土
+/** 外观：`light` 白天 ｜ `night` 夜间 ｜ `auto` 跟随系统（与电脑端同一套选项） */
+object TgAppearance {
+    const val LIGHT = "light"
+    const val NIGHT = "night"
+    const val AUTO = "auto"
+    private const val PREF = "taskguide_prefs"
+    private const val KEY = "ui_theme"
 
-    // ---- 装饰色（v5.4 全面去蓝化） ----
-    val Jade        = Color(0xFF7D9B76)   // 鼠尾草绿 Muted Sage #7D9B76（取代"完成绿"）
-    /** v5.15.24 F3c：日历"整日清空"用的**深**玉青。
-     *  原来的 Jade(#7D9B76) 在浅粉底上对比度只有 2.7:1，13sp 小字基本看不出
-     *  （像素扫描证实已渲染但肉眼不可辨）→ 换成 5.3:1 的深色，保证一眼可辨。 */
-    val JadeDeep    = Color(0xFF3F6B4A)
-    val Crimson     = Color(0xFFB85638)   // 朱砂 紧急/高优先级
-    val Azure       = Color(0xFF6B8E9E)   // 浅灰蓝（保留少量做"重复任务"等标签，整体不蓝）
-    val Violet      = Color(0xFFA38FA0)   // 灰紫（取代紫罗兰，低饱和不刺眼）
+    val mode: String get() = tgThemeModeState.value
 
-    // ---- 边框（含 alpha） ----
-    val BorderSoft   = Color(0x38C1603F)   // 赤陶透明
-    val BorderMid    = Color(0x598E4424)
-    val BorderStrong = Color(0x8C8E4424)
+    /** 进 UI 之前调用一次，恢复上次选的外观 */
+    fun load(ctx: Context) {
+        val v = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY, LIGHT) ?: LIGHT
+        tgThemeModeState.value = if (v == NIGHT || v == AUTO) v else LIGHT
+    }
+
+    fun set(ctx: Context, mode: String) {
+        if (mode != LIGHT && mode != NIGHT && mode != AUTO) return
+        tgThemeModeState.value = mode
+        ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY, mode).apply()
+    }
 }
 
-private val TGColorScheme = lightColorScheme(
-    primary = TGColors.Gold,
-    onPrimary = TGColors.Black,          // 金底用墨黑字（黑金招牌）
-    primaryContainer = TGColors.Selected,
-    onPrimaryContainer = TGColors.Ink,
-    secondary = TGColors.Jade,
-    onSecondary = Color.White,           // 玉青底用白字（习惯按钮）
-    secondaryContainer = TGColors.Selected,
-    onSecondaryContainer = TGColors.Ink,
-    background = TGColors.BgPaper,
-    onBackground = TGColors.Ink,
-    surface = TGColors.Panel,
-    onSurface = TGColors.Ink,
-    surfaceVariant = TGColors.BgPaperDeep,
-    onSurfaceVariant = TGColors.InkSoft,
-    outline = TGColors.BorderMid,
-    error = TGColors.Crimson,
+/**
+ * 全局调色板入口。**属性全部改成 getter 读当前调色板** ——
+ * 这样切外观时，所有读过 TGColors.X 的界面都会自动重组，引用处无需改动。
+ */
+object TGColors {
+    private val p: TgPalette get() = if (tgIsNightState.value) TgNightPalette else TgLightPalette
+
+    // ---- 背景 ----
+    val BgPaper get() = p.BgPaper            // 主背景
+    val BgPaperDeep get() = p.BgPaperDeep    // 深一档
+    val Panel get() = p.Panel                // 面板
+    val PanelSolid get() = p.PanelSolid      // 面板实色
+    val Card get() = p.Card                  // 卡片
+    val Bar get() = p.Bar                    // 任务条
+    val BarHover get() = p.BarHover          // 任务条按下
+    val Selected get() = p.Selected          // 选中
+
+    // ---- 文字 ----
+    val Ink get() = p.Ink                    // 主文字
+    val InkSoft get() = p.InkSoft            // 副文字
+    val InkMute get() = p.InkMute            // 三级
+    val InkFaint get() = p.InkFaint          // 四级/分隔
+
+    // ---- 招牌位深底 ----
+    val Black get() = p.Black
+    val BlackSoft get() = p.BlackSoft
+
+    // ---- 主色：赤陶 ----
+    val Gold get() = p.Gold
+    val GoldLight get() = p.GoldLight
+    val GoldDeep get() = p.GoldDeep
+
+    // ---- 强调色 ----
+    val Orange get() = p.Orange
+    val OrangeLight get() = p.OrangeLight
+
+    // ---- 装饰色 ----
+    val Jade get() = p.Jade
+    val JadeDeep get() = p.JadeDeep
+    val Crimson get() = p.Crimson
+    val Azure get() = p.Azure
+    val Violet get() = p.Violet
+
+    // ---- 边框 ----
+    val BorderSoft get() = p.BorderSoft
+    val BorderMid get() = p.BorderMid
+    val BorderStrong get() = p.BorderStrong
+}
+
+private val TGColorSchemeLight = lightColorScheme(
+    primary = TgLightPalette.Gold,
+    onPrimary = TgLightPalette.Black,
+    primaryContainer = TgLightPalette.Selected,
+    onPrimaryContainer = TgLightPalette.Ink,
+    secondary = TgLightPalette.Jade,
+    onSecondary = Color.White,
+    background = TgLightPalette.BgPaper,
+    onBackground = TgLightPalette.Ink,
+    surface = TgLightPalette.Card,
+    onSurface = TgLightPalette.Ink,
+    surfaceVariant = TgLightPalette.Panel,
+    onSurfaceVariant = TgLightPalette.InkSoft,
+    outline = TgLightPalette.BorderMid,
+    error = TgLightPalette.Crimson,
     onError = Color.White
 )
 
-/** 顶部暖光渐变（对应桌面端 body::before） */
-val TGBackgroundBrush = Brush.verticalGradient(
-    listOf(
-        Color(0xFFFAF0D8),
-        Color(0xFFF5EFE0),
-        Color(0xFFEFE1B8)
-    )
+/** v5.22.2 夜间配色：暖深咖底 + 米白字 + 提亮赤陶；按钮上是**深字**（赤陶偏亮） */
+private val TGColorSchemeNight = darkColorScheme(
+    primary = TgNightPalette.Gold,
+    onPrimary = Color(0xFF1A120D),
+    primaryContainer = TgNightPalette.Selected,
+    onPrimaryContainer = TgNightPalette.Ink,
+    secondary = TgNightPalette.Jade,
+    onSecondary = Color(0xFF14200F),
+    background = TgNightPalette.BgPaper,
+    onBackground = TgNightPalette.Ink,
+    surface = TgNightPalette.Card,
+    onSurface = TgNightPalette.Ink,
+    surfaceVariant = TgNightPalette.Panel,
+    onSurfaceVariant = TgNightPalette.InkSoft,
+    outline = TgNightPalette.BorderMid,
+    error = TgNightPalette.Crimson,
+    onError = Color(0xFF1A120D)
+)
+
+private val TGColorScheme: ColorScheme
+    get() = if (tgIsNightState.value) TGColorSchemeNight else TGColorSchemeLight
+
+/** 顶部背景渐变（对应桌面端 body::before）—— v5.22.2 起随外观切换 */
+val TGBackgroundBrush: Brush
+    get() = if (tgIsNightState.value) {
+        Brush.verticalGradient(listOf(Color(0xFF221A14), Color(0xFF1B1410), Color(0xFF150F0B)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFFFAF0D8), Color(0xFFF5EFE0), Color(0xFFEFE1B8)))
+    }
+
+/**
+ * v5.22.3（boss：「4 句激励语留不留 —— 留 甚至要更多，记住不要有ai味 可以参考名人名言」）——
+ * 完成/升级弹层底部那句短激励语。取舍标准：
+ *   · **短**（弹层空间小，超过 12 字就挤）
+ *   · **不装**：不写"让…有成就感""相信你可以的"这类话（那是 AI 味）
+ *   · 一半是平实口语（自己写的），一半是**公有领域的古典名句**（出处确定，不瞎挂名字）
+ */
+internal val CELEBRATE_LINES = listOf(
+    // —— 平实口语 ——
+    "又清掉一件",
+    "这一下很值",
+    "干净利落",
+    "先做五分钟，果然有用",
+    "不用等状态，做了就有",
+    "今天的份额到手",
+    "完成比完美容易",
+    "起步最难，已经过了",
+    "一件一件来，就快了",
+    "记下来，就不用一直惦记",
+    "做过的事，不会白做",
+    "明天会轻松一点",
+    // —— 古典名句（出处均可考） ——
+    "不积跬步，无以至千里",      // 荀子·劝学
+    "千里之行，始于足下",        // 老子·道德经
+    "锲而不舍，金石可镂",        // 荀子·劝学
+    "业精于勤，荒于嬉",          // 韩愈·进学解
+    "欲穷千里目，更上一层楼",    // 王之涣·登鹳雀楼
+    "天行健，君子以自强不息",    // 周易·乾卦
 )
 
 @Composable
 fun TaskGuideTheme(content: @Composable () -> Unit) {
+    // v5.22.2（boss：「手机端也要切换外观啊 夜间模式加进来」）——
+    //   在进 MaterialTheme 之前先把"当前是否夜间"定下来，这样下面的 content 读到的
+    //   TGColors 就已经是切好的那套；写入前判一下避免重组死循环。
+    val sysDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val night = when (tgThemeModeState.value) {
+        TgAppearance.NIGHT -> true
+        TgAppearance.AUTO -> sysDark
+        else -> false
+    }
+    if (tgIsNightState.value != night) tgIsNightState.value = night
     MaterialTheme(
         colorScheme = TGColorScheme,
         typography = Typography().run {
@@ -771,7 +900,7 @@ fun CompletionCelebration(
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                remember { listOf("又清掉一件，节奏不错", "稳扎稳打，继续保持", "这一下很值", "干净利落").random() },
+                remember { CELEBRATE_LINES.random() },
                 color = TGColors.GoldLight.copy(alpha = 0.8f),
                 fontSize = 12.sp,
                 letterSpacing = 1.sp

@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
             ) notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        // v5.22.2：进 UI 之前先恢复外观偏好（白天/夜间/跟随系统）
+        com.taskbar.app.ui.TgAppearance.load(this)
         setContent {
             TaskGuideTheme {
                 // 延迟启动同步服务：等 UI 起来 1.5s 后再启动，

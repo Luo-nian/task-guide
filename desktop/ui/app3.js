@@ -755,7 +755,34 @@ function renderSideNav() {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.nav === nav);
   });
+  // v5.22.3：当前就在四类任务里 → 自动把「所有任务」组展开，免得看不到自己在哪
+  if (['daily', 'goal', 'time-limited', 'once'].includes(nav)) {
+    const g = document.getElementById('typeGroup');
+    const a = document.getElementById('typeGroupArrow');
+    if (g) g.classList.remove('collapsed');
+    if (a) a.textContent = '\u25BE';
+  }
 }
+
+/* v5.22.3 · 侧栏「所有任务」分组的展开/收起（状态记在 localStorage，刷新后保持） */
+function toggleTypeGroup() {
+  const g = document.getElementById('typeGroup');
+  const a = document.getElementById('typeGroupArrow');
+  if (!g) return;
+  const collapsed = g.classList.toggle('collapsed');
+  if (a) a.textContent = collapsed ? '\u25B8' : '\u25BE';
+  try { localStorage.setItem('taskbar.typeGroup', collapsed ? '1' : '0'); } catch (e) { /* 忽略 */ }
+}
+(function restoreTypeGroup() {
+  try {
+    if (localStorage.getItem('taskbar.typeGroup') === '0') {
+      const g = document.getElementById('typeGroup');
+      const a = document.getElementById('typeGroupArrow');
+      if (g) g.classList.remove('collapsed');
+      if (a) a.textContent = '\u25BE';
+    }
+  } catch (e) { /* 忽略 */ }
+})();
 // v5.14g：追踪任务视图（boss 要求侧边栏显示追踪任务）—— 显示所有 track_status='tracking' 的任务
 function renderTrackingView() {
   const lvEl = document.getElementById('listView');
@@ -853,6 +880,8 @@ document.querySelectorAll('.nav-item').forEach(n => {
   n.addEventListener('click', async () => {
     // 历史任务 = 独立弹窗（不占用主视图）
     if (n.dataset.nav === 'archive') { openArchiveModal(); return; }
+    // v5.22.3：分组头不是视图，只负责展开/收起
+    if (n.classList.contains('nav-group-head')) { toggleTypeGroup(); return; }
     nav = n.dataset.nav;
     // v5.15.18 K1：重新进入"今日待办/总览" → 恢复追踪置顶（当次点追踪的"不置顶"只影响那一次）
     if (nav === 'today' || nav === 'overview') _pinTracking = true;

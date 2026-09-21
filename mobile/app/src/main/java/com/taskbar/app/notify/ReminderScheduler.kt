@@ -341,6 +341,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         ioScope.launch {
             try {
                 ReminderScheduler.fireNow(app, uuid, strength, 0)
+                // v5.22.4（体验测试发现）——**每日型提醒响过一次就再也不排了**：
+                //   全项目唯一的排程入口是"冷启动 / 开机"（TaskBarApp.onCreate），
+                //   闹钟触发后不重排 → 只有每天都打开 App 的人才能收到第二天的提醒
+                //   （这正好解释了测试里"有两天没响"）。触发后补排一次即可。
+                runCatching {
+                    (app as? com.taskbar.app.TaskBarApp)?.let { tba ->
+                        ReminderScheduler.rescheduleAll(tba.repo, app)
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.w("ReminderAlarm", "闹钟触发提醒失败", e)
             } finally {

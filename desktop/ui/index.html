@@ -61,23 +61,33 @@
       <span class="nav-tip">追踪</span>
       <span class="nav-count" id="trackingCount">0</span>
     </button>
-    <button class="nav-item" data-nav="daily" title="每日任务">
+    <!-- v5.22.3（boss：「电脑端 8 个分类导航是否收拢」→ 可以）——
+         四类任务收进「所有任务」一组（默认收起，点开展开；展开状态本地记住）。
+         顶层导航因此从 8 个变 5 个：总览 / 今日 / 追踪 / 所有任务 / 历史任务。 -->
+    <button class="nav-item nav-group-head" id="typeGroupHead" title="所有任务（每日·目标·限时·次数）">
       <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
-      <span class="nav-tip">每日任务</span>
+      <span class="nav-tip">所有任务</span>
+      <span class="nav-group-arrow" id="typeGroupArrow">▸</span>
     </button>
-    <button class="nav-item" data-nav="goal" title="目标任务">
-      <!-- v5.15.21 R3：与「追踪」图标对调（原 goal → 现 crosshair） -->
-      <span class="ico ico-goal" data-icon="crosshair" data-icon-size="15"></span>
-      <span class="nav-tip">目标任务</span>
-    </button>
-    <button class="nav-item" data-nav="time-limited" title="限时任务">
-      <span class="ico ico-lim" data-icon="lim" data-icon-size="15"></span>
-      <span class="nav-tip">限时任务</span>
-    </button>
-    <button class="nav-item" data-nav="once" title="次数任务">
-      <span class="ico ico-once" data-icon="once" data-icon-size="15"></span>
-      <span class="nav-tip">次数任务</span>
-    </button>
+    <div class="nav-group collapsed" id="typeGroup">
+      <button class="nav-item" data-nav="daily" title="每日任务">
+        <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
+        <span class="nav-tip">每日任务</span>
+      </button>
+      <button class="nav-item" data-nav="goal" title="目标任务">
+        <!-- v5.15.21 R3：与「追踪」图标对调（原 goal → 现 crosshair） -->
+        <span class="ico ico-goal" data-icon="crosshair" data-icon-size="15"></span>
+        <span class="nav-tip">目标任务</span>
+      </button>
+      <button class="nav-item" data-nav="time-limited" title="限时任务">
+        <span class="ico ico-lim" data-icon="lim" data-icon-size="15"></span>
+        <span class="nav-tip">限时任务</span>
+      </button>
+      <button class="nav-item" data-nav="once" title="次数任务">
+        <span class="ico ico-once" data-icon="once" data-icon-size="15"></span>
+        <span class="nav-tip">次数任务</span>
+      </button>
+    </div>
     <div class="nav-spacer"></div>
     <button class="nav-item repo" data-nav="archive" title="历史任务">
       <span class="ico ico-clock" data-icon="clock" data-icon-size="15"></span>

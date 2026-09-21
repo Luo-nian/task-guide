@@ -96,7 +96,16 @@ internal val CAT_FILTER_LABEL = mapOf(
 /** v5.21.x：原来这里挂着 5 句随机语录（"干得漂亮""完美收工！""去喝口水奖励一下自己吧"…），
  *  又长又抒情，正是 boss 要删的「情感标签堆砌 + 永远正确的废话」。
  *  完成状态本身已经说明一切 → 只留一句平实的状态说明。 */
-private const val ALL_DONE_TEXT = "今天的任务都完成了"
+private val ALL_DONE_LINES = listOf(
+    "今天的任务都完成了",
+    "清空了，明天见",
+    "今天该做的都做了",
+    "收工。可以歇了",
+    "今天没留尾巴",
+)
+// v5.22.3：按「当天」取模 —— 同一天里不跳字，第二天换一句（原来只有一句，boss 要更多）
+private val ALL_DONE_TEXT: String
+    get() = ALL_DONE_LINES[java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR) % ALL_DONE_LINES.size]
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1836,19 +1845,52 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     showCount = false
                 )
             } else {
-            // v5.15.21 R4（boss：手机端要能日历形式查看历史任务）—— 列表 / 日历 切换
-            PressPill(onClick = { calView = !calView }) {
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(TGColors.Gold.copy(alpha = 0.16f))
-                        .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        if (calView) "列表" else "日历",
-                        color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium
-                    )
+            // v5.22.3（boss：手机端「阅览方式」与历史页统一成「列表 / 日历」）——
+            //   原来这里是"单键翻转"（点一下在『列表/日历』之间来回翻），
+            //   而「所有任务」页是「阅览方式 ▾」下拉；同一件事两套控件 → 现在统一成下拉。
+            var histViewMenu by remember { mutableStateOf(false) }
+            Box {
+                PressPill(onClick = { histViewMenu = true }) {
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(TGColors.Gold.copy(alpha = 0.16f))
+                            .border(1.dp, TGColors.Gold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                            .padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("阅览方式", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.width(3.dp))
+                        Text("▾", color = TGColors.GoldDeep, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                DropdownMenu(expanded = histViewMenu, onDismissRequest = { histViewMenu = false }) {
+                    VIEW_MODES.forEach { mode ->
+                        val active = mode.isCalendar == calView
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    mode.label,
+                                    color = if (active) TGColors.GoldDeep else TGColors.Ink,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            trailingIcon = {
+                                if (active) {
+                                    TGIcon(
+                                        drawable = R.drawable.ic_check,
+                                        contentDescription = null,
+                                        tint = TGColors.GoldDeep, size = 16.dp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                calView = mode.isCalendar
+                                histViewMenu = false
+                            }
+                        )
+                    }
                 }
             }
             }
