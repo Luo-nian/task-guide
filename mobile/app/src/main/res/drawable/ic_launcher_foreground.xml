@@ -1,23 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 任务指南图标前景：淡金色指南针（任务"指南"） -->
+<!-- v5.21.2（boss：「手机端的 app 图标和电脑端没有统一，都用电脑端的」）——
+     与 desktop/scripts/gen_icons.py 同一套几何与配色：
+     米底 + 三条深褐(#3A2E1A)圆头任务线 + 一枚金色(#C9A227)对勾。
+     坐标由 1024 画布按"图形宽 62dp"等比映射到 108 viewport，收在 66dp 安全圆内。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 指南针外圈 -->
+    <!-- 第 1 条任务线 -->
     <path
-        android:strokeColor="#E8D9A0"
-        android:strokeWidth="3"
-        android:fillColor="#00000000"
-        android:pathData="M54,28 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
-    <!-- 指针（菱形） -->
+        android:pathData="M25.44,41.33 L57.12,41.33"
+        android:strokeColor="#3A2E1A"
+        android:strokeWidth="4.89"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- 第 2 条任务线 -->
     <path
-        android:fillColor="#C9A227"
-        android:pathData="M54,38 L60,54 L54,70 L48,54 Z" />
-    <!-- 中心点 -->
+        android:pathData="M25.44,54 L66.72,54"
+        android:strokeColor="#3A2E1A"
+        android:strokeWidth="4.89"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- 第 3 条任务线 -->
     <path
-        android:fillColor="#E8D9A0"
-        android:pathData="M54,52 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+        android:pathData="M25.44,66.67 L53.14,66.67"
+        android:strokeColor="#3A2E1A"
+        android:strokeWidth="4.89"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- 金色对勾（圆头折线） -->
+    <path
+        android:pathData="M61.29,54.91 L68.53,62.15 L81.2,47.3"
+        android:strokeColor="#C9A227"
+        android:strokeWidth="7.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
 </vector>

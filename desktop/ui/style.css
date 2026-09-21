@@ -3253,3 +3253,7 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
   font-size: 12px; font-weight: 800; color: var(--gold-deep);
   letter-spacing: .5px; font-variant-numeric: tabular-nums;
 }
+
+/* v5.21.2：设置页「用户名」——文本型输入框（原来的 .ss-edit 只针对 number） */
+.ss-edit input#setNickname { width: 150px; padding: 4px 8px; font-size: 13px; }
+#setNickWarn { margin-top: 6px; }

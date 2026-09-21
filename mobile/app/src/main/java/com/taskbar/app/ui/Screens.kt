@@ -2064,7 +2064,7 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     AvatarFrame(onClick = { navController.navigate("profile") })
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "任务栏",
+                        "next任务",
                         color = TGColors.Ink,
                         fontSize = 21.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -2105,7 +2105,7 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
             }
             "profile" -> barWithTitle("我的", navController, showBack = true)  // 我的页：顶部加返回箭头（不依赖系统返回键）
             "track" -> barWithTitle("追踪中", navController, showBack = false)    // 底部导航栏已有
-            else -> barWithTitle("任务栏", navController)
+            else -> barWithTitle("next任务", navController)
         }
     }
 }

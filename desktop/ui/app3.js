@@ -48,7 +48,8 @@ let settings = {
   count_default: 5,                // 次数任务默认次数
   daily_refresh: true,             // 每日任务每日 0 点自动刷新
   daily_refresh_time: '00:00',     // v5.15.31：每日任务刷新时间 HH:MM（boss：设置里要能改）
-  night_notify: true,              // 22:00 未完成弹窗
+  night_notify: true,              // 未完成弹窗（开关）
+  night_notify_time: '22:00',      // v5.21.2：未完成弹窗的触发时刻 'HH:MM'（boss：有人早睡早起，要能自己调）
   pairing: null,
   nickname: '',                    // v5.15.29 L5：**用户自己编辑过**的昵称（空 = 没编辑过）
   nickname_custom: ''              // v5.15.29 L5：'1' = 用户编辑过（用 nickname）；'' = 跟随当前等级名称
@@ -440,6 +441,8 @@ function applySettingsToUi() {
   document.getElementById('setEmergencyOn').checked = settings.emergency_on;
   // 每日刷新 / 进度条样式已撤出设置 UI（旧字段保留用于兼容 / 不再写入）
   document.getElementById('setNightNotify').checked = settings.night_notify;
+  // v5.21.2：未完成弹窗时间回填（两个小框）
+  if (typeof _setNightTime === 'function') _setNightTime(settings.night_notify_time || '22:00');
   // v5.15.31：每日任务刷新时间回填（两个小框）
   if (typeof _setRefreshTime === 'function') _setRefreshTime(settings.daily_refresh_time || '00:00');
   document.getElementById('setPairingStatus').textContent = settings.pairing ? '已配对：' + settings.pairing.url : '未配对';
@@ -587,6 +590,7 @@ async function persistSettingsServer() {
       daily_refresh: settings.daily_refresh ? '1' : '0',
       daily_refresh_time: settings.daily_refresh_time || '00:00',   // v5.15.31：双端刷新口径要一致
       night_notify: settings.night_notify ? '1' : '0',
+      night_notify_time: settings.night_notify_time || '22:00',   // v5.21.2：触发时刻也走同步通道
       nickname: settings.nickname || '',
       nickname_custom: settings.nickname_custom || '',   // v5.15.29 L5：昵称来源标志一并落库
       avatar_idx: settings.avatar_idx != null ? settings.avatar_idx : 0,
@@ -3420,6 +3424,9 @@ function showNightNotify(titles) {
   document.getElementById('nightMsg').innerHTML =
     '还有 <b>' + titles.length + '</b> 项没完成：' +
     '<div class="night-list">' + items + more + '</div>';
+  // v5.21.2：副标题不再写死 22:00，按用户设置的触发时刻显示
+  const subEl = document.getElementById('nightSub');
+  if (subEl) subEl.textContent = (settings.night_notify_time || '22:00') + ' 了，还有任务没完成';
   document.getElementById('nightOverlay').style.display = '';
 }
 document.getElementById('nightClose').addEventListener('click', () => {
@@ -3427,6 +3434,57 @@ document.getElementById('nightClose').addEventListener('click', () => {
   // 告知后端今天已提醒，避免一晚上反复弹
   call('dismiss_night_notify', {}).catch(() => {});
 });
+
+/* ==========================================================================
+   v5.21.2 · 未完成弹窗的触发时刻（时 : 分 两个小框）
+   字段 night_notify_time（'HH:MM'，默认 '22:00'）—— 与 night_notify(bool) 并存：
+   bool 管「要不要弹」，本字段管「几点弹」。走 settings 同步通道，
+   判定在后端（check_night_notify），前端只负责回填与保存。
+   boss 原话：「这个时间也让用户自己设置，因为有人早睡早起」。
+   ========================================================================== */
+function _setNightTime(v) {
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(String(v || '').trim());
+  const h = m ? Math.min(23, parseInt(m[1], 10)) : 22;
+  const mi = m ? Math.min(59, parseInt(m[2], 10)) : 0;
+  const eh = document.getElementById('setNightHour');
+  const em = document.getElementById('setNightMin');
+  if (eh) eh.value = _fmt2(h);
+  if (em) em.value = _fmt2(mi);
+}
+function _readNightTime() {
+  const eh = document.getElementById('setNightHour');
+  const em = document.getElementById('setNightMin');
+  let h = parseInt(((eh && eh.value) || '').trim(), 10);
+  let mi = parseInt(((em && em.value) || '').trim(), 10);
+  if (isNaN(h)) h = 22;
+  if (isNaN(mi)) mi = 0;
+  h = Math.max(0, Math.min(23, h));
+  mi = Math.max(0, Math.min(59, mi));
+  return _fmt2(h) + ':' + _fmt2(mi);
+}
+function _commitNightTime() {
+  const v = _readNightTime();
+  _setNightTime(v);
+  if (settings.night_notify_time === v) return;
+  settings.night_notify_time = v;
+  saveSettings();
+  call('set_setting', { key: 'night_notify_time', value: v }).catch(() => {});
+}
+(function bindNightTime() {
+  const eh = document.getElementById('setNightHour');
+  const em = document.getElementById('setNightMin');
+  if (!eh || !em) return;
+  [eh, em].forEach(el => {
+    el.addEventListener('focus', () => el.select());
+    el.addEventListener('input', () => { el.value = el.value.replace(/\D/g, '').slice(0, 2); });
+    el.addEventListener('blur', _commitNightTime);
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); return; }
+      if (el === eh && eh.value.length === 2 && e.key >= '0' && e.key <= '9') em.focus();
+    });
+  });
+})();
+_setNightTime(settings.night_notify_time || '22:00');
 
 
 /* ==========================================================================
@@ -3540,9 +3598,72 @@ function _nickExitEdit() {
   if (i) i.style.display = 'none';
   if (s) s.style.display = 'none';
   if (t) { t.textContent = activeNickname(); t.style.display = ''; }
-  if (b) b.style.display = '';
+  if (b) b.style.display = 'none';   // v5.21.2：昵称编辑已移到「设置 → 用户名」，这里只保留显示
 }
 (function bindNickEdit() {
   const b = document.getElementById('profileNickEdit');
   if (b) b.addEventListener('click', _nickEnterEdit);
+})();
+
+/* ==========================================================================
+   v5.21.2（boss：「用户名称的设置放在设置页面的最上面」）
+   桌面端昵称编辑从「个人中心卡」移到设置抽屉第一组（个人中心只保留昵称显示）。
+   写入的仍是同一组 setting：nickname / nickname_custom —— 与手机端走同一条同步通道。
+   规则与手机端一致：留空 = 跟随当前等级名；填了 = 用户自定义。
+   ========================================================================== */
+(function bindSettingsNickname() {
+  const box   = document.getElementById('dsp_setNickname');
+  const edt   = document.getElementById('edt_setNickname');
+  const cur   = document.getElementById('cur_setNickname');
+  const input = document.getElementById('setNickname');
+  const warn  = document.getElementById('setNickWarn');
+  if (!box || !edt || !cur || !input) return;
+
+  function refresh() { cur.textContent = activeNickname(); }
+  function enter() {
+    box.style.display = 'none';
+    edt.style.display = '';
+    input.value = activeNickname();
+    if (warn) refreshNickWarn(input, warn);
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+  }
+  function exit() {
+    edt.style.display = 'none';
+    box.style.display = '';
+    if (warn) warn.style.display = 'none';
+    refresh();
+  }
+  function commit() {
+    const raw = (input.value || '').trim().slice(0, 12);
+    if (!raw) {
+      settings.nickname = '';
+      settings.nickname_custom = '';
+      call('set_setting', { key: 'nickname', value: '' }).catch(() => {});
+      call('set_setting', { key: 'nickname_custom', value: '' }).catch(() => {});
+    } else {
+      settings.nickname = raw;
+      settings.nickname_custom = '1';
+      call('set_setting', { key: 'nickname', value: raw }).catch(() => {});
+      call('set_setting', { key: 'nickname_custom', value: '1' }).catch(() => {});
+    }
+    saveSettings();
+    exit();
+    if (typeof render === 'function') render();
+  }
+  const eb = document.getElementById('setNickEditBtn');
+  const sb = document.getElementById('setNickSaveBtn');
+  const cb = document.getElementById('setNickCancelBtn');
+  if (eb) eb.addEventListener('click', enter);
+  if (sb) sb.addEventListener('click', commit);
+  if (cb) cb.addEventListener('click', exit);
+  input.addEventListener('input', () => { if (warn) refreshNickWarn(input, warn); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); exit(); }
+  });
+  // 打开设置抽屉时刷新显示值（并退出上一次没提交的编辑态）
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) settingsBtn.addEventListener('click', () => {
+    if (edt.style.display !== 'none') exit(); else refresh();
+  });
 })();

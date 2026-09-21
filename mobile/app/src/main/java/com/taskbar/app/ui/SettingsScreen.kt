@@ -24,6 +24,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -154,6 +159,102 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(6.dp))
+        // v5.21.2（boss：「用户名称的设置放在设置页面的最上面」）—— 从「配对」下面提到第一组
+        // ===== v5.15.28 M10：昵称编辑放在设置界面 =====
+        // ===== v5.15.29 L5（boss：没编辑过就用**当前等级名**，编辑过就用用户编辑的）=====
+        // ===== v5.15.29 L6（boss：想改成更高等级的名称时，在**这张卡里**提示一句，但不拦保存）=====
+        TGCard(Modifier.fillMaxWidth()) {
+            val pointsNow by vm.totalPoints.collectAsState()
+            val curLevelName = Levels.of(pointsNow).name
+            var nick by remember { mutableStateOf("") }
+            var custom by remember { mutableStateOf(false) }
+            var draft by remember { mutableStateOf("") }
+            var editing by remember { mutableStateOf(false) }
+            val nickFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(Unit) {
+                runCatching { nick = vm.getSetting("nickname", "") }
+                runCatching { custom = vm.getSetting("nickname_custom", "") == "1" }
+                draft = nick
+            }
+            // 展示值：编辑过 → 用户的；没编辑过 → 当前等级名（升级会自动跟着变）
+            val shown = if (custom && nick.isNotBlank()) nick else curLevelName
+            // 输入值 == 某个「高于当前等级」的等级名 → 给提示（**不拦保存**）
+            val higher = remember(draft, pointsNow, editing) {
+                if (editing) Levels.higherLevelNamed(draft, pointsNow) else null
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("用户名", color = TGColors.InkMute, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+                if (!editing) {
+                    Text(shown, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { draft = if (custom) nick else ""; editing = true }) {
+                        Text("修改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                } else {
+                    Text("清空即跟随等级名", color = TGColors.InkMute, fontSize = 11.sp)
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+            if (editing) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it.take(12) },
+                        singleLine = true,
+                        placeholder = { Text(curLevelName, color = TGColors.InkMute, fontSize = 14.sp) },
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium
+                        ),
+                        modifier = Modifier.weight(1f).focusRequester(nickFocus)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(onClick = {
+                        val v = draft.trim().take(12)
+                        if (v.isEmpty()) {
+                            // 清空 = 回到「跟随当前等级名」
+                            nick = ""
+                            custom = false
+                            vm.setSyncedSetting("nickname", "")
+                            vm.setSyncedSetting("nickname_custom", "")
+                            prefs.edit().putString("nickname", "").apply()
+                            editing = false
+                            ToastHelper.show(ctx, "已恢复为等级名「$curLevelName」")
+                        } else {
+                            nick = v
+                            custom = true
+                            vm.setSyncedSetting("nickname", v)
+                            vm.setSyncedSetting("nickname_custom", "1")
+                            prefs.edit().putString("nickname", v).apply()
+                            editing = false
+                            ToastHelper.show(ctx, "用户名已改为「$v」")
+                        }
+                    }) { Text("确定", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { draft = nick; editing = false }) {
+                        Text("取消", color = TGColors.InkMute, fontSize = 14.sp)
+                    }
+                }
+                // L6：只在编辑昵称的这张卡里出现的提示
+                if (higher != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "这是 ${higher.lv} 级「${higher.name}」的名称，" +
+                            "您可以提前摘取高处的果实，但通往成功的道路仍在您的前方，愿你早日到达。",
+                        color = TGColors.GoldDeep,
+                        fontSize = 11.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(TGColors.Gold.copy(alpha = 0.10f))
+                            .padding(horizontal = 8.dp, vertical = 7.dp)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         // 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 演示键）——全局默认
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒方式（默认）", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -310,22 +411,50 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
-        // v5.21.0：买断授权（离线授权码）—— 买家付款拿到码后就输在这里
+        // v5.21.2（boss：「买断授权」这名字太生硬 + 要有仪式感）——
+        //   ① 卡片改名「完整版」：说的是"你会得到什么"，而不是"你要付钱"
+        //   ② 左侧一枚菱形徽记：未点亮 = 赤陶细边镂空；已点亮 = 赤陶实心（沿用任务条的菱形语言）
+        //   ③ 文案从 激活/已激活 → 点亮/已点亮：点亮的是完整版，不是买了个功能
         var showLicenseDialog by remember { mutableStateOf(false) }
+        var litInfo by remember { mutableStateOf<com.taskbar.app.billing.License.Info?>(null) }
         TGCard(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(13.dp)
+                        .then(
+                            if (isPro) Modifier.background(TGColors.Gold, RoundedCornerShape(3.dp))
+                            else Modifier.border(1.2.dp, TGColors.Gold.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                        )
+                        .graphicsLayer { rotationZ = 45f }
+                )
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("买断授权", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("完整版", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        if (!isPro) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "一次买断",
+                                color = TGColors.GoldDeep, fontSize = 10.sp,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(TGColors.Gold.copy(alpha = 0.12f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        if (isPro) "已激活 · 同时追踪不限" else "未激活 · 免费版同时追踪 1 个任务",
+                        if (isPro) "已点亮 · 谢谢你的支持"
+                        else "还没点亮 · 免费版任务不限量，同时追踪 1 个",
                         color = if (isPro) TGColors.Jade else TGColors.InkMute,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
                 TextButton(onClick = { showLicenseDialog = true }) {
                     Text(
-                        if (isPro) "查看" else "输入授权码",
+                        if (isPro) "查看" else "点亮",
                         color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium
                     )
                 }
@@ -338,14 +467,16 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 onSubmit = { code ->
                     val info = vm.redeemLicense(code)
                     showLicenseDialog = false
-                    ToastHelper.show(
-                        ctx,
-                        if (info != null) "已激活，感谢支持！" else "授权码无效，请核对后重试"
-                    )
+                    if (info != null) {
+                        // 点亮成功 → 交给仪式感弹层，不用一句 Toast 敷衍过去
+                        litInfo = info
+                    } else {
+                        ToastHelper.show(ctx, "这个授权码没验证通过，核对一下再试")
+                    }
                 }
             )
         }
-
+        litInfo?.let { info -> LicenseLitOverlay(info = info) { litInfo = null } }
         Spacer(Modifier.height(10.dp))
         // 配对状态（桌面端 mDNS 自动发现后点配对即记录在此）
         // v5.15.19：boss「手机端没有显示已连接」—— 新增【实时连接状态】。
@@ -524,101 +655,6 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         }
 
         Spacer(Modifier.height(10.dp))
-        // ===== v5.15.28 M10：昵称编辑放在设置界面 =====
-        // ===== v5.15.29 L5（boss：没编辑过就用**当前等级名**，编辑过就用用户编辑的）=====
-        // ===== v5.15.29 L6（boss：想改成更高等级的名称时，在**这张卡里**提示一句，但不拦保存）=====
-        Spacer(Modifier.height(10.dp))
-        TGCard(Modifier.fillMaxWidth()) {
-            val pointsNow by vm.totalPoints.collectAsState()
-            val curLevelName = Levels.of(pointsNow).name
-            var nick by remember { mutableStateOf("") }
-            var custom by remember { mutableStateOf(false) }
-            var draft by remember { mutableStateOf("") }
-            var editing by remember { mutableStateOf(false) }
-            val nickFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-            LaunchedEffect(Unit) {
-                runCatching { nick = vm.getSetting("nickname", "") }
-                runCatching { custom = vm.getSetting("nickname_custom", "") == "1" }
-                draft = nick
-            }
-            // 展示值：编辑过 → 用户的；没编辑过 → 当前等级名（升级会自动跟着变）
-            val shown = if (custom && nick.isNotBlank()) nick else curLevelName
-            // 输入值 == 某个「高于当前等级」的等级名 → 给提示（**不拦保存**）
-            val higher = remember(draft, pointsNow, editing) {
-                if (editing) Levels.higherLevelNamed(draft, pointsNow) else null
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("用户名", color = TGColors.InkMute, fontSize = 12.sp)
-                Spacer(Modifier.width(8.dp))
-                if (!editing) {
-                    Text(shown, color = TGColors.GoldDeep, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { draft = if (custom) nick else ""; editing = true }) {
-                        Text("修改", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    }
-                } else {
-                    Text("清空即跟随等级名", color = TGColors.InkMute, fontSize = 11.sp)
-                    Spacer(Modifier.weight(1f))
-                }
-            }
-            if (editing) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it.take(12) },
-                        singleLine = true,
-                        placeholder = { Text(curLevelName, color = TGColors.InkMute, fontSize = 14.sp) },
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium
-                        ),
-                        modifier = Modifier.weight(1f).focusRequester(nickFocus)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    TextButton(onClick = {
-                        val v = draft.trim().take(12)
-                        if (v.isEmpty()) {
-                            // 清空 = 回到「跟随当前等级名」
-                            nick = ""
-                            custom = false
-                            vm.setSyncedSetting("nickname", "")
-                            vm.setSyncedSetting("nickname_custom", "")
-                            prefs.edit().putString("nickname", "").apply()
-                            editing = false
-                            ToastHelper.show(ctx, "已恢复为等级名「$curLevelName」")
-                        } else {
-                            nick = v
-                            custom = true
-                            vm.setSyncedSetting("nickname", v)
-                            vm.setSyncedSetting("nickname_custom", "1")
-                            prefs.edit().putString("nickname", v).apply()
-                            editing = false
-                            ToastHelper.show(ctx, "用户名已改为「$v」")
-                        }
-                    }) { Text("确定", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                    TextButton(onClick = { draft = nick; editing = false }) {
-                        Text("取消", color = TGColors.InkMute, fontSize = 14.sp)
-                    }
-                }
-                // L6：只在编辑昵称的这张卡里出现的提示
-                if (higher != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "这是 ${higher.lv} 级「${higher.name}」的名称，" +
-                            "您可以提前摘取高处的果实，但通往成功的道路仍在您的前方，愿你早日到达。",
-                        color = TGColors.GoldDeep,
-                        fontSize = 11.sp,
-                        lineHeight = 17.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(TGColors.Gold.copy(alpha = 0.10f))
-                            .padding(horizontal = 8.dp, vertical = 7.dp)
-                    )
-                }
-            }
-        }
         // v5.15.3：起床/睡前每日提醒（AlarmManager 每日定时，TaskBarApp prefs 持久化）
         TGCard(Modifier.fillMaxWidth()) {
             Text("每日提醒", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -954,9 +990,10 @@ fun LimitDialog(current: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
 }
 
 /**
- * v5.21.0：授权码对话框。
- *   current == null → 让用户粘贴授权码
- *   current != null → 展示已激活的信息（授权对象 / 订单号 / 签发日期）
+ * v5.21.2：完整版弹窗。
+ *   current == null → 「点亮完整版」：先说清你能得到什么，再让用户粘贴授权码
+ *   current != null → 已点亮：展示授权对象 / 订单号 / 签发日期
+ * 视觉沿用项目既有语言（米白卡 + 极细赤陶边 + 菱形点标记），不新造风格。
  */
 @Composable
 fun LicenseDialog(
@@ -965,6 +1002,8 @@ fun LicenseDialog(
     onSubmit: (String) -> Unit
 ) {
     var code by remember { mutableStateOf("") }
+    val lctx = LocalContext.current
+    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
@@ -975,7 +1014,7 @@ fun LicenseDialog(
                 .padding(18.dp)
         ) {
             Text(
-                if (current != null) "已激活" else "输入授权码",
+                if (current != null) "完整版已点亮" else "点亮完整版",
                 color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(4.dp))
@@ -984,16 +1023,40 @@ fun LicenseDialog(
                 Text("订单号：${current.order}", color = TGColors.InkMute, fontSize = 12.sp)
                 Text("签发日期：${current.issuedAt}", color = TGColors.InkMute, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
-                Text("授权码永久有效，离线验证，不需要联网。", color = TGColors.Jade, fontSize = 12.sp)
+                Text("永久有效，离线验证，不需要联网。", color = TGColors.Jade, fontSize = 12.sp)
             } else {
-                Text(
-                    "付款后把订单号发给作者，你会收到一串授权码。粘贴到这里即可解锁" +
-                        "（多个任务同时追踪、数据导出、外观主题）。",
-                    color = TGColors.InkSoft, fontSize = 12.sp
+                Text("一次买断，永久有效，不用联网。", color = TGColors.InkMute, fontSize = 12.sp)
+                Spacer(Modifier.height(10.dp))
+                // 先说清「你会得到什么」（原先这段挤在一句话里，读着像功能清单）
+                listOf("同时追踪多个任务", "导出备份", "外观主题").forEach { line ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .background(TGColors.Gold, RoundedCornerShape(2.dp))
+                                .graphicsLayer { rotationZ = 45f }
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        Text(line, color = TGColors.InkSoft, fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.trim() },
+                    placeholder = { Text("把授权码粘贴到这里", color = TGColors.InkMute, fontSize = 13.sp) },
+                    singleLine = false,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
                 )
-                Spacer(Modifier.height(8.dp))
-                // v5.21.0：没买过的用户得有地方去 —— 点这行打开爱发电支持页
-                val lctx = androidx.compose.ui.platform.LocalContext.current
+                // 139 个字符靠手输太苦 → 给一个明确的「粘贴」键（读系统剪贴板）
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = {
+                        runCatching { clip.getText()?.text?.let { code = it.trim() } }
+                    }) { Text("粘贴", color = TGColors.GoldDeep, fontSize = 13.sp) }
+                }
                 Text(
                     "还没有授权码？点这里去爱发电支持一下",
                     color = TGColors.GoldDeep, fontSize = 13.sp,
@@ -1005,16 +1068,6 @@ fun LicenseDialog(
                             )
                         }
                     }
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it.trim() },
-                    placeholder = { Text("粘贴授权码", color = TGColors.InkMute, fontSize = 13.sp) },
-                    singleLine = false,
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -1029,9 +1082,10 @@ fun LicenseDialog(
                         onClick = { onSubmit(code) },
                         modifier = Modifier.weight(1f),
                         enabled = code.isNotBlank()
-                    ) { Text("激活") }
+                    ) { Text("点亮") }
                 }
             }
         }
     }
 }
+

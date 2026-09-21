@@ -230,6 +230,20 @@ fn level_of(points: i64) -> serde_json::Value {
     })
 }
 
+/// 解析 "HH:MM"（容忍 "H:M" 与纯 "HH"）；用于 night_notify_time 这类用户可改的时间点。
+/// 越界（>23 时 / >59 分）返回 None，由调用方回落到默认值。
+fn parse_hhmm(s: &str) -> Option<(u32, u32)> {
+    let t = s.trim();
+    let mut it = t.split(':');
+    let h: u32 = it.next()?.trim().parse().ok()?;
+    let m: u32 = match it.next() {
+        Some(x) => x.trim().parse().ok()?,
+        None => 0,
+    };
+    if h > 23 || m > 59 { return None; }
+    Some((h, m))
+}
+
 fn read_setting(db: &Connection, key: &str, default: &str) -> String {
     db.query_row("SELECT value FROM settings WHERE key=?1", params![key], |r| r.get::<_, String>(0))
         .unwrap_or_else(|_| default.to_string())
@@ -257,7 +271,12 @@ fn check_night_notify(state: tauri::State<AppState>) -> serde_json::Value {
     if read_setting(&db, "last_night_notify", "") == today {
         return serde_json::json!({ "pending": false });
     }
-    if Local::now().hour() < 22 {
+    // v5.21.2（boss：「这个时间也让用户自己设置，因为有人早睡早起」）——
+    //   触发点从写死的 22:00 改成读设置 night_notify_time（'HH:MM'，默认 22:00）。
+    //   判定仍是「已过该点 + 今天未提醒」这种宽松口径，所以整点那一分钟没开机也不会漏。
+    let (nh, nm) = parse_hhmm(&read_setting(&db, "night_notify_time", "22:00")).unwrap_or((22, 0));
+    let now0 = Local::now();
+    if now0.hour() < nh || (now0.hour() == nh && now0.minute() < nm) {
         return serde_json::json!({ "pending": false });
     }
 

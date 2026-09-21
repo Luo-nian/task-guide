@@ -287,7 +287,7 @@
       <div class="bless-top night-top">
         <div class="bless-icon night-icon" data-icon="bell" data-icon-size="20" data-icon-sw="1.7"></div>
         <div class="bless-title night-title">今天还没收尾</div>
-        <div class="bless-sub" id="nightSub">22:00 了，还有任务没完成</div>
+        <div class="bless-sub" id="nightSub">还有任务没完成</div>
       </div>
       <div class="bless-msg" id="nightMsg"></div>
       <div class="bless-action">
@@ -334,7 +334,8 @@
             <div class="ph-info">
               <div class="ph-nick-row">
                 <span class="ph-nick-text" id="profileNickText">历练学徒</span>
-                <button class="ph-nick-edit" id="profileNickEdit" title="修改昵称">修改</button>
+                <!-- v5.21.2：昵称编辑已移到「设置 → 用户名」，这里只保留显示 -->
+                <button class="ph-nick-edit" id="profileNickEdit" title="修改昵称" style="display:none">修改</button>
                 <input class="ph-nick-input" id="profileNickname" placeholder="历练学徒" maxlength="12" autocomplete="off" autocorrect="off" spellcheck="false" style="display:none" />
                 <button class="ph-nick-save-btn" id="profileNickSave" style="display:none">保存</button>
               </div>
@@ -397,6 +398,25 @@
       <div class="m-head"><span>设置</span><button class="m-close" data-close-overlay="settingsOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
 
+        <!-- v5.21.2（boss：「用户名称的设置放在设置页面的最上面」）—— 用户名提到第一组 -->
+        <div class="settings-section">
+          <div class="ss-title">用户名</div>
+          <div class="setting-row">
+            <label>用户名</label>
+            <div class="ss-default" id="dsp_setNickname">
+              <span class="ss-cur" id="cur_setNickname">历练学徒</span>
+              <button class="small-btn" id="setNickEditBtn">修改</button>
+            </div>
+            <div class="ss-edit" id="edt_setNickname" style="display:none">
+              <input type="text" id="setNickname" maxlength="12" placeholder="留空 = 跟随等级名" autocomplete="off" autocorrect="off" spellcheck="false" />
+              <button class="small-btn primary" id="setNickSaveBtn">确定</button>
+              <button class="small-btn" id="setNickCancelBtn">取消</button>
+            </div>
+            <div class="ph-nick-warn" id="setNickWarn" style="display:none"></div>
+            <span class="hint">留空即跟随等级名；升级后会自动跟着变</span>
+          </div>
+        </div>
+
         <!-- v5.15.31 重排：分组更清（外观/任务默认/提醒/追踪/连接/关于），并修掉「关于」卡片嵌进「连接」卡片里的嵌套错位 -->
         <div class="settings-section">
           <div class="ss-title">外观</div>
@@ -455,9 +475,16 @@
             <span class="hint">每天到这个点重置「每日任务」</span>
           </div>
           <div class="setting-row">
-            <label>22:00 未完成弹窗</label>
+            <label>未完成弹窗</label>
             <label class="switch"><input type="checkbox" id="setNightNotify" /><span class="slider"></span></label>
-            <span class="hint">每日任务未完成时弹窗提醒</span>
+            <!-- v5.21.2（boss：「这个时间也让用户自己设置，因为有人早睡早起」）——
+                 触发点可改，复用「每日任务刷新时间」那套 时:分 小框 -->
+            <div class="time-input-row">
+              <input class="tbox" id="setNightHour" type="text" inputmode="numeric" maxlength="2" placeholder="22" autocomplete="off" spellcheck="false" />
+              <span class="tsep">:</span>
+              <input class="tbox" id="setNightMin" type="text" inputmode="numeric" maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
+            </div>
+            <span class="hint">到点还没完成就弹一次</span>
           </div>
         </div>
 
