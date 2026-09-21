@@ -358,8 +358,7 @@ function higherLevelName(text) {
   return null;
 }
 function nickWarnText(info) {
-  return '这是 ' + info.lv + ' 级「' + info.name + '」的名称，您可以提前摘取高处的果实，' +
-         '但通往成功的道路仍在您的前方，愿你早日到达。';
+  return '「' + info.name + '」是 ' + info.lv + ' 级称号，当前等级还没到。';
 }
 function refreshNickWarn(inputEl, warnEl) {
   if (!warnEl) return;
@@ -698,7 +697,7 @@ async function render() {
   const lvEl = document.getElementById('listView');
   try {
     await fetchAll();
-    document.title = '[' + points + '分/' + (level?level.name:'无') + '] 任务栏';
+    document.title = '[' + points + '分/' + (level?level.name:'无') + '] next任务';
     const tpEl = document.getElementById('totalPoints');
     if (tpEl) tpEl.textContent = points;
     renderLevelBadge();
@@ -820,7 +819,6 @@ function renderTodayView() {
       <span class="vh-title">今日待办</span>
       <span class="vh-meta">${todayTasks.length} 项未完成</span>
     </div>
-    <div class="vh-hint">早一点完成就多一点余裕</div>
   `;
   if (pinnedTasks.length) {
     // v5.15.28 P3（boss：「正在追踪不用收起功能」）—— 与手机端一致：
@@ -840,7 +838,7 @@ function renderTodayView() {
     </div>`;
   });
   if (todayTasks.length === 0) {
-    html += `<div class="empty-tip">今日所有任务都已完成 ✦</div>`;
+    html += `<div class="empty-tip">今天的任务都完成了</div>`;
   }
   lvEl.innerHTML = html;
   if (typeof initIcons === 'function') initIcons(lvEl);   // v5.15.14：今日待办的分组头图标
@@ -1221,7 +1219,7 @@ function ledgerRowHtml(t) {
   const cat = CAT_LABEL[catOf(t)] || '';
   // v5.15.16：历史任务左键不再打开"外面"的任务详情（boss：历史任务不该跳当前详情）
   //   改为右键菜单「恢复任务 / 取消」；悬停时给个提示
-  return `<div class="lg-row" data-uuid="${t.uuid}" title="右键可恢复任务">
+  return `<div class="lg-row" data-uuid="${t.uuid}" title="右键可恢复到今日">
     <span class="lg-time">${time}</span>
     <span class="lg-title" title="${esc(t.title)}">${esc(t.title)}</span>
     <span class="lg-cat">${cat}</span>
@@ -1234,11 +1232,11 @@ function arcItemHtml(t) {
   // 完成时间容错：后端可能只给 track_status=done 而 done_at 为空，退回 updated_at
   const doneTs = t.done_at || (t.track_status === 'done' ? t.updated_at : null);
   return `
-    <div class="arc-item" data-uuid="${t.uuid}" title="右键 = 恢复此任务到今日待办">
+    <div class="arc-item" data-uuid="${t.uuid}" title="右键可恢复到今日">
       <span class="arc-ico cat-${catOf(t)}">${doneTs ? svgIcon('check',11,2.8) : '<i class="arc-dot"></i>'}</span>
       <div class="arc-main">
         <div class="arc-title">${esc(t.title)}</div>
-        <div class="arc-sub">${CAT_LABEL[catOf(t)] || '未分类'} · 完成于 ${doneTs ? fmtDue(doneTs) : '—'} · 右键恢复</div>
+        <div class="arc-sub">${CAT_LABEL[catOf(t)] || '未分类'} · 完成于 ${doneTs ? fmtDue(doneTs) : '—'}</div>
       </div>
       <span class="arc-points">+${t.reward_points || 10}</span>
     </div>`;
@@ -1325,11 +1323,8 @@ function renderDashboard() {
   const tracking = tasks.filter(isTracking).length;
   const remain = progressInfo.total - progressInfo.done;
   document.getElementById('statRemain').innerHTML = remain + '<span class="unit">项</span>';
-  document.getElementById('statRemainTrend').textContent = remain <= 0 ? '全部完成 ✦' : (remain <= 2 ? '即将完成' : '加油 ✦');
   document.getElementById('statTracking').innerHTML = tracking + '<span class="unit">项</span>';
-  document.getElementById('statTrackingTrend').textContent = tracking > 0 ? '进行时' : '未追踪';
   document.getElementById('statWeek').innerHTML = (progressInfo.week || 0) + '<span class="unit">项</span>';
-  document.getElementById('statWeekTrend').textContent = '稳步前行';
   // v5.15.15：右上角改为语义图标（见 index.html 的 .stat-ico）——
   //   原来这里是数字徽章，跟卡片中间的大数字重复（11 项 / 11），boss 反馈"不应该是现在这样"
   const statIcons = document.querySelectorAll('.stat-card .stat-ico');
@@ -1412,12 +1407,14 @@ function renderLevelBadge() {
 function renderLevelCard() {
   const lv = level || levelOf(points);
   const next = nextLevelOf(points);
-  // 总览大卡
-  // v5.13j：总览大卡设分档 class
+  // v5.21.x：仪表盘上那张重复的「等级卡」已删除（徽章/等级名与身份卡重复），
+  //   这里全部改成空保护，元素不存在就跳过，不影响其余刷新。
   const lch = document.getElementById('levelChar');
-  lch.className = 'level-character rank-lv' + (lv.lv || 1);
-  document.getElementById('levelChar').innerHTML = svgIcon(lv.ico || 'lv1', 30, 1.7);
-  document.getElementById('levelName').textContent = lv.name;
+  if (lch) {
+    lch.className = 'level-character rank-lv' + (lv.lv || 1);
+    lch.innerHTML = svgIcon(lv.ico || 'lv1', 30, 1.7);
+  }
+  const lnEl = document.getElementById('levelName'); if (lnEl) lnEl.textContent = lv.name;
   // 同步 user 头像到三处（顶栏/下午好/profile）
   renderUserAvatar();
   // boss：title 全删，元素自身隐藏避免占行
@@ -1695,34 +1692,32 @@ function showBless(opts) {
   const mEl = document.getElementById('blessMsg');
   if (opts.mode === 'daily') {
     // 今日全完成祝福（每日仅一次）
-    const msgs = [
-      { t:'恭喜你已完成今日任务', s:'愿星辰指引你的前路', m:'日拱一卒，功不唐捐<br>愿你继续保持这份热情' },
-      { t:'今日之约，已圆满', s:'下一段旅程在前方等你', m:'<b>坚持</b>是最高的技巧<br>你已经走在了大多数人前面' },
-      { t:'愿你此刻内心安宁', s:'每一份努力都在积蓄力量', m:'今日播种，明日收获<br>休息一下，准备迎接新的挑战' }
-    ];
-    const m = msgs[Math.floor(Math.random() * msgs.length)];
-    tEl.textContent = m.t; sEl.textContent = m.s; mEl.innerHTML = m.m;
+    // v5.21.x：原来这里是 3 组随机「祝福语」（"愿星辰指引你的前路""日拱一卒，功不唐捐"
+    //   "你已经走在了大多数人前面"…）—— 抒情、说教、还暗含比较，正是 boss 要删的 AI 味文案。
+    //   完成状态本身已经说明一切 → 与手机端同一句平实说明，不再随机。
+    tEl.textContent = '今天的任务都完成了'; sEl.textContent = ''; mEl.innerHTML = '';
   } else if (opts.mode === 'levelup') {
     // v5.14g：等级升级庆祝（金色光晕 + 徽章特效）
     const lv = level || levelOf(points);
     const overlay = document.getElementById('blessOverlay');
     overlay.classList.add('bless-levelup');
     tEl.textContent = opts.title || '恭喜升级！';
-    sEl.textContent = (lv ? 'Lv.' + lv.lv + ' · ' + lv.name : '') + ' · 当前积分 ' + points;
+    sEl.textContent = (lv ? 'Lv.' + lv.lv : '') + ' · 当前积分 ' + points;
     const lvIcon = lv && lv.ico ? svgIcon(lv.ico || 'lv1', 44, 1.4) : svgIcon('star', 40, 1.5);
+    // v5.21.x：删掉「继续加油，冲击下一级」（空话），以及「升级奖励 ×N 积分」——
+    //   代码里升级并不加分（见 detectLevelUp 的 bonus 恒为 0），这句承诺不存在的东西。
     mEl.innerHTML = '<div class="bless-lv-icon rank-lv' + (lv.lv || 1) + '">' + lvIcon + '</div>' +
-      '<b>新的等级已解锁</b><br>' + (lv.title ? '称号：' + lv.title : '继续加油，冲击下一级') +
-      '<div class="bless-crit-badge">✦ 升级奖励 ×' + Math.min(10, (lv.lv || 1)) + ' 积分</div>';
+      '<b>' + (lv.title ? '解锁称号：' + lv.title : '新等级已解锁') + '</b>';
     setTimeout(() => overlay.classList.remove('bless-levelup'), 2500);
   } else if (opts.mode === 'reward') {
-    // 单任务完成奖励（原神风：+N 经验）
+    // 单任务完成奖励（原神风：+N 积分）
     const pts = opts.points || 0;
     const title = opts.title || '本回合';
     const isCrit = !!opts.isCritical;
-    tEl.textContent = '+ ' + pts + ' 经验';
+    // v5.21.x：桌面端这里叫「经验」、其它地方叫「积分」→ 术语统一为「积分」（手机端口径）
+    tEl.textContent = '+ ' + pts + ' 积分';
     sEl.textContent = title;
-    const critBadge = isCrit ? '<div class="bless-crit-badge">✨ ×2 暴击！</div>' : '';
-    // v5.14d：boss 反馈啰嗦"这一小步已被记下" → 简化文案为单行"任务已完成"
+    const critBadge = isCrit ? '<div class="bless-crit-badge">×2 暴击</div>' : '';
     mEl.innerHTML = '<b>任务已完成</b>' + critBadge;
     // v5.11.8 即时庆祝：暴击时弹金色光晕 + 10 颗小金粒散开
     const overlay = document.getElementById('blessOverlay');
@@ -1736,7 +1731,7 @@ function showBless(opts) {
   } else {
     tEl.textContent = '完成';
     sEl.textContent = '';
-    mEl.innerHTML = '继续保持';
+    mEl.innerHTML = '';
   }
   document.getElementById('blessOverlay').style.display = '';
 }
@@ -1985,7 +1980,7 @@ const DDL_OPTS = [
 ];
 const CAT_TIP = {
   'daily': '每天固定时间提醒，第二天自动回到待办',
-  'goal': '为目标坚持推进；默认不限时，也可以设定限时',
+  'goal': '默认不限时，也可以设置截止时间',
   'time-limited': '必须选择限时时长，到期前会提醒',
   'once': '每完成一次记一次数，满次数结算'
 };
@@ -3134,10 +3129,10 @@ function checkEmergency() {
     let trigger = false, rule = '';
     if (totalHours <= 48) {
       const pctRemain = remain / total;
-      if (pctRemain <= (settings.eta_short_pct / 100)) { trigger = true; rule = '短时长 ' + Math.round(settings.eta_short_pct/10) + '/10 阈值'; }
+      if (pctRemain <= (settings.eta_short_pct / 100)) { trigger = true; rule = '剩余不足 ' + Math.round(settings.eta_short_pct) + '%'; }
     } else {
       const remainH = remain / 3600000;
-      if (remainH <= settings.eta_long_h) { trigger = true; rule = '长时长 ' + settings.eta_long_h + 'h 提前'; }
+      if (remainH <= settings.eta_long_h) { trigger = true; rule = '剩余不足 ' + settings.eta_long_h + ' 小时'; }
     }
     if (trigger) {
       const key = t.uuid + ':' + (t.deadline || t.due_at);
@@ -3391,7 +3386,7 @@ async function checkReconnectFail() {
       //   之后状态看右下角常驻胶囊，不再反复弹 toast。
       if (!window._offlineToastShown) {
         window._offlineToastShown = true;
-        showToast('手机暂时不在网络，正在后台自动重连（状态见右下角）');
+        showToast('手机不在网络，正在后台自动重连');
       }
     } else {
       window._offlineToastShown = false;   // 连上了 → 允许下次断连再提示一次
@@ -3426,7 +3421,7 @@ function showNightNotify(titles) {
     '<div class="night-list">' + items + more + '</div>';
   // v5.21.2：副标题不再写死 22:00，按用户设置的触发时刻显示
   const subEl = document.getElementById('nightSub');
-  if (subEl) subEl.textContent = (settings.night_notify_time || '22:00') + ' 了，还有任务没完成';
+  if (subEl) subEl.textContent = (settings.night_notify_time || '22:00') + ' · 还有任务没完成';
   document.getElementById('nightOverlay').style.display = '';
 }
 document.getElementById('nightClose').addEventListener('click', () => {

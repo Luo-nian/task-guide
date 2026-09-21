@@ -93,13 +93,10 @@ internal val CAT_FILTER_LABEL = mapOf(
     "time-limited" to "限时任务", "once" to "次数任务"
 )
 
-private val DONE_QUOTES = listOf(
-    "今天的任务都已经完成啦，可以去休息休息，或者继续完成非今日的任务哦",
-    "全部搞定！今天的进度 100%，干得漂亮",
-    "该做的都做完了，去喝口水奖励一下自己吧",
-    "任务清空！剩下的时间都是你的",
-    "完美收工！明天也继续保持哦"
-)
+/** v5.21.x：原来这里挂着 5 句随机语录（"干得漂亮""完美收工！""去喝口水奖励一下自己吧"…），
+ *  又长又抒情，正是 boss 要删的「情感标签堆砌 + 永远正确的废话」。
+ *  完成状态本身已经说明一切 → 只留一句平实的状态说明。 */
+private const val ALL_DONE_TEXT = "今天的任务都完成了"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,7 +113,11 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
             FloatingActionButton(
                 onClick = { navController.navigate("add") },
                 containerColor = TGColors.Gold,
-                contentColor = TGColors.Black
+                contentColor = TGColors.Black,
+                // v5.21.x 双端统一：FAB 原来用 Material 默认的**圆角方形**（16dp），
+                //   而同一个屏幕上底部中央的「追踪」是正圆、电脑端右下角的 FAB 也是正圆 →
+                //   三个浮动主键里只有这一个不是圆。统一成正圆。
+                shape = androidx.compose.foundation.shape.CircleShape
             ) {
                 TGIcon(R.drawable.ic_add, contentDescription = "添加", tint = TGColors.Black, size = 24.dp)
             }
@@ -173,14 +174,12 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 val allDone = tracking.isEmpty() && todo.isEmpty()
 
                 if (allDone) {
-                    // 随机语录（每次到达此状态重新随机）
-                    val quote = remember(allDone) { DONE_QUOTES.random() }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             TGIcon(R.drawable.ic_check_circle, contentDescription = null, tint = TGColors.Jade, size = 44.dp)
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                quote,
+                                ALL_DONE_TEXT,
                                 color = TGColors.InkSoft,
                                 fontSize = 14.sp,
                                 lineHeight = 22.sp,
@@ -667,7 +666,7 @@ private fun TaskRow(
             }
             if (showFinish) {
                 Text(
-                    "步骤都完成了吗？可以直接点完成哦",
+                    "步骤还没做完，也可以直接完成",
                     color = TGColors.Jade,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp)
@@ -805,7 +804,7 @@ private fun TaskRow(
             }
             if (showFinish) {
                 Text(
-                    "步骤都完成了吗？可以直接点完成哦",
+                    "步骤还没做完，也可以直接完成",
                     color = TGColors.Jade,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp)
@@ -1200,7 +1199,8 @@ fun HabitScreen(vm: TaskViewModel) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("每日任务", color = TGColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp, 12.dp))
         if (habits.isEmpty()) {
-            EmptyState("还没有习惯\n添加一个 type=habit 的任务", Modifier.fillMaxSize())
+            // v5.21.x：原文案「添加一个 type=habit 的任务」把内部字段名直接甩给用户了 → 换成人话
+            EmptyState("还没有习惯\n添加一个习惯类型的任务", Modifier.fillMaxSize())
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(habits, key = { it.uuid }) { habit ->
@@ -1729,7 +1729,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     if (confirmDelete) {
         TGConfirmDialog(
             title = "取消这 ${ms.ids.size} 个任务？",
-            message = "将删除选中的任务（两端一起移除）；操作后底部会出现「撤销」。",
+            message = "两端一起移除。删完底部会出现「撤销」，可撤回。",
             confirmText = "确认取消",
             confirmColor = TGColors.Crimson,
             onConfirm = {
@@ -1746,7 +1746,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
     if (confirmRestore) {
         TGConfirmDialog(
             title = "恢复这 ${ms.ids.size} 个任务？",
-            message = "选中的任务会回到待办。若含逾期未完成的任务，恢复按奖励的一半扣分（不足 1 分按 1 分算）。",
+            message = "回到待办。逾期未完成的按奖励一半扣分（不足 1 分按 1 分）。",
             confirmText = "确认恢复",
             confirmColor = TGColors.Jade,
             onConfirm = {
@@ -1900,7 +1900,7 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     if (confirmDelete) {
         TGConfirmDialog(
             title = "取消这 ${ms.ids.size} 个任务？",
-            message = "将删除选中的任务（两端一起移除），此操作不可撤销。",
+            message = "两端一起移除，此操作不可撤销。",
             confirmText = "确认取消",
             confirmColor = TGColors.Crimson,
             onConfirm = {
@@ -1920,9 +1920,9 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
         TGConfirmDialog(
             title = "恢复这 ${ms.ids.size} 个任务？",
             message = if (hasOverdue)
-                "选中的任务会回到待办。含逾期未完成的任务：恢复按奖励的一半扣分（不足 1 分按 1 分算）。"
+                "回到待办。逾期未完成的按奖励一半扣分（不足 1 分按 1 分）。"
             else
-                "选中的任务会回到待办，并扣回完成时获得的积分。",
+                "回到待办，并扣回完成时获得的积分。",
             confirmText = "确认恢复",
             confirmColor = TGColors.Jade,
             onConfirm = {

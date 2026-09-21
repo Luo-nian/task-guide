@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>任务栏</title>
-<link rel="stylesheet" href="style.css?v=v75">
+<title>next任务</title>
+<link rel="stylesheet" href="style.css?v=v76">
 </head>
 <body>
 <div class="widget" id="app">
@@ -13,7 +13,7 @@
   <header class="topbar" id="topbar" data-tauri-drag-region="true">
     <div class="title">
       <span class="title-glyph"></span>
-      <span>任务栏</span>
+      <span>next任务</span>
     </div>
     <!-- v5.15.27 P1（boss：「已连接那个东西 我只是让你放到左上角的右边一点，
          左上角原本是属于"任务栏"这个名称的 不用动」）——
@@ -159,14 +159,10 @@
         <span class="greet-gem" id="greetGem" title="等级稀有度"></span>
       </div>
 
-      <!-- 等级卡（只显示等级名 + 副标，没有"?"按钮，经验条挪去 profile modal） -->
-      <div class="level-card" id="levelCard">
-        <div class="level-character" id="levelChar"></div>
-        <div class="level-info">
-          <div class="level-name" id="levelName">历练学徒</div>
-          <div class="level-title" id="levelTitle">敢开始，就已经赢了一半</div>
-        </div>
-      </div>
+      <!-- v5.21.x 双端统一：删掉原来的「等级卡」（.level-card = 徽章 + 等级名 + 座右铭）。
+           上面那张身份卡已经把徽章、等级名、积分、距下一级全说了一遍 →
+           同一屏出现两个"等级名 + 徽章"就是重复占位、把重点冲淡。
+           手机端「我的」页也早已把两张卡合并成一张，这里跟进。 -->
 
       <!-- 进度条卡（统一硬编码条形；旧版三样式 tab 已撤） -->
       <div class="progress-card">
@@ -188,20 +184,17 @@
           <span class="stat-ico" data-icon="clock" data-icon-size="17" data-icon-sw="1.9"></span>
           <div class="stat-label">今日剩余</div>
           <div class="stat-value" id="statRemain">0<span class="unit">项</span></div>
-          <div class="stat-trend" id="statRemainTrend">加油 ✦</div>
         </div>
         <div class="stat-card tracking" id="statCardTrack">
           <!-- v5.15.22 D3（boss：这里的图标也要换）crosshair → goal，与追踪页/侧边栏同款 -->
           <span class="stat-ico" data-icon="goal" data-icon-size="17" data-icon-sw="1.9"></span>
           <div class="stat-label">追踪中</div>
           <div class="stat-value" id="statTracking">0<span class="unit">项</span></div>
-          <div class="stat-trend up" id="statTrackingTrend">进行时</div>
         </div>
         <div class="stat-card" id="statCardWeek">
           <span class="stat-ico" data-icon="trophy" data-icon-size="17" data-icon-sw="1.9"></span>
           <div class="stat-label">本周完成</div>
           <div class="stat-value" id="statWeek">0<span class="unit">项</span></div>
-          <div class="stat-trend" id="statWeekTrend">稳步前行</div>
         </div>
       </div>
 
@@ -257,7 +250,7 @@
         <div class="em-label">即将超时的任务</div>
         <div class="em-task" id="emTaskName"></div>
         <div class="em-count" id="emCountdown"></div>
-        <div class="em-msg">请尽快完成或处理，逾期会记一次未完成</div>
+        <div class="em-msg">逾期会记一次未完成</div>
       </div>
       <div class="em-foot">
         <button class="em-btn secondary" id="emLater">稍后</button>
@@ -271,12 +264,12 @@
     <div class="bless-card">
       <div class="bless-top">
         <div class="bless-icon" data-icon="coin" data-icon-size="24" data-icon-sw="1.7"></div>
-        <div class="bless-title" id="blessTitle">恭喜你已完成今日任务</div>
-        <div class="bless-sub" id="blessSub">逐梦的脚步，从未停歇</div>
+        <div class="bless-title" id="blessTitle">今天的任务都完成了</div>
+        <div class="bless-sub" id="blessSub"></div>
       </div>
-      <div class="bless-msg" id="blessMsg">愿你继续保持这份热情<br>下一段旅程在前方等你</div>
+      <div class="bless-msg" id="blessMsg"></div>
       <div class="bless-action">
-        <button class="bless-btn" id="blessClose">继续前行</button>
+        <button class="bless-btn" id="blessClose">好</button>
       </div>
     </div>
   </div>
@@ -413,7 +406,6 @@
               <button class="small-btn" id="setNickCancelBtn">取消</button>
             </div>
             <div class="ph-nick-warn" id="setNickWarn" style="display:none"></div>
-            <span class="hint">留空即跟随等级名；升级后会自动跟着变</span>
           </div>
         </div>
 
@@ -472,7 +464,6 @@
               <span class="tsep">:</span>
               <input class="tbox" id="setDailyRefreshMin" type="text" inputmode="numeric" maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
             </div>
-            <span class="hint">每天到这个点重置「每日任务」</span>
           </div>
           <div class="setting-row">
             <label>未完成弹窗</label>
@@ -484,7 +475,6 @@
               <span class="tsep">:</span>
               <input class="tbox" id="setNightMin" type="text" inputmode="numeric" maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
             </div>
-            <span class="hint">到点还没完成就弹一次</span>
           </div>
         </div>
 
@@ -492,7 +482,6 @@
           <div class="ss-title">提醒</div>
           <div class="setting-row remind-section">
             <label class="lbl-head">默认提醒</label>
-            <span class="hint">新建任务的默认设置</span>
           </div>
           <div class="setting-row">
             <label>提醒方式</label>
@@ -548,7 +537,7 @@
           <div class="setting-row">
             <label>紧急提醒</label>
             <label class="switch"><input type="checkbox" id="setEmergencyOn" /><span class="slider"></span></label>
-            <span class="hint">即将超时的任务主动弹</span>
+            <span class="hint">即将超时主动弹窗</span>
           </div>
         </div>
 
@@ -676,7 +665,6 @@
             <span class="tsep">:</span>
             <input type="text" id="addDailyMin" class="tbox" value="00" inputmode="numeric"
                    maxlength="2" placeholder="00" autocomplete="off" spellcheck="false" />
-            <span class="hint">每天到这个点提醒你</span>
           </div>
         </div>
 
@@ -690,7 +678,7 @@
         </div>
 
         <label class="label">备注</label>
-        <textarea id="addDesc" rows="2" placeholder="可选，补充说明"></textarea>
+        <textarea id="addDesc" rows="2"></textarea>
 
         <label class="label">优先级</label>
         <div class="prio-row" id="addPrioRow">
@@ -760,12 +748,12 @@
     <div class="modal json-modal">
       <div class="m-head"><span>添加 JSON 步骤</span><button class="m-close" data-close-overlay="jsonOverlay"><span class="ico-slot" data-icon="close" data-icon-size="14" data-icon-sw="2.1"></span></button></div>
       <div class="m-body">
-        <label class="label">把外部 AI 拆好的 JSON 粘进来，自动生成步骤</label>
-        <textarea id="jsonArea" class="json-area" rows="7" spellcheck="false" placeholder='把外部 AI 拆好的 JSON 粘到这里…（格式：{"steps":[{"title":"步骤名","attr_label":"可选标签","attr_value":"可选值"}]}）'></textarea>
+        <label class="label">把 AI 拆好的 JSON 粘进来，自动生成步骤</label>
+        <textarea id="jsonArea" class="json-area" rows="7" spellcheck="false" placeholder='把 AI 拆好的 JSON 粘到这里…'></textarea>
 
         <div class="json-example">
           <div class="json-example-head">
-            <span>示例（发给任意 AI，让它照着拆你的任务）</span>
+            <span>示例（发给 AI，让它照这个格式拆）</span>
             <button class="json-copy-btn" id="jsonCopyExample">复制示例</button>
           </div>
           <pre id="jsonExampleText">{
@@ -821,6 +809,6 @@
   </div>
 </div>
 
-<script src="app3.js?v=v80"></script>
+<script src="app3.js?v=v81"></script>
 </body>
 </html>

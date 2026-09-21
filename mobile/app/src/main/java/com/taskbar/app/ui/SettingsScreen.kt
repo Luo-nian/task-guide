@@ -239,9 +239,11 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 // L6：只在编辑昵称的这张卡里出现的提示
                 if (higher != null) {
                     Spacer(Modifier.height(8.dp))
+                    // v5.21.x：原来这里是「您可以提前摘取高处的果实，但通往成功的道路仍在您的前方，
+                    //   愿你早日到达。」—— 比喻 + 说教 + 居高临下，正是 boss 要删的那类文字。
+                    //   改成一句客观事实：说清这个称号属于哪一级，不评价用户。
                     Text(
-                        "这是 ${higher.lv} 级「${higher.name}」的名称，" +
-                            "您可以提前摘取高处的果实，但通往成功的道路仍在您的前方，愿你早日到达。",
+                        "「${higher.name}」是 ${higher.lv} 级称号，当前等级还没到。",
                         color = TGColors.GoldDeep,
                         fontSize = 11.sp,
                         lineHeight = 17.sp,
@@ -259,7 +261,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         TGCard(Modifier.fillMaxWidth()) {
             Text("提醒方式（默认）", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp))
-            Text("可多选组合，如「通知栏+铃声」；任务到点按最高档提醒", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("同时勾选多个时，按最高档提醒", color = TGColors.InkMute, fontSize = 11.sp)
             Spacer(Modifier.height(6.dp))
             // 四通道多选 + 演示键
             listOf(
@@ -309,6 +311,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
 
             // 振动档：显示周期选择（选中振动时）
+            // v5.21.x 双端统一 + 减元素：原来这里是**两行几乎同名**的控件 ——
+            //   上行「短震/中震/长震」（选中），下行「演示短震/演示中震/演示长震」（试听）。
+            //   名字重复、作用重叠，一屏白多出三个按钮。
+            //   合并成一行：点档位 = 选中并直接震一次（试听），功能一个没少。
             if (ReminderStrength.VIBRATE in channels) {
                 Spacer(Modifier.height(8.dp))
                 Text("振动周期", color = TGColors.InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium)
@@ -321,22 +327,12 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     ).forEach { (label, pattern) ->
                         FilterChip(
                             selected = vibratePattern == pattern,
-                            onClick = { saveVibratePattern(pattern) },
+                            onClick = {
+                                saveVibratePattern(pattern)
+                                com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, ReminderStrength.VIBRATE)
+                            },
                             label = { Text(label) }
                         )
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        "演示短震" to "0,300,200,300",
-                        "演示中震" to "0,500,300,500,300,500",
-                        "演示长震" to "0,1000,500,1000,500,1000"
-                    ).forEach { (label, pattern) ->
-                        TextButton(onClick = {
-                            saveVibratePattern(pattern)
-                            com.taskbar.app.notify.NotificationHelper.demoReminder(ctx, ReminderStrength.VIBRATE)
-                        }) { Text(label, color = TGColors.GoldDeep, fontSize = 12.sp) }
                     }
                 }
             }
@@ -659,7 +655,8 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         TGCard(Modifier.fillMaxWidth()) {
             Text("每日提醒", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp))
-            Text("按设定时间每天提醒一次，帮你规律作息", color = TGColors.InkMute, fontSize = 11.sp)
+            // v5.21.x：删掉「按设定时间每天提醒一次，帮你规律作息」——
+            //   「每日提醒」+ 起床/睡前两行已自解释，后半句是永远正确的废话。
             Spacer(Modifier.height(8.dp))
             // 起床
             // v5.15.27 M7b ⭐ 真 bug：开关状态原来是**普通 val**（直接读 prefs），
@@ -767,7 +764,7 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     Spacer(Modifier.height(3.dp))
                     if (alive) {
                         Text(
-                            "已保活 ✓ 系统不会再冻结本应用",
+                            "系统不会再冻结本应用",
                             color = TGColors.Jade, fontSize = 12.sp, fontWeight = FontWeight.Medium
                         )
                         // M4（boss：保活那里的小字给个链接，点击自动找到自启动设置）——
@@ -844,10 +841,14 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     val msg = withContext(Dispatchers.IO) { exportJson(ctx) }
                     ToastHelper.show(ctx, msg, Toast.LENGTH_LONG)
                 }
-            }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Jade)) {
+            }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) {
+                // v5.21.x 按钮主次统一：这里原来是**玉青实底**——全 App 唯一一个用非主色
+                //   做的实底主按钮（玉青在别处一律表示"已完成/已连接"状态）。
+                //   实底主按钮统一回主色（与「点亮」「确定」一致），玉青只留给成功态。
                 Text("导出 JSON 备份", color = Color.White)
             }
-            Text("备份文件保存在应用私有目录，可通过文件管理器查看", color = TGColors.InkMute, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            // v5.21.x：删掉「备份文件保存在应用私有目录，可通过文件管理器查看」——
+            //   导出成功的 Toast 已经给出完整路径，用户不关心存放机制（boss 点名）。
         }
 
         // v5.15.3：起床/睡前时间选择对话框
@@ -1023,7 +1024,7 @@ fun LicenseDialog(
                 Text("订单号：${current.order}", color = TGColors.InkMute, fontSize = 12.sp)
                 Text("签发日期：${current.issuedAt}", color = TGColors.InkMute, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
-                Text("永久有效，离线验证，不需要联网。", color = TGColors.Jade, fontSize = 12.sp)
+                Text("一次买断，永久有效，不用联网。", color = TGColors.Jade, fontSize = 12.sp)
             } else {
                 Text("一次买断，永久有效，不用联网。", color = TGColors.InkMute, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))

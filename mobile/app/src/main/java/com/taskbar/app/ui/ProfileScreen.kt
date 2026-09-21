@@ -85,8 +85,11 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
             )
+            // v5.21.x：原来副行是「等级名 · 积分」，而主行问候语后面已经跟了名字
+            //   （没改过昵称时名字就是等级名）→ 同一屏上等级名出现 3 次。
+            //   副行只留积分，等级名交给下面那张黑金等级卡（它才是主角）。
             Text(
-                "${level.name} · $points 分",
+                "$points 分",
                 color = TGColors.GoldDeep,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
@@ -272,7 +275,10 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        // 统计卡：今日进度 + 习惯坚持（正反馈层层递进）
+        // 统计卡：今日进度 + 习惯坚持
+        // v5.21.x：两张卡原来各多一行小字（「今天要做的事」「最长连续打卡」）——
+        //   前者是纯填充（"今日进度 1 个待完成"已自解释），去掉；后者同理（卡片标题已说明是什么）。
+        //   两张卡一起变两行，高度也保持齐平。
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TGCard(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,7 +293,6 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text("今天要做的事", color = TGColors.InkMute, fontSize = 10.sp)
             }
             TGCard(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -302,7 +307,6 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text("最长连续打卡", color = TGColors.InkMute, fontSize = 10.sp)
             }
         }
 

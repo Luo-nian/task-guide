@@ -776,8 +776,8 @@ fun CompletionCelebration(
                 fontSize = 12.sp,
                 letterSpacing = 1.sp
             )
-            Spacer(Modifier.height(14.dp))
-            Text("点击任意位置关闭", color = Color(0xFFEDE4D3).copy(alpha = 0.5f), fontSize = 10.5.sp, letterSpacing = 1.sp)
+            // v5.21.x：删掉「点击任意位置关闭」—— 弹层 2.4s 自动消失，点任意处也能关，
+            //   这句既不是必需信息、又要占一行版面（boss：「很多文字提示没必要」）。
         }
     }
 }

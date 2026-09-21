@@ -291,7 +291,7 @@ fun AddStepDialog(
                 // JSON 粘贴模式：多行输入 + 解析+应用 + 复制示例
                 Column {
                     Text(
-                        "把 AI 拆解的结果（或示例格式）粘到下面，应用后会批量添加到本任务。",
+                        "把 AI 拆好的 JSON 粘到下面，解析后批量加成本任务的步骤。",
                         color = TGColors.InkMute, fontSize = 12.sp
                     )
                     Spacer(Modifier.height(6.dp))
@@ -346,7 +346,7 @@ fun AddStepDialog(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text("属性与值是选填的，比如「距离 5km」「用时 30分钟」，不用可以留空", color = TGColors.InkMute, fontSize = 12.sp)
+                    Text("选填，如「距离 5km」", color = TGColors.InkMute, fontSize = 12.sp)
                     Spacer(Modifier.height(6.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedTextField(
@@ -604,9 +604,9 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 }
                 Text(
                     when (catSel) {
-                        "daily" -> "每天到这个点提醒你，第二天自动回到待办"
-                        "goal" -> "为目标坚持推进；默认不限时，可另设截止时间"
-                        "time-limited" -> "必须选择截止时间，到期前会提醒"
+                        "daily" -> "每天固定时间提醒，第二天自动回到待办"
+                        "goal" -> "默认不限时，也可以设置截止时间"
+                        "time-limited" -> "必须选截止时间，到期前会提醒"
                         else -> "每完成一次记一次数，满次数结算"
                     },
                     color = TGColors.InkMute, fontSize = 11.sp
@@ -918,7 +918,7 @@ fun JsonImportDialog(
         ) {
             Text("添加 JSON 步骤", color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("把 AI 拆解好的 JSON 粘贴进来，自动生成步骤", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("把 AI 拆好的 JSON 粘进来，自动生成步骤", color = TGColors.InkMute, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = text,
@@ -932,7 +932,7 @@ fun JsonImportDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = {
                     clipboard.setText(androidx.compose.ui.text.AnnotatedString(sample))
-                    ToastHelper.show(ctx, "示例已复制，去 AI 那边照着格式拆解")
+                    ToastHelper.show(ctx, "已复制，发给 AI 让它照格式拆解")
                 }) { Text("复制示例", color = TGColors.GoldDeep, fontSize = 12.sp) }
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text("取消", color = TGColors.InkSoft) }

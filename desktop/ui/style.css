@@ -58,15 +58,19 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 模拟桌面背景（预览模式）—— 暖亚麻光 */
+/* 模拟桌面背景（预览模式）—— 暖亚麻光
+   v5.21.x 双端统一：原来这里混着两团**冷调**光斑（天蓝 rgba(120,160,200) +
+   淡紫 rgba(190,170,220)），是手机端已经废弃的"冰川蓝"遗留。手机端背景三色
+   （#FAF0D8 / #F5EFE0 / #EFE1B8）只有暖白→暖米，这里同步改成同色系，
+   换设备时底色不再偏冷。 */
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: -2;
   background:
-    radial-gradient(90% 70% at 78% 12%, rgba(232, 203, 127, 0.28), transparent 55%),
-    radial-gradient(70% 60% at 12% 85%, rgba(120, 160, 200, 0.14), transparent 60%),
-    radial-gradient(60% 50% at 88% 88%, rgba(190, 170, 220, 0.12), transparent 55%),
-    linear-gradient(170deg, #F5EEDF 0%, #F0E9DB 45%, #E7DEC9 100%);
+    radial-gradient(90% 70% at 78% 12%, rgba(232, 203, 127, 0.30), transparent 55%),
+    radial-gradient(70% 60% at 12% 85%, rgba(214, 178, 98, 0.16), transparent 60%),
+    radial-gradient(60% 50% at 88% 88%, rgba(216, 168, 124, 0.14), transparent 55%),
+    linear-gradient(170deg, #FAF0D8 0%, #F5EFE0 45%, #EFE1B8 100%);
 }
 body::after {
   content: "";
@@ -256,27 +260,27 @@ body::after {
   border-radius: 2px;
   box-shadow: 0 0 6px var(--glow-gold);
 }
-/* 侧栏图标：统一 24px 圆角渐变底 + 白色符号（分类专属色） */
+/* 侧栏图标：v5.21.x 双端统一 —— 原来是 8 个**各自不同色相的渐变方块**
+   （紫/橘/紫/蓝/紫/橙/绿/金），一竖排下来就是一道彩虹，既杂乱、又属于手机端
+   已经废弃的冷调色（冰川蓝/紫）。改成与手机端底部导航同一套逻辑：
+   **常态只有一种墨色，选中态才上主色**。
+   （纹章守则也明确："更高级"不靠颜色堆叠；同理，导航不靠颜色区分。） */
 .nav-item .ico {
   width: 24px; height: 24px;
-  border-radius: 7px;
+  border-radius: var(--r-ctrl, 8px);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 1px 4px rgba(110, 80, 30, 0.18);
-  transition: transform .2s, box-shadow .2s;
+  font-size: 12px;
+  background: transparent;       /* 去掉彩色渐变底 */
+  color: inherit;                /* 跟随 .nav-item 的墨色 / 选中主色 */
+  box-shadow: none;
+  transition: transform .2s, color .2s;
   font-style: normal;
 }
 .nav-item:hover .ico { transform: scale(1.08); }
-.nav-item.active .ico { box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.1), 0 0 10px var(--glow-gold); }
-.ico-overview { background: linear-gradient(135deg, #A78BFA, #5B3FB0); }
-.ico-today    { background: linear-gradient(135deg, #F5B95D, #C98432); }   /* v5.14e：今日图标（橘黄）—— 之前没定义导致 .ico 容器空白 */
-.ico-tracking { background: linear-gradient(135deg, #B49BE0, #7E62A6); }   /* v5.14g：追踪图标（紫色菱形/准星） */
-.ico-daily    { background: linear-gradient(135deg, #5BA3D0, #2E6FA0); }
-.ico-goal     { background: linear-gradient(135deg, #B49BE0, #7E62A6); }  /* boss #16：补目标任务图标 */
-.ico-lim      { background: linear-gradient(135deg, #D88A3F, #A55F1A); }
-.ico-once     { background: linear-gradient(135deg, #4A8B6F, #2E6F58); }
-.ico-archive,
-.ico-clock    { background: linear-gradient(135deg, #C9A227, #8A6B30); }  /* boss #16：补历史任务图标 */
+.nav-item.active .ico { box-shadow: none; }
+/* 分类图标不再各自配色 —— 保留类名（HTML/JS 仍在用），只清掉配色 */
+.ico-overview, .ico-today, .ico-tracking, .ico-daily,
+.ico-goal, .ico-lim, .ico-once, .ico-archive, .ico-clock { background: transparent; }
 .nav-item .nav-tip {
   display: none !important;            /* boss #22：隐藏旧 nav-tip，改用全局软件风 #_softTip */
 }
@@ -487,26 +491,22 @@ body::after {
   box-shadow: var(--shadow-card);
   transition: all .2s;
 }
-/* 行边缘渐变（左→右 金色淡入淡出） */
-.cat-card::before, .cat-card::after {
-  content: "";
-  position: absolute; top: 0; bottom: 0; width: 8px;
-  pointer-events: none;
-  opacity: 0.7;
-}
-.cat-card::before { left: 0; background: linear-gradient(90deg, var(--gold-light), transparent); }
-.cat-card::after  { right: 0; background: linear-gradient(270deg, var(--gold-light), transparent); }
+/* v5.21.x：删掉分类卡左右两侧各 8px 的「金色渐隐边」——
+   它是纯装饰（不承载任何信息），且每张分类卡都有两条，一列排下来就是 2N 条金色光晕，
+   正是 boss 说的"杂乱"。卡片靠底色 + 描边 + 圆角已经足够区分。 */
 .cat-card:hover { box-shadow: var(--shadow-hover); }
 /* v5.15.21 D3（boss：把追踪中的任务和其他任务隔开，放个框框住）——
-   给追踪卡一个专属的天蓝描边 + 冷调底，与普通分类卡（米金）明确区分。 */
+   给追踪卡一个专属描边 + 底色，与普通分类卡（米金）明确区分。
+   v5.21.x 双端统一：原来是**天蓝**（冷调），与手机端已废弃的"冰川蓝"同源；
+   手机端「正在追踪」分组用的是低饱和灰紫（#A38FA0 @10%），这里改成同一色系。 */
 #catCardTracking {
-  border: 1.5px solid rgba(112, 158, 208, 0.62);
-  background: linear-gradient(180deg, rgba(238, 247, 255, 0.96), rgba(252, 250, 243, 0.90));
-  box-shadow: 0 0 0 1px rgba(112, 158, 208, 0.16), var(--shadow-card);
+  border: 1.5px solid rgba(163, 143, 160, 0.58);
+  background: linear-gradient(180deg, rgba(244, 240, 244, 0.96), rgba(252, 250, 243, 0.90));
+  box-shadow: 0 0 0 1px rgba(163, 143, 160, 0.16), var(--shadow-card);
   margin-bottom: 10px;
 }
 #catCardTracking .cc-head { background: transparent; }
-#catCardTracking .cc-title { color: #35688F; }
+#catCardTracking .cc-title { color: #6B5A6D; }
 .cc-head {
   display: flex; align-items: center; gap: 5px;
   padding: 4px 8px 4px 10px;          /* 上下 padding 减 20% */
@@ -705,10 +705,8 @@ body::after {
   position: relative;
   overflow: hidden;
 }
-.progress-card::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-  background: linear-gradient(180deg, var(--gold-light), var(--gold-deep));
-}
+/* v5.21.x：删掉进度卡左侧 4px 金色竖光条（纯装饰；同屏已有多张卡带同类色条 → 杂乱）。
+   卡片标题「今日进度」+ 进度条本身已经把这一块说清楚了。 */
 .progress-head {
   display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
 }
@@ -960,9 +958,6 @@ body::after {
 .stat-label { color: var(--ink-mute); font-size: 10.5px; letter-spacing: 0.5px; margin-bottom: 4px; }
 .stat-value { color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.1; }
 .stat-value .unit { color: var(--ink-mute); font-size: 11px; font-weight: 400; margin-left: 2px; }
-.stat-trend { color: var(--ink-mute); font-size: 10px; margin-top: 3px; }
-.stat-trend.up { color: var(--jade); }
-.stat-trend.warn { color: var(--orange); }
 
 /* v5.15.26 P6（boss：卡片要分等级设计，越高级越高贵；**不得影响任何文字和图标的观感**）——
    这里只改【外框颜色 / 外发光 / 角落光斑】这三样"装饰层"，一律不碰 color/font-size/filter，
@@ -2225,7 +2220,6 @@ input::placeholder { color: var(--ink-faint); }
 .progress-title { font-size: 14px; }
 .progress-stat .sep { font-size: 15px; }
 .stat-label { font-size: 12.5px; }
-.stat-trend { font-size: 12.5px; }
 .stat-value .unit { font-size: 12px; }
 .tip-card .tip-text { font-size: 13px; }
 .vh-title { font-size: 14px; }
@@ -3257,3 +3251,46 @@ html, body { background-color: var(--bg-paper) !important; background-image: non
 /* v5.21.2：设置页「用户名」——文本型输入框（原来的 .ss-edit 只针对 number） */
 .ss-edit input#setNickname { width: 150px; padding: 4px 8px; font-size: 13px; }
 #setNickWarn { margin-top: 6px; }
+
+/* ==========================================================================
+   v5.21.x · 双端视觉统一层（手机端为基准）
+   --------------------------------------------------------------------------
+   基准（取自手机端 UiFoundation.kt 与各屏）：
+     · 卡片/面板/弹窗圆角 14 ；卡片内边距 14~16
+     · 控件（按钮 / 输入框 / 分段控件）圆角 8
+     · 胶囊 999 、小标签 4
+     · 分隔线一律 1px 主色淡边
+     · 主按钮 = 主色实底 + 白字；次按钮 = 描边；三 = 纯文字
+   动机：本文件是历版逐条叠加出来的，同类元素的圆角散落在 6/8/9/10/12px 之间、
+   卡片内边距在 10/12/14px 之间，两端"同类元素长得不一样"。本块统一放在文件末尾，
+   用同样的选择器覆盖前面的零散取值。
+   ⚠️ 只管几何与层级，不动配色语义：桌面端主色仍是鎏金，身份卡/徽章的黑金体系不动。
+   ========================================================================== */
+:root {
+  --r-card: 14px;    /* 卡片 / 面板 / 弹窗 */
+  --r-ctrl: 8px;     /* 按钮 / 输入框 / 分段控件 */
+  --r-tag:  4px;     /* 小标签 */
+  --r-pill: 999px;   /* 胶囊 */
+}
+
+/* —— 1. 容器圆角统一 —— */
+.stat-card, .cat-card, .progress-card, .week-strip, .profile-card,
+.settings-section, .modal, .bless-card, .crop-card { border-radius: var(--r-card); }
+
+/* —— 2. 控件圆角统一 —— */
+.ico-btn, .small-btn, .seg-btn, .search, .arc-search-btn, .arc-tab,
+.rem-device-btn, .rem-time-btn, .rem-cat-btn, .cat-btn, .ddl-btn, .prio-btn,
+input[type=text], input[type=number], input[type=password], select, textarea {
+  border-radius: var(--r-ctrl);
+}
+
+/* —— 3. 卡片内边距节奏统一 —— */
+.profile-card, .progress-card { padding: 14px 16px; }
+.week-strip { padding: 14px 16px 12px; }
+.stat-card { padding: 12px 14px; }
+
+/* —— 4. 统计卡：删掉第三行装饰语后补足高度，三张卡等高、数值居中偏上 —— */
+.stat-card { min-height: 80px; display: flex; flex-direction: column; justify-content: center; }
+
+/* —— 5. 分隔线统一：分组行之间一律实线 1px（原来这里是虚线，与别处的实线不一致）—— */
+.setting-row + .setting-row { border-top: 1px solid var(--border-soft); }
