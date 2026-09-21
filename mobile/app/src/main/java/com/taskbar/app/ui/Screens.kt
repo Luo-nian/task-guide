@@ -2060,8 +2060,11 @@ fun AppTopBar(currentRoute: String?, vm: TaskViewModel, navController: NavContro
                     Modifier.fillMaxWidth().padding(8.dp, 10.dp, 12.dp, 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 人物边框头像 → 我的
-                    AvatarFrame(onClick = { navController.navigate("profile") })
+                    // 身份位（等级徽章）→ 我的；v5.22.1 起不再显示头像
+                    AvatarFrame(
+                        lv = com.taskbar.app.data.model.Levels.of(points).lv,
+                        onClick = { navController.navigate("profile") }
+                    )
                     Spacer(Modifier.width(10.dp))
                     Text(
                         "next任务",
@@ -2126,25 +2129,13 @@ private fun barWithTitle(title: String, navController: NavController, showBack: 
     }
 }
 
-/** 人物边框头像（克制：圆形卡色底 + 金边 + 墨色人形），点开进入我的 */
+/** 顶栏身份位（点开进入「我的」）。
+ *  v5.22.1（boss：「为什么手机端还有头像存在 我不是说不要头像了吗 ……现在双端只有一端有头像是个问题」）——
+ *  这里原本显示"自定义头像"（电脑端同步来的照片 settings.avatar_img，或 emoji avatar_emoji），
+ *  而电脑端同一位置早已换成**等级徽章**（v5.15.29 L4）→ 双端不一致。
+ *  现改为两端统一的**等级徽章**：App 内不再显示任何头像。 */
 @Composable
-fun AvatarFrame(onClick: () -> Unit) {
-    // v5.15：自定义 emoji 头像（taskguide_prefs avatar_emoji）—— 注册 prefs 监听，profile 改动后即时刷新
-    val ctx = LocalContext.current
-    val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
-    var emoji by remember { mutableStateOf(prefs.getString("avatar_emoji", "") ?: "") }
-    DisposableEffect(prefs) {
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
-            if (key == "avatar_emoji" || key == null) emoji = sp.getString("avatar_emoji", "") ?: ""
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-    // v5.15.7：电脑端自定义头像（settings.avatar_img）跨端同步后顶栏也显示
-    val repo = remember { com.taskbar.app.TaskBarApp.instance.repo }
-    val syncedAvatar by remember(repo) { repo.observeSetting("avatar_img") }
-        .collectAsState(initial = null)
-    val syncedBmp = rememberAvatarBitmap(syncedAvatar)
+fun AvatarFrame(lv: Int, onClick: () -> Unit) {
     PressIcon(onClick = onClick) {
         Box(
             Modifier
@@ -2154,23 +2145,7 @@ fun AvatarFrame(onClick: () -> Unit) {
                 .border(1.5.dp, TGColors.Gold, androidx.compose.foundation.shape.CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (syncedBmp != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = syncedBmp,
-                    contentDescription = "我的",
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (emoji.isNotEmpty()) {
-                Text(emoji, fontSize = 16.sp)
-            } else {
-                TGIcon(
-                    drawable = R.drawable.ic_avatar,
-                    contentDescription = "我的",
-                    tint = TGColors.Ink,
-                    size = 20.dp
-                )
-            }
+            LevelEmblem(lv = lv, size = 24.dp, animated = false)
         }
     }
 }

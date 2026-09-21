@@ -1,4 +1,4 @@
-// 任务栏 桌面端前端 v4.6
+// next任务 桌面端前端
 // 暖色浅色 + 三栏布局（7% / 30% / 63%）
 // 等级系统 + 每日进度条（三样式）+ 涟漪追踪 + 步骤推进 + 挂件模式 + SVG 图标库
 // ⚠️ 2026-09-02 22:5x 修复：原 `const isTauri` 与 Tauri/WebView2 环境预置的全局保留名
@@ -3023,7 +3023,7 @@ document.getElementById('setScanBtn').addEventListener('click', async () => {
   box.innerHTML = '正在扫描…';
   let list = [];
   try { list = await call('discover_devices', { timeoutMs: 3000 }); } catch (e) { box.innerHTML = '扫描失败：' + e.message; return; }
-  if (!list.length) { box.innerHTML = '未发现手机端服务。<br>请确认手机「任务栏」已打开同步（设置-同步服务器），且与电脑在同一 WiFi。'; return; }
+  if (!list.length) { box.innerHTML = '未发现手机端服务。<br>请确认手机「next任务」已打开同步（设置-同步服务器），且与电脑在同一 WiFi。'; return; }
   box.innerHTML = '';
   list.forEach(d => {
     const row = document.createElement('div');
@@ -3661,4 +3661,15 @@ function _nickExitEdit() {
   if (settingsBtn) settingsBtn.addEventListener('click', () => {
     if (edt.style.display !== 'none') exit(); else refresh();
   });
+})();
+
+/* ==========================================================================
+   v5.22.1：界面上的版本号统一由这里出
+   原先「关于」里写死 <span class="hint">v5.17.1</span>，项目已走到 v5.22.x 也没人改 →
+   版本号漂了 5 个小版本。现在只有一个来源，改版本只改这一行。
+   ========================================================================== */
+const UI_VERSION = 'v5.22.1';
+(function fillUiVersion() {
+  const el = document.getElementById('aboutVersion');
+  if (el) el.textContent = UI_VERSION;
 })();

@@ -588,7 +588,7 @@
           <div class="ss-title">关于</div>
           <div class="setting-row">
             <label>版本</label>
-            <span class="hint">v5.17.1</span>
+            <span class="hint" id="aboutVersion">v5.22.1</span>
           </div>
         </div>
 
@@ -786,28 +786,8 @@
 
 </div>
 
-<!-- 头像裁剪器 v4.13.2 专业版（参考 Instagram/微信/Discord）：
-     圆形 frame + box-shadow 暗遮罩 + 三分辅助线 + 底部工具栏（取消 + 比例 + 完成）
-     去 slider/旋转：拖动 + 双击缩放 + 滚轮缩放 + 比例切换 -->
-<div class="crop-overlay" id="cropOverlay">
-  <div class="crop-card">
-    <div class="crop-title">✂ 调整你的头像</div>
-    <div class="crop-hint"><b>拖动图片</b>移动位置 · <b>滚轮</b>或<b>双击</b>缩放</div>
-    <div class="crop-stage-wrap">
-      <div class="crop-frame" id="cropFrame">
-        <div class="crop-img-wrap" id="cropImgWrap"><img class="crop-img" id="cropImg" /></div>
-      </div>
-    </div>
-    <div class="crop-toolbar">
-      <div class="left">
-        <button class="crop-btn" id="cropCancel">取消</button>
-      </div>
-      <div class="right">
-        <button class="crop-btn primary" id="cropConfirm">使用此头像</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- v5.22.1（boss：不要头像）—— 原「头像裁剪器 v4.13.2」整块已删除：
+       桌面端早已无任何上传/选择头像的入口（v5.15.29 L4 身份位改为等级徽章），这块是死 UI。 -->
 
 <script src="app3.js?v=v81"></script>
 </body>
