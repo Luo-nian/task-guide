@@ -69,7 +69,14 @@ data class Task(
     /** 里程碑目标次数 / 次数任务总次数（JSON: count） */
     @ColumnInfo(name = "target")
     @kotlinx.serialization.SerialName("count")
-    val target: Int = 1
+    val target: Int = 1,
+
+    /**
+     * v5.24.0：**提前提醒分钟数**（0 = 到点才提醒）。
+     *   多份体验测试命中：产检、交片、服药这类"错过就麻烦"的事，只有到点响一次，
+     *   而"提前量"此前是个**没有任何消费点**的死设置 —— 用户以为设了，实际没人读。
+     */
+    @ColumnInfo(name = "remind_ahead_min") val remindAheadMin: Int = 0
 )
 
 // ==================== 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 未受理升级） ====================

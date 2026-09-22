@@ -162,7 +162,9 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             val next = if (daily)
                 com.taskbar.app.notify.ReminderScheduler.nextOccurrenceFor(due, t.repeatRule, now)
             else due
-            if (next > now) com.taskbar.app.notify.ReminderScheduler.schedule(ctx, uuid, next, strength)
+            // v5.24.0：提前提醒（与 rescheduleAll 同一口径）
+            val fireAt = next - (t.remindAheadMin.coerceAtLeast(0) * 60_000L)
+            if (fireAt > now) com.taskbar.app.notify.ReminderScheduler.schedule(ctx, uuid, fireAt, strength)
         }
     }
 
@@ -170,11 +172,11 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun createTask(
         type: String, title: String, desc: String, category: String,
         priority: String, dueAt: Long?, repeatRule: String?, deadline: Long?,
-        reminderStrength: String? = null, target: Int = 1,
+        reminderStrength: String? = null, target: Int = 1, remindAheadMin: Int = 0,
         onCreated: (String) -> Unit = {}
     ) = viewModelScope.launch {
         val task = repo.createTask(type, title, desc, category, priority, dueAt, repeatRule, deadline,
-            reminderStrength = reminderStrength, target = target)
+            reminderStrength = reminderStrength, target = target, remindAheadMin = remindAheadMin)
         refreshWidget()
         rescheduleOne(task.uuid)
         onCreated(task.uuid)

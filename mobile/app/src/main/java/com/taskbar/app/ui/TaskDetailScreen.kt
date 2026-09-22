@@ -509,6 +509,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
         ReminderStrength.parseConfig(g)
     }
     // 提醒方式：四通道多选 + 端选择（存储为 serializeConfig 格式）
+    // v5.24.0：提前提醒（分钟）。0 = 到点提醒
+    var remindAhead by remember { mutableStateOf(0) }
     var reminderChannels by remember { mutableStateOf(reminderDefaults.first) }
     var reminderScope by remember { mutableStateOf(reminderDefaults.second) }
     // 限时任务不允许"不提醒"
@@ -554,7 +556,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 t.type == TaskType.REPEAT -> "time-limited"
                 else -> "once"
             }
-            category = t.category; dueAt = t.dueAt; habitRule = t.repeatRule
+            category = t.category; dueAt = t.dueAt; habitRule = t.repeatRule; remindAhead = t.remindAheadMin
             if (catSel == "goal" && t.dueAt != null) goalDeadlineOn = true
             // 编辑：解析任务已存配置
             val (ch, sc) = ReminderStrength.parseConfig(t.reminderStrength)
@@ -696,6 +698,26 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 // v5.15.23 M13（boss：「目标任务如果没有设置截止时间，那下面的提醒方式之类的也没必要了」）——
                 //   目标类型且未开截止时间 → 整块提醒设置不渲染。
                 if (!(catSel == "goal" && !goalDeadlineOn)) run {
+                    // v5.24.0：**提前提醒** —— 产检/交片/服药这类"错过就麻烦"的事，到点才响一次太晚。
+                    //   此前"提前量"是没有任何消费点的死设置（多份体验测试命中）。
+                    if (reminderScope != com.taskbar.app.data.model.ReminderStrength.SCOPE_NONE) {
+                        Text("提前提醒", color = TGColors.InkSoft, fontSize = 13.sp)
+                        Spacer(Modifier.height(4.dp))
+                        listOf(0 to "到点", 5 to "提前5分", 30 to "提前30分", 60 to "提前1小时", 1440 to "提前1天")
+                            .chunked(3).forEach { chunk ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    chunk.forEach { (v, l) ->
+                                        FilterChip(
+                                            selected = remindAhead == v,
+                                            onClick = { remindAhead = v },
+                                            label = { Text(l) }
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                            }
+                        Spacer(Modifier.height(2.dp))
+                    }
                     Text("提醒", color = TGColors.InkSoft, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     // 1) 端（单选）——每行两个，防挤压
@@ -812,7 +834,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                                 priority = priority, category = finalCat, dueAt = finalDue,
                                 repeatRule = finalRepeat, deadline = deadline,
                                 reminderStrength = remCfg,
-                                target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                                target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+                                remindAheadMin = remindAhead
                             ))
                             // 批量添加新建的步骤
                             pendingSteps.forEach { (t, l, v) ->
@@ -822,6 +845,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                             vm.createTask(type, title.trim(), desc, finalCat, priority, finalDue, finalRepeat, deadline,
                                 reminderStrength = remCfg,
                                 target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+                                remindAheadMin = remindAhead,
                                 onCreated = { uuid ->
                                     pendingSteps.forEach { (t, l, v) ->
                                         if (t.isNotBlank()) vm.addStep(uuid, t.trim(), l.trim(), v.trim())

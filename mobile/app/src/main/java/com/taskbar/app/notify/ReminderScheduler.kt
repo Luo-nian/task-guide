@@ -219,8 +219,10 @@ object ReminderScheduler {
                 //   "已过期未完成 → 立即提醒"分支，等于天天把每日任务当逾期。
                 //   这里先折算成"今天那个时刻"（今天已过 → 明天那个时刻）。
                 if (dailyKind) due = nextOccurrenceFor(due, t.repeatRule, now)
-                if (due > now) {
-                    schedule(context, t.uuid, due, strength)
+                // v5.24.0：**提前提醒** —— 把响铃时刻往前挪 remindAheadMin 分钟
+                val fireAt = due - (t.remindAheadMin.coerceAtLeast(0) * 60_000L)
+                if (fireAt > now) {
+                    schedule(context, t.uuid, fireAt, strength)
                 } else if (!dailyKind) {
                     // 已过期未完成 → 立即提醒（未完成警告）
                     // ⚠️ 每日型任务不走这里：它没有"逾期"这回事
@@ -266,7 +268,10 @@ object ReminderScheduler {
 
         // 未受理升级：N 分钟后若还没处理，按最高档升一级（notify→vibrate→beep→ring）
         val prefs = ctx.applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
-        val escalateOn = prefs.getBoolean("reminder_escalate_enabled", true)
+        // v5.24.0：**默认关闭**。原来默认 true，而设置页里那个开关早已被删除 →
+        //   用户无法关闭它，夜里没处理的通知会自动升级成振动/响铃
+        //   （夜班作息用户直接被吵醒；体验测试报告命中，且这属于"用户看不见也关不掉的行为"）。
+        val escalateOn = prefs.getBoolean("reminder_escalate_enabled", false)
         if (escalateOn && strength != "repeat") {   // 旧 repeat 已有独立链式，不叠加升级
             val minutes = prefs.getInt("reminder_escalate_minutes", 5)
             val (channels, scope) = com.taskbar.app.data.model.ReminderStrength.parseConfig(strength)

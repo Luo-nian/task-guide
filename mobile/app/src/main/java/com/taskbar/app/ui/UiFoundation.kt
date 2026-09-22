@@ -52,6 +52,13 @@ object ToastHelper {
         val t = Toast.makeText(ctx.applicationContext, msg, duration)
         val tv = android.widget.TextView(ctx.applicationContext).apply {
             text = msg
+            // v5.24.0（低视力用户报告）：自定义 View 的 Toast **读屏不会播报** ——
+            //   完成/积分/入库/上限这些反馈对 TalkBack 用户全静默。
+            //   这里是零依赖的两个开关：声明"内容变化要播报" + 对无障碍可见。
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+                accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_ASSERTIVE
+            }
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
             setTextColor(0xFF3A2E1A.toInt())
             textSize = 14f
             maxLines = 3

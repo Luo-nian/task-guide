@@ -276,7 +276,7 @@ interface SyncMetaDao {
 // ==================== Database ====================
 @Database(
     entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -301,6 +301,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE tasks ADD COLUMN target INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        /** v4 → v5：加「提前提醒分钟数」（0 = 到点提醒）；见 Task.remindAheadMin 的说明 */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN remind_ahead_min INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

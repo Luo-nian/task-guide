@@ -99,7 +99,40 @@ class TaskRepository(private val db: AppDatabase) {
         }.timeInMillis
         return taskDao.observeMainListToday(dayStart, dayEnd).map { list ->
             list.map { t -> normalizeDailyReset(t, dayStart) }
+                // v5.24.0：**「每周一三五 / 隔天」的任务不该天天出现在今日待办里**。
+                //   v5.23.0 已让提醒按星期算准，但列表 SQL 不看 weekday →
+                //   设了"每周三"的任务周一到周日都躺在今日（多份体验测试报告一致命中）。
+                //   SQL 里算星期几不划算，这里在内存里过滤（列表规模很小）。
+                .filter { shouldShowOnDay(it, dayStart) }
         }
+    }
+
+    /**
+     * v5.24.0：按 repeatRule 判断这条任务"今天该不该出现在今日列表"。
+     * 只对 `weekly:…` / `everyNd` 生效；其它规则（daily / 无规则）一律照常显示。
+     */
+    internal fun shouldShowOnDay(t: Task, dayStart: Long): Boolean {
+        val rule = t.repeatRule ?: return true
+        if (!rule.startsWith("weekly:") && !rule.startsWith("every")) return true
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = dayStart }
+        // Calendar：周日=1…周六=7 → 本项目规则 1=周一…7=周日
+        val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+        val iso = if (dow == java.util.Calendar.SUNDAY) 7 else dow - 1
+        if (rule.startsWith("weekly:")) {
+            val days = rule.removePrefix("weekly:").split(",")
+                .mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..7 }.toSet()
+            return days.isEmpty() || iso in days
+        }
+        val n = rule.removePrefix("every").removeSuffix("d").toIntOrNull() ?: return true
+        if (n <= 1) return true
+        val base = t.dueAt ?: return true
+        val baseDay = java.util.Calendar.getInstance().apply {
+            timeInMillis = base
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val diffDays = (dayStart - baseDay) / 86_400_000L
+        return diffDays >= 0 && diffDays % n == 0L
     }
 
     /** v5.15.22：今天 0 点（毫秒）—— 每日任务跨天折算的基准（completeTask 也要用同一基准） */
@@ -200,7 +233,8 @@ class TaskRepository(private val db: AppDatabase) {
         repeatRule: String? = null,
         deadline: Long? = null,
         reminderStrength: String? = null,
-        target: Int = 1
+        target: Int = 1,
+        remindAheadMin: Int = 0
     ): Task {
         val t = now()
         // v5.15.21 P2：次数任务（category=once）与里程碑共用 target 承载"次数"。
@@ -217,6 +251,7 @@ class TaskRepository(private val db: AppDatabase) {
             rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(type, priority, cnt),
             reminderStrength = reminderStrength,
             progress = 0, target = cnt,
+            remindAheadMin = remindAheadMin.coerceIn(0, 7 * 24 * 60),
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
