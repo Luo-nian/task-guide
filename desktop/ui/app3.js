@@ -962,7 +962,7 @@ function catTaskHtml(t) {
   // v5.15.21 P4（boss："任务栏右侧放一个小型动态的东西 星星 或者涟漪 现在怎么没有了"）：
   //   菱形 .ct-diamond 的**渲染代码在某次重构时丢了**（CSS 一直在，元素没人生成 → 空转）。
   //   这里补回来：仅 `.tracking` 时由 CSS 显示蓝色菱形 + rippleBreath 涟漪呼吸。
-  return `<div class="cat-task ${isTracking(t) ? 'tracking' : ''} ${isOverdue(t) ? 'overdue' : ''}" data-uuid="${t.uuid}">
+  return `<div class="cat-task ${isTracking(t) ? 'tracking' : ''} ${isOverdue(t) ? 'overdue' : ''}" data-uuid="${t.uuid}" oncontextmenu="ctxOpen(event, '${t.uuid}')">
     <div class="lt-main" onclick="openDetail('${t.uuid}')">
       <span class="ct-title">${esc(t.title)}</span>
       ${timeMetaHtml(t)}
@@ -1038,7 +1038,7 @@ function renderListView() {
     box.innerHTML = `<div class="empty-line">这一类暂时没有任务</div>`;
   } else {
     box.innerHTML = arr.map(t => `
-      <div class="list-task ${isTracking(t)?'tracking':''} ${isOverdue(t)?'overdue':''}" data-uuid="${t.uuid}">
+      <div class="list-task ${isTracking(t)?'tracking':''} ${isOverdue(t)?'overdue':''}" data-uuid="${t.uuid}" oncontextmenu="ctxOpen(event, '${t.uuid}')">
         <div class="lt-main" onclick="openDetail('${t.uuid}')">
           <span class="ct-title">${esc(t.title)}</span>
           ${timeMetaHtml(t)}
@@ -1982,6 +1982,8 @@ ctxMenu.querySelectorAll('button').forEach(b => {
     if (cmd === 'track') await call('start_tracking', { taskUuid: ctxUuid });
     if (cmd === 'untrack') await call('stop_tracking', { taskUuid: ctxUuid });
     if (cmd === 'complete') await call('complete_task', { taskUuid: ctxUuid });
+    // v5.26.0：右键「编辑」→ 直接开编辑表单（原来任务行右键被系统菜单吞掉，完全没法右键）
+    if (cmd === 'edit') { ctxMenu.style.display = 'none'; openEdit(ctxUuid); return; }
     if (cmd === 'delete') {
       if (!confirm('确定删除？')) return;
       await call('delete_task', { taskUuid: ctxUuid });

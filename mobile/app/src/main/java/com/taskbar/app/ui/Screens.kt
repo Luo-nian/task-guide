@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -239,7 +241,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                                 GroupBoxItem(idx == 0, idx == list.lastIndex, TGColors.Gold.copy(alpha = 0.10f)) {
                                 if (task.type == TaskType.HABIT) {
                                     // v5.15.21 M1：传入追踪态，习惯行按"追踪/取消追踪 + 完成"渲染
-                                    HabitRow(task, vm, checkedToday = task.uuid in checkedHabits,
+                                    HabitRow(task, vm, onEdit = { navController.navigate("edit/${task.uuid}") }, checkedToday = task.uuid in checkedHabits,
                                         streak = (habitStats[task.uuid]?.streak ?: 0),
                                         tracking = task.trackStatus == TrackStatus.TRACKING,
                                         onJustStopped = { })   // v5.15.21 P3
@@ -272,14 +274,42 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                      selected: Boolean = false,
                      onToggleSelect: (() -> Unit)? = null,
                      onLongSelect: (() -> Unit)? = null,
-                     onRowClick: (() -> Unit)? = null) {
+                     onRowClick: (() -> Unit)? = null,
+                     // v5.26.0：左右滑动露出的动作需要"编辑"入口
+                     onEdit: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     // v5.15.23 V2（boss：所有任务页面更多是视觉上的问题）——
     //   已完成不再把**整张卡**染成淡绿（12 张绿卡叠在一起像一整块），
     //   改成干净的白卡 + 左侧一条玉色色条：同样一眼看出"做完了"，但层次清爽得多。
     val bg = TGColors.Card
+    // v5.26.0（boss：「给手机端加一个左滑或者右滑某一栏任务的功能」）——
+    //   习惯行（吃药/跑步这类）以前**漏在滑动之外**：boss 手机上第一条就是习惯任务，
+    //   一滑没反应会以为是坏的。这里补上同一套：左滑露出 编辑 / 归档 / 删除。
+    var swipe by remember { mutableStateOf(0f) }
+    var swipeDelConfirm by remember { mutableStateOf(false) }
+    val swipeMax = with(androidx.compose.ui.platform.LocalDensity.current) { 182.dp.toPx() }
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.matchParentSize(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (onEdit != null) SwipeActionButton("编辑", TGColors.Gold) { swipe = 0f; onEdit() }
+            SwipeActionButton("归档", TGColors.Azure) { swipe = 0f; vm.unpinToRepo(task.uuid) }
+            SwipeActionButton("删除", TGColors.Crimson) { swipe = 0f; swipeDelConfirm = true }
+        }
     Row(
         Modifier
+            .offset { androidx.compose.ui.unit.IntOffset(swipe.roundToInt(), 0) }
+            .pointerInput(task.uuid) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        swipe = if (swipe < -swipeMax / 2f) -swipeMax else 0f
+                    }
+                ) { _, drag ->
+                    swipe = (swipe + drag).coerceIn(-swipeMax, 0f)
+                }
+            }
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
@@ -379,6 +409,25 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             }
         }
     }
+    // v5.26.0：与 TaskRow 同一句确认文案
+    if (swipeDelConfirm) {
+        AlertDialog(
+            onDismissRequest = { swipeDelConfirm = false },
+            title = { Text("删除任务", color = TGColors.Ink, fontSize = 16.sp) },
+            text = { Text("删除后无法恢复，确定吗？", color = TGColors.InkSoft, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { swipeDelConfirm = false; vm.deleteTask(task.uuid) }) {
+                    Text("删除", color = TGColors.Crimson)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { swipeDelConfirm = false }) {
+                    Text("取消", color = TGColors.InkMute)
+                }
+            }
+        )
+    }
+    }
 }
 
 /** 列表分区标题（带色块引导）
@@ -477,6 +526,24 @@ private fun GroupBoxItem(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
+/** v5.26.0：任务行左滑露出的动作键（淡底 + 同色细边 + 同色字，与手机端按钮风格一致） */
+@Composable
+private fun SwipeActionButton(label: String, color: Color, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .padding(horizontal = 3.dp)
+            .width(56.dp)
+            .height(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.42f), RoundedCornerShape(10.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 @Composable
 private fun TaskRow(
     task: Task,
@@ -527,9 +594,36 @@ private fun TaskRow(
         }
     }
 
+    // v5.26.0（boss：「给手机端加一个左滑或者右滑某一栏任务的功能 删除 编辑 归档到所有任务之类的」）——
+    //   **左滑露出三个动作键**（编辑 / 归档 / 删除），右滑或点别处复位；
+    //   删除仍然要过二次确认（与详情页同一句文案）。原来的「长按进编辑」「点进详情」都保留。
+    var swipe by remember { mutableStateOf(0f) }
+    var swipeDelConfirm by remember { mutableStateOf(false) }
+    val swipeMax = with(androidx.compose.ui.platform.LocalDensity.current) { 182.dp.toPx() }
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.matchParentSize(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SwipeActionButton("编辑", TGColors.Gold) { swipe = 0f; onEdit() }
+            SwipeActionButton("归档", TGColors.Azure) { swipe = 0f; vm.unpinToRepo(task.uuid) }
+            SwipeActionButton("删除", TGColors.Crimson) { swipe = 0f; swipeDelConfirm = true }
+        }
     // 置顶框（非黑金）：追踪中 = 天蓝框 + 顶部蓝金渐变条（原神风清爽）
     Column(
         modifier = Modifier
+            .offset { androidx.compose.ui.unit.IntOffset(swipe.roundToInt(), 0) }
+            .pointerInput(task.uuid) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        // 超过一半就"吸附"展开，否则弹回
+                        swipe = if (swipe < -swipeMax / 2f) -swipeMax else 0f
+                    }
+                ) { _, drag ->
+                    swipe = (swipe + drag).coerceIn(-swipeMax, 0f)
+                }
+            }
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TGColors.Card)
@@ -838,6 +932,25 @@ private fun TaskRow(
                 }
             }
         }
+    }
+    // v5.26.0：滑动删除也要二次确认（和详情页同一句文案，用户不会看到两套口径）
+    if (swipeDelConfirm) {
+        AlertDialog(
+            onDismissRequest = { swipeDelConfirm = false },
+            title = { Text("删除任务", color = TGColors.Ink, fontSize = 16.sp) },
+            text = { Text("删除后无法恢复，确定吗？", color = TGColors.InkSoft, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { swipeDelConfirm = false; vm.deleteTask(task.uuid) }) {
+                    Text("删除", color = TGColors.Crimson)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { swipeDelConfirm = false }) {
+                    Text("取消", color = TGColors.InkMute)
+                }
+            }
+        )
+    }
     }
 }
 
@@ -1601,7 +1714,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     itemsIndexed(trackingF, key = { _, t -> "t-${t.uuid}" }) { idx, task ->
                         GroupBoxItem(idx == 0, idx == trackingF.lastIndex, TGColors.Violet.copy(alpha = 0.10f)) {
                         if (task.type == TaskType.HABIT) {
-                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                            HabitRow(task, vm, onEdit = { navController.navigate("edit/${task.uuid}") }, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0), tracking = true,
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
@@ -1627,7 +1740,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     }
                     if (!isCatCollapsed("today")) itemsIndexed(todayCheckedList, key = { _, t -> "today-${t.uuid}" }) { idx, task ->
                         GroupBoxItem(idx == 0, idx == todayCheckedList.lastIndex, TGColors.Jade.copy(alpha = 0.10f)) {
-                        HabitRow(task, vm, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
+                        HabitRow(task, vm, onEdit = { navController.navigate("edit/${task.uuid}") }, checkedToday = true, streak = (habitStats[task.uuid]?.streak ?: 0),
                             selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                             onToggleSelect = { ms.toggle(task.uuid) },
                             onLongSelect = { ms.begin(task.uuid) },
@@ -1646,7 +1759,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         if (task.type == TaskType.HABIT) {
                             // v5.15.23 M7/M8：每日任务在仓库页也按习惯行渲染（今日打卡/连续天数），
                             //   且**不给**「移回仓库」——boss：每日任务本来就在主页，这个按钮没意义
-                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                            HabitRow(task, vm, onEdit = { navController.navigate("edit/${task.uuid}") }, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
@@ -1673,7 +1786,7 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                     if (!isCatCollapsed("f")) itemsIndexed(futureF, key = { _, t -> "f-${t.uuid}" }) { idx, task ->
                         GroupBoxItem(idx == 0, idx == futureF.lastIndex, TGColors.Azure.copy(alpha = 0.10f)) {
                         if (task.type == TaskType.HABIT) {
-                            HabitRow(task, vm, checkedToday = task.uuid in todayCheckedHabits,
+                            HabitRow(task, vm, onEdit = { navController.navigate("edit/${task.uuid}") }, checkedToday = task.uuid in todayCheckedHabits,
                                 streak = (habitStats[task.uuid]?.streak ?: 0),
                                 selecting = ms.selecting, selected = ms.isSelected(task.uuid),
                                 onToggleSelect = { ms.toggle(task.uuid) },
