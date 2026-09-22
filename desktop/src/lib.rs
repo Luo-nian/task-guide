@@ -2038,6 +2038,18 @@ pub fn run() {
             Ok(())
         })
         .manage(state)
+/// v5.26.1：发 Windows 系统通知（弹窗会被全屏软件挡住 → 12 个测试身份死于这一点）
+#[tauri::command]
+fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,
             get_habits_status, get_task_detail, get_total_points,
@@ -2052,7 +2064,8 @@ pub fn run() {
             pair_request, pair_poll,   // v5.17.0 双向确认配对
             set_setting, get_setting, save_pairing, load_pairing,
             is_ws_connected, get_ws_peer, push_avatar_emoji,
-            discover_devices, seed_default_tasks
+            discover_devices, seed_default_tasks,
+            notify_desktop
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

@@ -3184,6 +3184,14 @@ function flushEmergency() {
   document.getElementById('emTaskName').textContent = task.title;
   document.getElementById('emCountdown').textContent = fmtRemaining(remainMs) + (rule ? '  · ' + rule : '');
   document.getElementById('emergencyOverlay').style.display = '';
+  // v5.26.1：⚠️ 同时发 Windows 系统通知 —— 窗口内弹窗会被全屏软件（IDE/OBS/PS/推流）挡住，
+  //   第五轮 12 个身份死于这一点。系统通知走 OS 通知中心，遮挡也看得到。
+  try {
+    call('notify_desktop', {
+      title: '⏰ ' + task.title,
+      body: '到点了！' + (rule ? '（' + rule + '）' : '') + ' · next任务'
+    });
+  } catch (e) { /* 通知失败不阻塞页内弹窗 */ }
 }
 document.getElementById('emLater').addEventListener('click', () => {
   document.getElementById('emergencyOverlay').style.display = 'none';
