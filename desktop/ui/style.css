@@ -216,7 +216,8 @@ body::after {
    侧栏 7%
    ============================================================ */
 .side-nav {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  /* v5.26.0：按钮放大到 58 后间距同步 6 → 8，避免挤成一坨 */
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 12px 0;
   background: linear-gradient(180deg, rgba(248, 243, 231, 0.96), rgba(243, 235, 219, 0.92));
   border-right: 1px solid var(--border-soft);
@@ -228,12 +229,22 @@ body::after {
   position: relative;
   /* v5.15.18 F2：44 → 50 */
   /* v5.15.21 D4（boss：侧边栏按键还是有点小，再加大一点点）→ 50 → 54 */
-  width: 54px; height: 54px;
+  /* v5.26.0（boss：「侧边栏的按键太小 而且不像按键 不明显 改」）——
+     三个问题拆开治：
+     ① 太小 → 54 → 58，并用 min() 跟着 9% 的栏宽走，窗口被拉窄时也不会溢出被裁；
+     ② **不像按键 / 不明显才是真问题** —— 原来常态 background 与 border **全透明**，
+        一竖排图标飘在米色上没有边界，看不出"这里能点"。现在常态就给浅白底 + 细金边 +
+        极轻内高光，做出实体按钮感；hover 抬起，active 才上实金底（层级不变）。
+     ③ 图标同步从 24 → 28，折叠三角 9px → 15px（boss 反复点名"三角形太小"）。 */
+  width: min(58px, calc(9vw - 12px));
+  height: min(58px, calc(9vw - 12px));
+  margin: 0 auto;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 13px; cursor: pointer;
-  color: var(--ink-mute);
-  background: transparent;
-  border: 1px solid transparent;
+  border-radius: 15px; cursor: pointer;
+  color: var(--ink-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(252, 247, 236, 0.60));
+  border: 1px solid rgba(154, 123, 26, 0.26);
+  box-shadow: 0 1px 2px rgba(110, 80, 30, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.75);
   transition: all .2s;
   /* v5.14d：boss 反馈点击切换 nav 时整页灰色蒙一瞬 —— WebView2 焦点 outline 造成
      加 outline:none + -webkit-tap-highlight-color:transparent 消除点击高光 */
@@ -241,7 +252,13 @@ body::after {
   -webkit-tap-highlight-color: transparent;
 }
 .nav-item:focus, .nav-item:focus-visible, .nav-item:active { outline: none; box-shadow: none; }
-.nav-item:hover { color: var(--gold-deep); background: rgba(224, 186, 104, 0.20); transform: translateY(-1px); }
+.nav-item:hover {
+  color: var(--gold-deep);
+  background: linear-gradient(180deg, rgba(224, 186, 104, 0.30), rgba(224, 186, 104, 0.16));
+  border-color: rgba(154, 123, 26, 0.45);
+  box-shadow: 0 3px 8px rgba(110, 80, 30, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
+}
 .nav-item.active {
   color: var(--gold-deep);
   /* v5.14e：active 背景加深（0.55+0.30 → 0.85+0.6）让 .ico 容器内层更显眼，
@@ -266,7 +283,8 @@ body::after {
    **常态只有一种墨色，选中态才上主色**。
    （纹章守则也明确："更高级"不靠颜色堆叠；同理，导航不靠颜色区分。） */
 .nav-item .ico {
-  width: 24px; height: 24px;
+  /* v5.26.0：24 → 28（配合按钮放大；svg 尺寸在 index.html 的 data-icon-size 里同步 15 → 18） */
+  width: 28px; height: 28px;
   border-radius: var(--r-ctrl, 8px);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px;
@@ -3298,5 +3316,7 @@ input[type=text], input[type=number], input[type=password], select, textarea {
 /* v5.22.3：侧栏「所有任务」分组（四类任务收进一组，默认收起） */
 .nav-group { display: flex; flex-direction: column; gap: 4px; }
 .nav-group.collapsed { display: none; }
-.nav-group-arrow { margin-left: auto; font-size: 9px; color: var(--ink-faint); line-height: 1; }
+/* v5.26.0（boss：「三角形太小了 这个问题我说了一万遍了吧」）—— 9 → 15px + 加粗加深。
+   它是"这一组还能展开"的唯一线索，太小就等于没有。 */
+.nav-group-arrow { margin-left: auto; font-size: 15px; font-weight: 800; color: var(--ink-mute); line-height: 1; }
 .side-nav .nav-group-head.active .nav-group-arrow { color: var(--gold); }

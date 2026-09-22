@@ -954,10 +954,31 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "换手机或重装后，用导出的备份把任务、打卡、积分和授权码一起找回来。" +
-                    "按条合并，不会覆盖手机上更新的内容。",
+                "换手机或重装后，用导出的备份把任务、打卡、积分找回来。按条合并，不会覆盖手机上更新的内容。" +
+                    "（授权码不随备份走，换机请在「点亮完整版」里输入你自己的码）",
                 color = TGColors.InkMute, fontSize = 11.sp
             )
+            // v5.26.0：备份要不要包含授权码（默认不包含）
+            var withLicense by remember {
+                mutableStateOf(prefs.getBoolean("backup_include_license", false))
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("备份里包含授权码", color = TGColors.Ink, fontSize = 13.sp)
+                    Text(
+                        "只在你确定要用这台手机换机时打开。开着导出后请勿把文件发给别人 —— 里面有你的许可证",
+                        color = TGColors.InkMute, fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = withLicense,
+                    onCheckedChange = {
+                        withLicense = it
+                        prefs.edit().putBoolean("backup_include_license", it).apply()
+                    }
+                )
+            }
 
             parsed?.let { pv ->
                 AlertDialog(
@@ -966,7 +987,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     text = {
                         Text(
                             "这个备份里有 ${pv.tasks} 条任务、${pv.steps} 个步骤、${pv.habits} 条打卡记录。" +
-                                if (pv.licenseCode != null) "\n还带着授权码，会一并恢复到这台手机。" else "",
+                                if (pv.licenseCode != null)
+                                    "\n注意：这个备份里带着授权码，但出于安全**不会自动点亮**。" +
+                                        "如果这是你自己的备份要换机，请到「点亮完整版」里手动输入你的码。"
+                                else "",
                             color = TGColors.InkSoft, fontSize = 13.sp
                         )
                     },
@@ -979,12 +1003,13 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                                     val res = withContext(Dispatchers.IO) {
                                         val app = ctx.applicationContext as TaskBarApp
                                         val pair = app.repo.importFullSyncPayload(pv.payload)
-                                        // 授权码：只有本机尚未点亮时才恢复，避免顶掉用户自己的码
-                                        pv.licenseCode?.let { code ->
-                                            if (!com.taskbar.app.billing.License.isPro(ctx)) {
-                                                com.taskbar.app.billing.License.redeem(ctx, code)
-                                            }
-                                        }
+                                        // v5.26.0 安全修复：**导入永不自动点亮授权码**。
+                                        //   boss 的原话：「我是不是可以直接拿网上卖的、比五块钱便宜的、
+                                        //   甚至免费的、一份空的没有任何数据的授权过的 json 文件导入进去，
+                                        //   就可以破授权了呢？」——**可以，这就是漏洞**。
+                                        //   备份是"用户会随手传"的文件（v5.22.5 就是为此把 auth_secret 剔出去的），
+                                        //   在它里面放一张能直接生效的许可证，等于把授权体系变成可复制的。
+                                        //   换机请走「点亮完整版」手动输入自己的码（入口本来就有）。
                                         // 导入的任务必须重排提醒（新增/改时间的都不能漏）
                                         com.taskbar.app.notify.ReminderScheduler.rescheduleAll(app.repo, ctx)
                                         pair
@@ -1084,8 +1109,18 @@ private suspend fun exportJson(ctx: android.content.Context): String {
             put("format", JsonPrimitive("taskguide-backup"))
             put("version", JsonPrimitive(1))
             put("exported_at", JsonPrimitive(System.currentTimeMillis()))
-            com.taskbar.app.billing.License.rawCode(ctx)?.let {
-                put("license_code", JsonPrimitive(it))
+            // v5.26.0 安全修复（boss 指出）——
+            //   上一版把**原始授权码**写进备份 → 谁把这份（哪怕空数据的）json 传出去，
+            //   别人导入就白得完整版 = 一张可以被无限复制的许可证。
+            //   ⚠️ 所以现在**默认不写**；只有用户在设置里显式勾选「备份包含授权码」才写，
+            //   并且导入侧也**永不自动点亮**（见下面的说明）。
+            if (com.taskbar.app.billing.License.rawCode(ctx) != null &&
+                ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE)
+                    .getBoolean("backup_include_license", false)
+            ) {
+                com.taskbar.app.billing.License.rawCode(ctx)?.let {
+                    put("license_code", JsonPrimitive(it))
+                }
             }
             put(
                 "payload",

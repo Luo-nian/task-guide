@@ -28,7 +28,16 @@ import java.util.UUID
 
 /** 变更总线：Repository 写操作后发射，服务器层订阅并推送给电脑端 */
 object ChangeBus {
-    private val _events = MutableSharedFlow<ChangeOp>(extraBufferCapacity = 128)
+    // v5.26.0（boss：「手机上点了完成健身任务 电脑端还是没有完成 过了大概两分钟才同步上来 太慢了」）——
+    //   根因：原来 replay = 0 → **没人在听的时候事件直接消失**。
+    //   桌面端的订阅者是在 WS 连上那一刻才建立的；只要那一刻 WS 没连（重连间隙、刚开机、
+    //   网络抖动），这条变更就**永久丢失** —— 只能等桌面端下次重连做全量拉取才收敛，
+    //   这正是"要等两分钟"的来源（15s 轮询拉的是桌面本地库，拉不到手机上的新变更）。
+    //   加 replay：WS 重连后自动补发最近 256 条，桌面端 apply_change 是 LWW 幂等的，重放无害。
+    private val _events = MutableSharedFlow<ChangeOp>(
+        replay = 256,
+        extraBufferCapacity = 128
+    )
     val events = _events.asSharedFlow()
     fun tryEmit(op: ChangeOp) { _events.tryEmit(op) }
 }
@@ -306,6 +315,12 @@ class TaskRepository(private val db: AppDatabase) {
      * 3. 第一个 todo 步骤转 doing（若有步骤）
      */
     suspend fun startTracking(uuid: String): Boolean {
+        // v5.26.0（boss：「为什么我可以追踪已经完成的任务」）——
+        //   原来这里只看追踪上限，**不校验任务本身的状态** → 已完成/已归档的任务
+        //   点「追踪」照样进追踪列表，然后就是"点完成没反应、点取消追踪才回去"的死循环。
+        val target = taskDao.getByUuid(uuid)
+        if (target == null) return false
+        if (target.done == 1 || target.trackStatus == TrackStatus.DONE) return false
         val limit = getTrackLimit()
         val current = taskDao.countTracking()
         if (current >= limit) return false

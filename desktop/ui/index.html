@@ -45,19 +45,19 @@
   <!-- ===== 左侧图标导航 7% ===== -->
   <nav class="side-nav" id="sideNav">
     <button class="nav-item active" data-nav="overview" title="总览">
-      <span class="ico ico-overview" data-icon="overview" data-icon-size="15"></span>
+      <span class="ico ico-overview" data-icon="overview" data-icon-size="18"></span>
       <span class="nav-tip">总览</span>
     </button>
     <!-- v5.14d：boss 要求"今日"项放在总览下面，打开客户端默认看到今日 -->
     <button class="nav-item" data-nav="today" title="今日待办">
-      <span class="ico ico-today" data-icon="sun" data-icon-size="15"></span>
+      <span class="ico ico-today" data-icon="sun" data-icon-size="18"></span>
       <span class="nav-tip">今日</span>
     </button>
     <!-- v5.14g：boss 要求侧边栏显示追踪任务 -->
     <button class="nav-item" data-nav="tracking" title="追踪任务">
       <!-- v5.15.21 R3（boss：把侧边栏上"追踪中任务"和"目标任务"的图标对调一下）——
            原先追踪用 crosshair、目标用 goal，现在互换。 -->
-      <span class="ico ico-tracking" data-icon="goal" data-icon-size="15"></span>
+      <span class="ico ico-tracking" data-icon="goal" data-icon-size="18"></span>
       <span class="nav-tip">追踪</span>
       <span class="nav-count" id="trackingCount">0</span>
     </button>
@@ -65,32 +65,32 @@
          四类任务收进「所有任务」一组（默认收起，点开展开；展开状态本地记住）。
          顶层导航因此从 8 个变 5 个：总览 / 今日 / 追踪 / 所有任务 / 历史任务。 -->
     <button class="nav-item nav-group-head" id="typeGroupHead" title="所有任务（每日·目标·限时·次数）">
-      <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
+      <span class="ico ico-daily" data-icon="daily" data-icon-size="18"></span>
       <span class="nav-tip">所有任务</span>
       <span class="nav-group-arrow" id="typeGroupArrow">▸</span>
     </button>
     <div class="nav-group collapsed" id="typeGroup">
       <button class="nav-item" data-nav="daily" title="每日任务">
-        <span class="ico ico-daily" data-icon="daily" data-icon-size="15"></span>
+        <span class="ico ico-daily" data-icon="daily" data-icon-size="18"></span>
         <span class="nav-tip">每日任务</span>
       </button>
       <button class="nav-item" data-nav="goal" title="目标任务">
         <!-- v5.15.21 R3：与「追踪」图标对调（原 goal → 现 crosshair） -->
-        <span class="ico ico-goal" data-icon="crosshair" data-icon-size="15"></span>
+        <span class="ico ico-goal" data-icon="crosshair" data-icon-size="18"></span>
         <span class="nav-tip">目标任务</span>
       </button>
       <button class="nav-item" data-nav="time-limited" title="限时任务">
-        <span class="ico ico-lim" data-icon="lim" data-icon-size="15"></span>
+        <span class="ico ico-lim" data-icon="lim" data-icon-size="18"></span>
         <span class="nav-tip">限时任务</span>
       </button>
       <button class="nav-item" data-nav="once" title="次数任务">
-        <span class="ico ico-once" data-icon="once" data-icon-size="15"></span>
+        <span class="ico ico-once" data-icon="once" data-icon-size="18"></span>
         <span class="nav-tip">次数任务</span>
       </button>
     </div>
     <div class="nav-spacer"></div>
     <button class="nav-item repo" data-nav="archive" title="历史任务">
-      <span class="ico ico-clock" data-icon="clock" data-icon-size="15"></span>
+      <span class="ico ico-clock" data-icon="clock" data-icon-size="18"></span>
       <span class="nav-tip">历史任务</span>
     </button>
   </nav>

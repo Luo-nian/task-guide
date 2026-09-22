@@ -1020,7 +1020,8 @@ private fun TrackTaskCard(task: Task, steps: List<Step>, vm: TaskViewModel) {
         ) {
             Text(
                 if (expanded) "收起 ▾" else "展开 ▸",
-                color = TGColors.GoldDeep, fontSize = 20.sp, fontWeight = FontWeight.Bold
+                // v5.26.0（boss：「手机端追踪页面 展开的字样有点太大了 小一点」）—— 20 → 14sp
+                color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium
             )
         }
     }
@@ -1423,7 +1424,9 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         Text(
                             "▾",
                             color = TGColors.GoldDeep,
-                            fontSize = 15.sp,                                  // v5.15.24 F4b（boss：三角形太小了）
+                            // v5.26.0（boss 再次点名：「三角形太小了 这个问题我说了一万遍了吧」）——
+                            //   15sp 仍显小 → 20sp。这个下拉指示是"这里能展开"的唯一线索，宁大勿小。
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1864,7 +1867,8 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     ) {
                         Text("阅览方式", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.width(3.dp))
-                        Text("▾", color = TGColors.GoldDeep, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        // v5.26.0：同主页口径，15 → 20sp（boss 反复点名"三角形太小"）
+                        Text("▾", color = TGColors.GoldDeep, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 DropdownMenu(expanded = histViewMenu, onDismissRequest = { histViewMenu = false }) {
