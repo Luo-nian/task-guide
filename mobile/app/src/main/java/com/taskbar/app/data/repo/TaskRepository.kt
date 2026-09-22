@@ -773,6 +773,69 @@ class TaskRepository(private val db: AppDatabase) {
         ))
     }
 
+    // ==================== 本地备份导入（v5.25.0） ====================
+
+    /**
+     * v5.25.0：导入本地备份。
+     *
+     * 欠账来源：多轮体验测试反复点名「只能导出、不能导入」——
+     *   换手机 / 重装 = 数据全丢，且 App 认不出你是老用户（等级、连续天数一起归零）。
+     *
+     * 语义：**合并**，不覆盖本机更新的内容（同 uuid 以 updated_at 新者胜）。
+     *   - 不写 `auth_secret`（本机配对密钥不能被别人的备份顶掉）
+     *   - `total_points` 只增不减（避免「恢复备份反而掉级」）
+     *   - 习惯打卡按 (task_uuid, check_date) 去重，不会重复计数
+     *
+     * @return Pair(新增条数, 更新条数)
+     */
+    suspend fun importFullSyncPayload(p: FullSyncPayload): Pair<Int, Int> {
+        var added = 0
+        var updated = 0
+
+        val localTasks = taskDao.getAllNonDeleted().associateBy { it.uuid }
+        val newTasks = mutableListOf<Task>()
+        val updTasks = mutableListOf<Task>()
+        p.tasks.forEach { t ->
+            val cur = localTasks[t.uuid]
+            when {
+                cur == null -> { newTasks.add(t); added++ }
+                t.updatedAt > cur.updatedAt -> { updTasks.add(t); updated++ }
+            }
+        }
+        if (newTasks.isNotEmpty()) taskDao.upsertAll(newTasks)
+        if (updTasks.isNotEmpty()) taskDao.upsertAll(updTasks)
+
+        val localSteps = stepDao.getAllNonDeleted().associateBy { it.uuid }
+        val newSteps = mutableListOf<Step>()
+        val updSteps = mutableListOf<Step>()
+        p.steps.forEach { st ->
+            val cur = localSteps[st.uuid]
+            when {
+                cur == null -> { newSteps.add(st); added++ }
+                st.updatedAt > cur.updatedAt -> { updSteps.add(st); updated++ }
+            }
+        }
+        if (newSteps.isNotEmpty()) stepDao.upsertAll(newSteps)
+        if (updSteps.isNotEmpty()) stepDao.upsertAll(updSteps)
+
+        // 习惯打卡：DAO 是 OnConflictStrategy.IGNORE，已存在的同一天不会重复计数
+        p.habit_logs.forEach { habitDao.insert(it) }
+
+        p.settings
+            .filterNot { it.key == "auth_secret" || it.key.startsWith("sync_ts_") }
+            .forEach { kv ->
+                if (kv.key == "total_points") {
+                    val cur = settingsDao.get("total_points")?.toIntOrNull() ?: 0
+                    val inc = kv.value.toIntOrNull() ?: 0
+                    if (inc > cur) settingsDao.set(com.taskbar.app.data.model.Setting("total_points", inc.toString()))
+                } else {
+                    settingsDao.set(com.taskbar.app.data.model.Setting(kv.key, kv.value))
+                }
+            }
+
+        return added to updated
+    }
+
     // ==================== 同步入参（被服务器调用） ====================
 
     /** 构建全量同步数据（首次连接用） */

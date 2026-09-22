@@ -126,6 +126,9 @@ object License {
     fun trackLimit(ctx: Context): Int =
         if (isPro(ctx)) Int.MAX_VALUE else FREE_TRACK_LIMIT
 
+    /** v5.25.0：原始授权码（导出备份时带上，换机后可一键恢复到新设备） */
+    fun rawCode(ctx: Context): String? = prefs(ctx).getString(PREF_CODE, null)
+
     /** 撤销/换码 */
     fun clear(ctx: Context) {
         prefs(ctx).edit().remove(PREF_CODE).remove(PREF_TIER).apply()

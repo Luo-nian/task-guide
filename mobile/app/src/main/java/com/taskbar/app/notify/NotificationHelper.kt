@@ -178,12 +178,23 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // v5.25.0：锁屏隐私档（默认开）。
+        //   背景：第四轮「ICU 医生」等专业场景用户指出 —— 原来 setVisibility(VISIBILITY_PUBLIC)
+        //   会把**任务名明晃晃显示在锁屏上**（「给 3 床 测血糖」这种），旁边的人全看得见。
+        //   这是专业/家庭场景的死线，所以默认隐藏内容，设置页可关。
+        val hideOnLock = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+            .getBoolean("lock_hide_content", true)
+
         val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle(title)
-            .setContentText("到点了，去做吧")
+            .setContentTitle(if (hideOnLock) "你有任务到点了" else title)
+            .setContentText(if (hideOnLock) "解锁查看详情" else "到点了，去做吧")
             .setContentIntent(openIntent)
             .setAutoCancel(true)
+            .setVisibility(
+                if (hideOnLock) NotificationCompat.VISIBILITY_SECRET
+                else NotificationCompat.VISIBILITY_PUBLIC
+            )
             .addAction(0, "完成", doneIntent)
             .addAction(0, "5分钟", delay5mIntent)
             .addAction(0, "延迟1天", delayIntent)
@@ -192,7 +203,6 @@ object NotificationHelper {
         if (withFullScreen) {
             builder.setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setFullScreenIntent(openIntent, true)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         }
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

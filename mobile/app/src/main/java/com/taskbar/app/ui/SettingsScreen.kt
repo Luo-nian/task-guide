@@ -56,6 +56,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.io.File
 
 /** v5.15.27 M7：把「起床/睡前提醒」的下一次触发时刻说人话（今天 07:30 / 明天 07:30） */
@@ -353,6 +359,28 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     }
                 }
                 Spacer(Modifier.height(4.dp))
+            }
+            // v5.25.0：锁屏隐藏任务名（默认开启）。
+            //   第四轮专业场景用户（ICU 医生）点名：锁屏通知公开可见 = 把工作内容亮给所有人。
+            var lockHide by remember {
+                mutableStateOf(prefs.getBoolean("lock_hide_content", true))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("锁屏隐藏任务名", color = TGColors.Ink, fontSize = 14.sp)
+                    Text(
+                        "锁屏上只写「你有任务到点了」，不露出具体内容（医院/办公室等场合用）",
+                        color = TGColors.InkMute, fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = lockHide,
+                    onCheckedChange = {
+                        lockHide = it
+                        prefs.edit().putBoolean("lock_hide_content", it).apply()
+                    }
+                )
             }
             if (reminderScope == ReminderStrength.SCOPE_PC || reminderScope == ReminderStrength.SCOPE_BOTH) {
                 Spacer(Modifier.height(4.dp))
@@ -898,6 +926,87 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
             // v5.21.x：删掉「备份文件保存在应用私有目录，可通过文件管理器查看」——
             //   导出成功的 Toast 已经给出完整路径，用户不关心存放机制（boss 点名）。
+
+            // v5.25.0：导入备份 —— 换机/重装能把数据（含授权码）拿回来。
+            //   此前全 App 没有任何导入入口，是各轮体验测试里被点名最多的欠账。
+            var parsed by remember { mutableStateOf<ParsedBackup?>(null) }
+            var importing by remember { mutableStateOf(false) }
+            val picker = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { readBackup(ctx, uri) }
+                        if (r == null) {
+                            ToastHelper.show(ctx, "这个文件不是备份，或者已经损坏", Toast.LENGTH_LONG)
+                        } else {
+                            parsed = r
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { picker.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("导入 JSON 备份", color = TGColors.Ink, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "换手机或重装后，用导出的备份把任务、打卡、积分和授权码一起找回来。" +
+                    "按条合并，不会覆盖手机上更新的内容。",
+                color = TGColors.InkMute, fontSize = 11.sp
+            )
+
+            parsed?.let { pv ->
+                AlertDialog(
+                    onDismissRequest = { if (!importing) parsed = null },
+                    title = { Text("导入备份", color = TGColors.Ink, fontSize = 16.sp) },
+                    text = {
+                        Text(
+                            "这个备份里有 ${pv.tasks} 条任务、${pv.steps} 个步骤、${pv.habits} 条打卡记录。" +
+                                if (pv.licenseCode != null) "\n还带着授权码，会一并恢复到这台手机。" else "",
+                            color = TGColors.InkSoft, fontSize = 13.sp
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !importing,
+                            onClick = {
+                                importing = true
+                                scope.launch {
+                                    val res = withContext(Dispatchers.IO) {
+                                        val app = ctx.applicationContext as TaskBarApp
+                                        val pair = app.repo.importFullSyncPayload(pv.payload)
+                                        // 授权码：只有本机尚未点亮时才恢复，避免顶掉用户自己的码
+                                        pv.licenseCode?.let { code ->
+                                            if (!com.taskbar.app.billing.License.isPro(ctx)) {
+                                                com.taskbar.app.billing.License.redeem(ctx, code)
+                                            }
+                                        }
+                                        // 导入的任务必须重排提醒（新增/改时间的都不能漏）
+                                        com.taskbar.app.notify.ReminderScheduler.rescheduleAll(app.repo, ctx)
+                                        pair
+                                    }
+                                    importing = false
+                                    parsed = null
+                                    ToastHelper.show(
+                                        ctx,
+                                        "导入完成：新增 ${res.first} 条、更新 ${res.second} 条",
+                                        Toast.LENGTH_LONG
+                                    )
+                                }
+                            }
+                        ) { Text(if (importing) "正在导入…" else "导入", color = TGColors.Gold) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { parsed = null }) {
+                            Text("取消", color = TGColors.InkMute)
+                        }
+                    }
+                )
+            }
         }
 
         // v5.15.3：起床/睡前时间选择对话框
@@ -966,13 +1075,62 @@ private suspend fun exportJson(ctx: android.content.Context): String {
             p.copy(settings = p.settings.filterNot { it.key == "auth_secret" })
         }
         val json = Json { encodeDefaults = true; prettyPrint = true }
-            .encodeToString(com.taskbar.app.data.model.FullSyncPayload.serializer(), payload)
+        // v5.25.0：备份改为「包装格式」—— 顶层多带 format / version / exported_at / license_code。
+        //   为什么加 license_code：授权码只存在 SharedPreferences（不进同步载荷），
+        //   所以换机后**买断会一起丢失**（多轮测试最高级问题）。现在随备份走。
+        //   为什么不直接加进 FullSyncPayload：那是同步载荷，加了会把授权码
+        //   发给配对的桌面端 —— v5.22.5 刚把 auth_secret 从导出里剔除，不能又漏一个。
+        val root = buildJsonObject {
+            put("format", JsonPrimitive("taskguide-backup"))
+            put("version", JsonPrimitive(1))
+            put("exported_at", JsonPrimitive(System.currentTimeMillis()))
+            com.taskbar.app.billing.License.rawCode(ctx)?.let {
+                put("license_code", JsonPrimitive(it))
+            }
+            put(
+                "payload",
+                json.encodeToJsonElement(com.taskbar.app.data.model.FullSyncPayload.serializer(), payload)
+            )
+        }
+        val text = json.encodeToString(JsonObject.serializer(), root)
         val dir = File(ctx.getExternalFilesDir(null), "backups").apply { mkdirs() }
         val file = File(dir, "taskguide-backup-${System.currentTimeMillis()}.json")
-        file.writeText(json, Charsets.UTF_8)
+        file.writeText(text, Charsets.UTF_8)
         "已导出到: ${file.absolutePath}"
     } catch (e: Exception) {
         "导出失败: ${e.message}"
+    }
+}
+
+/** v5.25.0：解析出来的备份内容（导入前给用户确认用） */
+private class ParsedBackup(
+    val payload: com.taskbar.app.data.model.FullSyncPayload,
+    val licenseCode: String?,
+    val tasks: Int,
+    val steps: Int,
+    val habits: Int
+)
+
+/**
+ * v5.25.0：读取并解析备份文件。
+ * 兼容两种：新版包装格式（顶层 { format, version, license_code, payload }）与旧的裸 FullSyncPayload。
+ */
+private fun readBackup(ctx: android.content.Context, uri: android.net.Uri): ParsedBackup? {
+    return try {
+        val text = ctx.contentResolver.openInputStream(uri)?.use {
+            it.readBytes().toString(Charsets.UTF_8)
+        } ?: return null
+        val json = Json { ignoreUnknownKeys = true }
+        val root = json.parseToJsonElement(text)
+        val obj = root.jsonObject
+        val payloadEl = obj["payload"] ?: root
+        val payload = json.decodeFromJsonElement(
+            com.taskbar.app.data.model.FullSyncPayload.serializer(), payloadEl
+        )
+        val code = obj["license_code"]?.jsonPrimitive?.contentOrNull
+        ParsedBackup(payload, code, payload.tasks.size, payload.steps.size, payload.habit_logs.size)
+    } catch (e: Exception) {
+        null
     }
 }
 
