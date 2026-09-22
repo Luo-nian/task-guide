@@ -39,7 +39,7 @@ object ReminderScheduler {
      * v5.18.3：每日型任务（每日任务 / 习惯 / 重复）的判断。
      * 这类任务的 due_at 表达的是"每天几点"，不是绝对截止时间。
      */
-    private fun isDailyKindForReminder(t: com.taskbar.app.data.model.Task): Boolean =
+    internal fun isDailyKindForReminder(t: com.taskbar.app.data.model.Task): Boolean =
         t.category == "daily" ||
             t.type == com.taskbar.app.data.model.TaskType.HABIT ||
             t.type == com.taskbar.app.data.model.TaskType.REPEAT ||
@@ -58,7 +58,7 @@ object ReminderScheduler {
      * 只取 due_at 的「时:分」，日期用今天/明天 —— 这样每日任务的提醒不会因为
      * due_at 不推进而永远落在过去。
      */
-    private fun nextDailyOccurrence(dueAt: Long, now: Long): Long {
+    internal fun nextDailyOccurrence(dueAt: Long, now: Long): Long {
         val src = java.util.Calendar.getInstance()
         src.timeInMillis = dueAt
         val dst = java.util.Calendar.getInstance()
@@ -71,10 +71,61 @@ object ReminderScheduler {
         return dst.timeInMillis
     }
 
+    /**
+     * v5.22.5（24 份代入式体验测试报告的**最高频问题**）：按任务的周期规则折算「下一次发生时刻」。
+     *   原实现只认 `daily`：`weekly:1,3,5` 与 `everyNd` 虽然在 UI 里能选、也能存进库，
+     *   但全仓**没有任何消费方**（排提醒、主页列表、连续天数都不认）——
+     *   于是「每周一三五 6:30 体能」天天出现、天天提醒、天天判未完成，
+     *   而真正需要它的场景（进货日、教研日、排班）全线失效。
+     */
+    internal fun nextOccurrenceFor(dueAt: Long, repeatRule: String?, now: Long): Long {
+        val rule = repeatRule ?: return dueAt
+        if (rule == "daily") return nextDailyOccurrence(dueAt, now)
+        if (rule.startsWith("weekly:")) {
+            val days = rule.removePrefix("weekly:").split(",")
+                .mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..7 }.toSet()
+            if (days.isEmpty()) return nextDailyOccurrence(dueAt, now)
+            val src = java.util.Calendar.getInstance().apply { timeInMillis = dueAt }
+            val c = java.util.Calendar.getInstance().apply { timeInMillis = now }
+            c.set(java.util.Calendar.HOUR_OF_DAY, src.get(java.util.Calendar.HOUR_OF_DAY))
+            c.set(java.util.Calendar.MINUTE, src.get(java.util.Calendar.MINUTE))
+            c.set(java.util.Calendar.SECOND, 0)
+            c.set(java.util.Calendar.MILLISECOND, 0)
+            if (c.timeInMillis <= now) c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+            var guard = 0
+            while (guard < 8) {
+                // Calendar.DAY_OF_WEEK：周日=1…周六=7；本项目的规则是 1=周一…7=周日
+                val dow = c.get(java.util.Calendar.DAY_OF_WEEK)
+                val iso = if (dow == java.util.Calendar.SUNDAY) 7 else dow - 1
+                if (iso in days) return c.timeInMillis
+                c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                guard++
+            }
+            return c.timeInMillis
+        }
+        if (rule.startsWith("every")) {
+            val n = rule.removePrefix("every").removeSuffix("d").toIntOrNull() ?: return dueAt
+            if (n <= 1) return nextDailyOccurrence(dueAt, now)
+            val c = java.util.Calendar.getInstance().apply { timeInMillis = nextDailyOccurrence(dueAt, now) }
+            var guard = 0
+            while (c.timeInMillis <= now && guard < 400) {
+                c.add(java.util.Calendar.DAY_OF_MONTH, n)
+                guard++
+            }
+            return c.timeInMillis
+        }
+        return dueAt
+    }
+
     /** 为带 due_at 的任务调度到点提醒 */
     fun schedule(context: Context, taskUuid: String, dueAt: Long, strength: String) {
-        val delay = dueAt - System.currentTimeMillis()
-        if (delay <= 0) return
+        // v5.22.5：时刻已过**不再静默丢弃**。
+        //   原来 `if (delay <= 0) return` —— 于是「把任务时间从 20:00 改到 22:00」之后
+        //   重新排程时若那一刻已过，提醒就**无声消失**（报告里反复出现"改了时间就不响了"）。
+        //   现在改为：已过 → 1.5 秒后立刻响一次，至少让用户看到它。
+        val now = System.currentTimeMillis()
+        val fireAt = if (dueAt > now) dueAt else now + 1500L
+        val delay = fireAt - now
         val data = workDataOf(
             KEY_UUID to taskUuid,
             "strength" to strength,
@@ -105,10 +156,10 @@ object ReminderScheduler {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = alarmPending(context, taskUuid, strength)
         try {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dueAt, pi)
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi)
         } catch (e: Exception) {
             // Android 12+ 未授予 SCHEDULE_EXACT_ALARM 时降级为不精确闹钟（仍远优于 WorkManager）
-            try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dueAt, pi) } catch (_: Exception) {}
+            try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) } catch (_: Exception) {}
         }
     }
 
@@ -167,7 +218,7 @@ object ReminderScheduler {
                 //   直接拿它比 now 会永远落在过去 → 每次冷启动/开机都走进下面那个
                 //   "已过期未完成 → 立即提醒"分支，等于天天把每日任务当逾期。
                 //   这里先折算成"今天那个时刻"（今天已过 → 明天那个时刻）。
-                if (dailyKind) due = nextDailyOccurrence(due, now)
+                if (dailyKind) due = nextOccurrenceFor(due, t.repeatRule, now)
                 if (due > now) {
                     schedule(context, t.uuid, due, strength)
                 } else if (!dailyKind) {
@@ -271,33 +322,52 @@ class ReminderActionReceiver : BroadcastReceiver() {
                     cancelNotification(context, uuid)
                 }
             }
-            ACTION_DELAY -> {
-                ioScope.launch {
-                    app.repo.delayTask(uuid, 1)
-                    val t = app.repo.observeTask(uuid).first()
-                    t?.let {
-                        // 保留原任务的 per-task 强度；未设置才用全局默认（prefs）
-                        val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
-                            .getString("reminder_strength", "notify") ?: "notify"
-                        val strength = it.reminderStrength ?: defaultStrength
-                        ReminderScheduler.schedule(context, uuid, it.dueAt!!, strength)
-                    }
-                    cancelNotification(context, uuid)
-                }
+            // v5.22.5：修两个被多份报告命中的硬伤 ——
+            //   ① 「延迟1天」原代码是 `delayTask(uuid, 1)`，而 delayTask 的参数单位是**毫秒**
+            //      → 实际只把截止时间往后推 1 毫秒，下一次冷启动/刷新时通知立刻又弹（按钮形同虚设）；
+            //   ② `it.dueAt!!` 空断言 —— 通知还挂在栏里时把任务改成「次数任务/一次性」
+            //      （dueAt 被置空），再点通知上的按钮 → **崩溃**。
+            ACTION_DELAY -> handleDelay(context, uuid, 24L * 3600_000L, 0)
+            ACTION_DELAY_5M -> handleDelay(context, uuid, 5L * 60_000L, 5)
+        }
+    }
+
+    /**
+     * v5.22.5：通知上的「延迟」统一走这里。
+     *   - 每日型任务的 due_at 表达的是「每天几点」，**不能按毫秒平移**
+     *     （原来会把"每天 9:00"静默改成"每天 9:00:00.001"，且所有后续折算全部漂移）
+     *     → 改成按「下一次发生的那个时刻」重排；
+     *   - 非每日型按天/分钟平移，并同步写库；
+     *   - dueAt 为空（次数任务/一次性）时**不崩**，只清掉通知。
+     */
+    private fun handleDelay(context: Context, uuid: String, delayMillis: Long, keepMinutes: Int) {
+        ioScope.launch {
+            val repo = (context.applicationContext as TaskBarApp).repo
+            val cur = repo.observeTask(uuid).first()
+            if (cur == null) {
+                cancelNotification(context, uuid)
+                return@launch
             }
-            ACTION_DELAY_5M -> {
-                ioScope.launch {
-                    app.repo.delayTask(uuid, 5L * 60_000L)
-                    val t = app.repo.observeTask(uuid).first()
-                    t?.let {
-                        val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
-                            .getString("reminder_strength", "notify") ?: "notify"
-                        val strength = it.reminderStrength ?: defaultStrength
-                        ReminderScheduler.schedule(context, uuid, it.dueAt!!, strength)
-                    }
-                    cancelNotification(context, uuid)
-                }
+            val base = cur.dueAt
+            if (base == null) {
+                cancelNotification(context, uuid)
+                return@launch
             }
+            val strength = cur.reminderStrength ?: context
+                .getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+                .getString("reminder_strength", "notify") ?: "notify"
+            val now = System.currentTimeMillis()
+            val daily = ReminderScheduler.isDailyKindForReminder(cur)
+            val next = if (!daily) {
+                repo.delayTask(uuid, delayMillis)
+                base + delayMillis
+            } else if (keepMinutes == 5) {
+                now + 5L * 60_000L              // 「5分钟」对每日型就是 5 分钟后再来一次
+            } else {
+                ReminderScheduler.nextDailyOccurrence(base, now)   // 「延迟1天」= 推到明天那个时刻
+            }
+            if (next > now) ReminderScheduler.schedule(context, uuid, next, strength)
+            cancelNotification(context, uuid)
         }
     }
 

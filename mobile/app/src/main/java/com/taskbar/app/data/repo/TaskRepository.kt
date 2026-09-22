@@ -303,6 +303,8 @@ class TaskRepository(private val db: AppDatabase) {
         //   而 VM 的弹窗是无条件设置的 → 用户看到"弹了积分但任务没动"。
         //   这里先把 daily 任务按同一条规则折算回未完成，再走正常完成流程。
         val task = normalizeDailyReset(raw, todayStart())
+        // v5.22.5：次数任务"每推进一次给多少分"（默认 0 = 走原来的整笔发放）
+        var grantPoints = 0
         if (task.type == TaskType.HABIT) {
             // 习惯：今日已打卡则不再加分；写 habit_log + 加积分，任务保持非 done
             val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(t))
@@ -331,13 +333,31 @@ class TaskRepository(private val db: AppDatabase) {
                 taskDao.upsert(task.copy(progress = newProgress, updatedAt = t))
             }
             emitWithData(ChangeOp("upsert", "task", uuid))
+        } else if (task.target > 1) {
+            // ⭐ v5.22.5（24 份代入式体验测试里，这条被 19 份独立命中）：**次数任务原来点一次就归档**。
+            //   「喝水 8 次」「跑够 20 单」「今天 20 组」全都做不到 —— 点一下直接完成，
+            //   而积分是按"多次"算完再减半的值一次性发掉，用户还觉得自己白干一半。
+            //   改为累计推进：每推进一次给该次份额，满次数才归档、末次补齐余数
+            //   （总额仍等于 rewardPoints，**不留刷分空间**）。
+            if (task.trackStatus == TrackStatus.DONE) return
+            val newProgress = task.progress + 1
+            val total = task.rewardPoints.coerceAtLeast(1)
+            val per = (total / task.target).coerceAtLeast(1)
+            grantPoints = if (newProgress >= task.target)
+                (total - per * (task.target - 1)).coerceAtLeast(1)
+            else per
+            if (newProgress >= task.target) {
+                taskDao.upsert(task.copy(progress = newProgress, trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
+            } else {
+                taskDao.upsert(task.copy(progress = newProgress, updatedAt = t))
+            }
         } else {
             // 普通任务：归档 + 加积分
             if (task.trackStatus == TrackStatus.DONE) return
             taskDao.upsert(task.copy(trackStatus = TrackStatus.DONE, done = 1, doneAt = t, updatedAt = t))
         }
         // 积分奖励（v5.15.7：写值 + 打时间戳 + 推电脑端，双端"最新为主"一致）
-        bumpPoints(task.rewardPoints)
+        bumpPoints(if (grantPoints > 0) grantPoints else task.rewardPoints)
         // 步骤全 done（习惯/普通都一样）
         stepDao.getByTask(uuid).filter { it.status != StepStatus.DONE }.forEach {
             stepDao.updateStatus(it.uuid, StepStatus.DONE, t, t)

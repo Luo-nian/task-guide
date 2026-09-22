@@ -710,7 +710,8 @@ fun CompletionToast(title: String, points: Int, onDismiss: () -> Unit) {
                 .padding(bottom = 130.dp)
                 .graphicsLayer { alpha = a; translationY = slide }
                 .clip(RoundedCornerShape(14.dp))
-                .background(TGColors.Ink.copy(alpha = 0.94f))
+                // v5.22.5：完成提示的底色固定为深褐（夜间 TGColors.Ink 是米白 → 白字压米白不可读）
+                .background(Color(0xFF3B2A20).copy(alpha = 0.94f))
                 .border(1.dp, TGColors.Gold.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically

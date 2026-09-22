@@ -123,5 +123,13 @@ class TaskBarApp : Application() {
     companion object {
         lateinit var instance: TaskBarApp
             private set
+
+        /**
+         * v5.22.5：点提醒通知要直接打开的那条任务。
+         *   通知里本来就带了 `task_uuid`（NotificationHelper 已 putExtra），
+         *   但 MainActivity **从来没读过 intent** → 点通知只回主页，落不到那条任务上
+         *   （多份体验测试报告提到）。这里由 Activity 写入、Compose 侧消费后清空。
+         */
+        val pendingOpenTask = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     }
 }

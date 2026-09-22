@@ -3,6 +3,7 @@ package com.taskbar.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -79,6 +80,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // v5.22.5：从提醒通知进来时，直接落到那条任务的详情（原来点了只回主页）
+        handleOpenTask(intent)
         // Android 13+ 请求通知权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -110,6 +113,22 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpenTask(intent)
+    }
+}
+
+/**
+ * v5.22.5：处理「点提醒通知 → 打开对应任务」。
+ *   冷启动走 onCreate，App 已在后台时系统走 onNewIntent（不重跑 onCreate），两条都要接。
+ */
+private fun handleOpenTask(intent: Intent?) {
+    val uuid = intent?.getStringExtra("task_uuid") ?: return
+    intent.removeExtra("task_uuid")            // 消费掉，避免返回后再被导航一次
+    TaskBarApp.pendingOpenTask.value = uuid
 }
 
 /** icon 传的是矢量 drawable 资源 id（不是 emoji / Unicode 符号） */
@@ -120,6 +139,16 @@ private data class TabItem(val route: String, val label: String, val icon: Int)
 fun MainApp() {
     val navController = rememberNavController()
     val vm: TaskViewModel = viewModel()
+
+    // v5.22.5：点提醒通知 → 直接打开那条任务的详情
+    val pendingOpen by TaskBarApp.pendingOpenTask.collectAsState()
+    LaunchedEffect(pendingOpen) {
+        val u = pendingOpen
+        if (!u.isNullOrBlank()) {
+            TaskBarApp.pendingOpenTask.value = null
+            runCatching { navController.navigate("detail/$u") }
+        }
+    }
 
         // 顶层 tab：home（主页）、profile（我的，用 AppTopBar 里的 AvatarFrame）。
         // 追踪从底部导航栏的追踪 tab 进入，不放在顶部 tab 里。

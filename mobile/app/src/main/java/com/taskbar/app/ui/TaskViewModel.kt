@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -121,6 +122,50 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         .map { it.groupBy { step -> step.taskUuid } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    /**
+     * v5.22.5（体验测试最高频问题）：**任务增删改之后立刻重排这一条的提醒**。
+     *
+     *   原来全项目的排程入口只有三处：冷启动（TaskBarApp.onCreate）、开机（BootReceiver）、
+     *   上一条闹钟响过（ReminderAlarmReceiver）。而手机的同步前台服务常驻、进程不死，
+     *   于是「新建任务当晚不响」「把 20:00 改成 22:00 之后旧闹钟照响、新时间不响」
+     *   「删掉的任务到点还弹」——24 份报告里有 79 条指向这个链路。
+     *
+     *   单条重排而不是全量 rescheduleAll：后者会顺带触发"已过期未完成 → 立即提醒"，
+     *   每次点一下按钮就弹一堆通知反而更糟。
+     */
+    private fun rescheduleOne(uuid: String, removed: Boolean = false) = viewModelScope.launch {
+        val ctx = getApplication<android.app.Application>()
+        runCatching {
+            com.taskbar.app.notify.ReminderScheduler.cancel(ctx, uuid)
+            if (removed) return@runCatching
+            val t = repo.observeTask(uuid).first() ?: return@runCatching
+            if (t.deleted != 0) return@runCatching
+            val due = t.dueAt ?: return@runCatching
+            val now = System.currentTimeMillis()
+            val daily = com.taskbar.app.notify.ReminderScheduler.isDailyKindForReminder(t)
+            // 已完成：非每日型直接不排；每日型只有"今天已完成"才跳过今天（明天还要响）
+            if (t.trackStatus == com.taskbar.app.data.model.TrackStatus.DONE) {
+                if (!daily) return@runCatching
+                val today0 = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                    set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                if ((t.doneAt ?: 0L) >= today0) {
+                    // 今天已经打过卡 → 排到下一次（明天/下一个周期日）
+                }
+            }
+            val strength = t.reminderStrength ?: ctx
+                .getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE)
+                .getString("reminder_strength", "notify") ?: "notify"
+            val next = if (daily)
+                com.taskbar.app.notify.ReminderScheduler.nextOccurrenceFor(due, t.repeatRule, now)
+            else due
+            if (next > now) com.taskbar.app.notify.ReminderScheduler.schedule(ctx, uuid, next, strength)
+        }
+    }
+
     // ===== 任务操作 =====
     fun createTask(
         type: String, title: String, desc: String, category: String,
@@ -131,17 +176,20 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         val task = repo.createTask(type, title, desc, category, priority, dueAt, repeatRule, deadline,
             reminderStrength = reminderStrength, target = target)
         refreshWidget()
+        rescheduleOne(task.uuid)
         onCreated(task.uuid)
     }
 
     fun updateTask(task: Task) = viewModelScope.launch {
         repo.updateTask(task)
         refreshWidget()
+        rescheduleOne(task.uuid)          // 改了时间/提醒方式要立刻生效（否则旧闹钟照响）
     }
 
     fun deleteTask(uuid: String) = viewModelScope.launch {
         repo.deleteTask(uuid)
         refreshWidget()
+        rescheduleOne(uuid, removed = true)   // 删了就别再响（原来删掉的任务到点还会弹）
     }
 
     // ===== v5.15.23 M11：多选批量操作 =====
@@ -149,12 +197,14 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteTasks(uuids: List<String>) = viewModelScope.launch {
         uuids.forEach { repo.deleteTask(it) }
         refreshWidget()
+        uuids.forEach { rescheduleOne(it, removed = true) }
     }
 
     /** 批量恢复到待办；overdueHalf=true 时按"逾期恢复"规则扣半分（至少 1 分） */
     fun restoreTasks(uuids: List<String>, overdueHalf: Boolean = false) = viewModelScope.launch {
         uuids.forEach { repo.restoreTask(it, overdueHalf) }
         refreshWidget()
+        uuids.forEach { rescheduleOne(it) }
     }
 
     /**
@@ -164,6 +214,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun undeleteTasks(uuids: List<String>) = viewModelScope.launch {
         repo.undeleteTasks(uuids)
         refreshWidget()
+        uuids.forEach { rescheduleOne(it) }
     }
 
     /** 开始追踪；已达上限返回 false（UI 据此弹提示） */
@@ -201,6 +252,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         refreshWidget()
+        rescheduleOne(uuid)      // 完成后撤掉今天的闹钟；每日型会排到下一次
     }
 
     /** v5.15.23 M10：overdueHalf=true 时按"逾期恢复"规则扣半分（至少 1 分） */

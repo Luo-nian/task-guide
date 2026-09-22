@@ -1710,7 +1710,10 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(TGColors.Ink.copy(alpha = 0.94f))
+                    // v5.22.5：撤销条底色**不能跟主题走** —— 夜间 TGColors.Ink 是米白，
+                    //   米白底 + 白字 = 1.2:1，完全不可读（色弱/老年用户报告里最硬的一条，
+                    //   其实对所有人都是 bug）。这里固定用深褐。
+                    .background(Color(0xFF3B2A20).copy(alpha = 0.94f))
                     .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

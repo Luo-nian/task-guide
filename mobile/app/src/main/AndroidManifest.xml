@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- v5.22.5：NotificationHelper 里调了 setFullScreenIntent（"强提醒"档想锁屏全屏弹出），
+         但清单从未声明该权限 → 系统静默降级成普通通知。体验测试多份报告命中。 -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 前台服务（Ktor 同步服务器常驻） -->

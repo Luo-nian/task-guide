@@ -73,7 +73,29 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
     val trackLimit by vm.trackLimit.collectAsState()
 
     var showDelayDialog by remember { mutableStateOf(false) }
+    // v5.22.5：详情页的「删除」原来一点就删（同排还有延迟/编辑两个键，手一偏就中）。
+    //   新建/编辑页早有二次确认，详情页漏了 —— 体验测试多份报告命中。
+    var showDelConfirm by remember { mutableStateOf(false) }
     var showAddStepDialog by remember { mutableStateOf(false) }
+
+    // v5.22.5：详情页「删除」的二次确认（原来一点就删，同排还有延迟/编辑两个键，手一偏就中）
+    if (showDelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDelConfirm = false },
+            title = { Text("删除任务") },
+            text = { Text("删除后无法恢复，确定吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDelConfirm = false
+                    vm.deleteTask(uuid)
+                    navController.popBackStack()
+                }) { Text("删除", color = TGColors.Crimson) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDelConfirm = false }) { Text("取消") }
+            }
+        )
+    }
     val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     Column(Modifier.fillMaxSize()) {
@@ -155,7 +177,7 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                 OutlinedButton(onClick = { showDelayDialog = true }) { Text("延迟") }
                 OutlinedButton(onClick = { navController.navigate("edit/$uuid") }) { Text("编辑") }
                 OutlinedButton(
-                    onClick = { vm.deleteTask(uuid); navController.popBackStack() },
+                    onClick = { showDelConfirm = true },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = TGColors.Crimson)
                 ) { Text("删除") }
             }
@@ -624,6 +646,10 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                         )
                         Text("次", color = TGColors.InkSoft, fontSize = 12.sp)
                     }
+                    // v5.22.5：次数任务也能设提醒（原来既无时间入口、dueAt 又被强制置空 → 永不提醒）
+                    Spacer(Modifier.height(6.dp))
+                    Text("提醒时间（可选）", color = TGColors.InkSoft, fontSize = 13.sp)
+                    DailyTimeEditor(dueAt = dueAt, onChange = { dueAt = it })
                 } else if (catSel == "daily") {
                     // v5.15.13：每日任务只选「每天几点」（原来给整张日期选择器，还会出现"明天"）
                     Spacer(Modifier.height(6.dp))
@@ -759,8 +785,19 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                             return@Button
                         }
                         val finalCat = catSel
-                        val finalDue = if (catSel == "once") null else dueAt
-                        val finalRepeat = if (catSel == "daily") "daily" else null
+                        // v5.22.5：次数任务不再强制清空 dueAt。
+                        //   原来 `if (catSel == "once") null else dueAt` → 即使勾了提醒通道，
+                        //   这条任务也永远没有提醒（多份报告："喝水 8 次"白设了提醒）。
+                        val finalDue = dueAt
+                        // v5.22.5：**保留用户在「习惯周期」里选的规则**。
+                        //   原来一律写成 "daily" —— 于是「每周一三五」「隔天」选了等于没选，
+                        //   而且不报错（多份报告：每周二进货、每周三教研全都变成天天提醒）。
+                        val finalRepeat = when {
+                            catSel == "daily" -> (habitRule ?: "daily")
+                            // 次数任务设了提醒时间 → 按"每天那个时刻"重复（否则一次性过期后再也不响）
+                            catSel == "once" && dueAt != null -> "daily"
+                            else -> null
+                        }
                         val deadline = if (catSel == "time-limited") dueAt else null
 
                         // 提醒配置序列化（四通道 + 端选择）；全不选=null（不提醒）

@@ -958,7 +958,13 @@ private fun TimePickDialog(
 private suspend fun exportJson(ctx: android.content.Context): String {
     return try {
         val app = ctx.applicationContext as TaskBarApp
-        val payload = app.repo.buildFullSyncPayload()
+        // v5.22.5：导出的备份里**不能带配对密钥 auth_secret**。
+        //   体验测试发现导出的 JSON 与全量同步载荷是同一个对象，而 `auth_secret`
+        //   是设备间鉴权用的长期密钥（server/Auth.kt）—— 备份是准备给用户随便传的，
+        //   带出去等于把本机配对凭据一起发人。同步载荷保持原样（同步需要它），只清导出。
+        val payload = app.repo.buildFullSyncPayload().let { p ->
+            p.copy(settings = p.settings.filterNot { it.key == "auth_secret" })
+        }
         val json = Json { encodeDefaults = true; prettyPrint = true }
             .encodeToString(com.taskbar.app.data.model.FullSyncPayload.serializer(), payload)
         val dir = File(ctx.getExternalFilesDir(null), "backups").apply { mkdirs() }
