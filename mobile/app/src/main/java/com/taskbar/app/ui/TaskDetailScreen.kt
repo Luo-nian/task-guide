@@ -144,6 +144,11 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
         if (!readOnly) item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val isTracking = task.trackStatus == TrackStatus.TRACKING
+                // v5.26.0（boss：「为什么我可以追踪已经完成的任务」）——
+                //   原来这里只判 isTracking → 一条**已归档**的任务照样显示"追踪目标"，
+                //   点下去在仓库层被拒（done）→ 用户看到的是"点了完全没反应"。
+                //   现在已完成/已归档的任务干脆不给这个键（要改就先去历史页恢复）。
+                if (task.done == 0 && task.trackStatus != TrackStatus.DONE) {
                 Button(
                     onClick = {
                         if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid) { ok ->
@@ -167,6 +172,7 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                         if (isTracking) "当前追踪中·停止" else "追踪目标",
                         fontWeight = FontWeight.Medium
                     )
+                }
                 }
                 Button(
                     onClick = { vm.completeTask(uuid); navController.popBackStack() },
