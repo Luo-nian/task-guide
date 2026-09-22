@@ -50,7 +50,8 @@
     </button>
     <!-- v5.14d：boss 要求"今日"项放在总览下面，打开客户端默认看到今日 -->
     <button class="nav-item" data-nav="today" title="今日待办">
-      <span class="ico ico-today" data-icon="sun" data-icon-size="18"></span>
+      <!-- v5.26.1（boss：今日任务的侧边栏图标不应该是太阳）—— 日历带勾才语义对 -->
+      <span class="ico ico-today" data-icon="daily" data-icon-size="22"></span>
       <span class="nav-tip">今日</span>
     </button>
     <!-- v5.14g：boss 要求侧边栏显示追踪任务 -->
@@ -164,6 +165,8 @@
             <span class="dash-greet-sep">·</span>
             <span id="dashGreetRemain">距传奇勇者差 11</span>
           </div>
+          <!-- v5.26.1（boss：进度条看不出来多少）—— 等级进度改成看得见的一根条 -->
+          <div class="dash-greet-bar"><i id="dashGreetBarFill"></i></div>
         </div>
         <!-- v5.15.29 L4：徽章已并入左侧环内（原头像位），此处不再放第二个徽章 -->
         <span class="greet-gem" id="greetGem" title="等级稀有度"></span>

@@ -746,7 +746,7 @@ function toggleCatGroup(k) {
   document.querySelectorAll('.cat-group[data-cg="' + k + '"]').forEach(g => {
     g.classList.toggle('collapsed', on);
     const a = g.querySelector('.cg-arrow');
-    if (a) a.textContent = on ? '\u25B8' : '\u25BE';
+    if (a) a.textContent = on ? '\u002B' : '\u2212';
   });
 }
 window.toggleCatGroup = toggleCatGroup;
@@ -760,7 +760,7 @@ function renderSideNav() {
     const g = document.getElementById('typeGroup');
     const a = document.getElementById('typeGroupArrow');
     if (g) g.classList.remove('collapsed');
-    if (a) a.textContent = '\u25BE';
+    if (a) a.textContent = '\u2212';
   }
 }
 
@@ -770,7 +770,7 @@ function toggleTypeGroup() {
   const a = document.getElementById('typeGroupArrow');
   if (!g) return;
   const collapsed = g.classList.toggle('collapsed');
-  if (a) a.textContent = collapsed ? '\u25B8' : '\u25BE';
+  if (a) a.textContent = collapsed ? '\u002B' : '\u2212';
   try { localStorage.setItem('taskbar.typeGroup', collapsed ? '1' : '0'); } catch (e) { /* 忽略 */ }
 }
 (function restoreTypeGroup() {
@@ -779,7 +779,7 @@ function toggleTypeGroup() {
       const g = document.getElementById('typeGroup');
       const a = document.getElementById('typeGroupArrow');
       if (g) g.classList.remove('collapsed');
-      if (a) a.textContent = '\u25BE';
+      if (a) a.textContent = '\u2212';
     }
   } catch (e) { /* 忽略 */ }
 })();
@@ -860,7 +860,7 @@ function renderTodayView() {
     if (list.length === 0) return;
     const c = _cg(cat);
     html += `<div class="cat-group ${c ? 'collapsed' : ''}" data-cg="${cat}">
-      <div class="cat-group-head" onclick="toggleCatGroup('${cat}')"><span class="ico ico-${iconMap[cat]}" data-icon="${iconMap[cat]}" data-icon-size="13"></span><span>${titleMap[cat]}</span><span class="gh-count">${list.length}</span><span class="cg-arrow">${c ? '\u25B8' : '\u25BE'}</span></div>
+      <div class="cat-group-head" onclick="toggleCatGroup('${cat}')"><span class="ico ico-${iconMap[cat]}" data-icon="${iconMap[cat]}" data-icon-size="13"></span><span>${titleMap[cat]}</span><span class="gh-count">${list.length}</span><span class="cg-arrow">${c ? '\u002B' : '\u2212'}</span></div>
       <div class="cg-body">${list.map(catTaskHtml).join('')}</div>
     </div>`;
   });
@@ -1339,6 +1339,20 @@ function renderDashboard() {
   if (greetRemain) {
     if (next2) greetRemain.textContent = '距 ' + next2.name + ' 还差 ' + Math.max(0, next2.min - points) + ' 分';
     else greetRemain.textContent = '已至巅峰';
+  }
+
+  // v5.26.1：身份卡线性进度条（boss：进度条看不出来多少）
+  {
+    const cur = lv2, nx = next2;
+    const gb = document.getElementById('dashGreetBarFill');
+    if (gb) {
+      let pct = 100;
+      if (nx && cur) {
+        const span = Math.max(1, nx.min - cur.min);
+        pct = Math.min(100, Math.max(0, ((points - cur.min) / span) * 100));
+      }
+      gb.style.width = pct.toFixed(0) + '%';
+    }
   }
 
   // 等级卡

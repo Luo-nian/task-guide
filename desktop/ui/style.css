@@ -242,8 +242,8 @@ body::after {
   display: flex; align-items: center; justify-content: center;
   border-radius: 15px; cursor: pointer;
   color: var(--ink-soft);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(252, 247, 236, 0.60));
-  border: 1px solid rgba(154, 123, 26, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.70), rgba(252, 247, 236, 0.40));
+  border: 1px solid rgba(154, 123, 26, 0.18);
   box-shadow: 0 1px 2px rgba(110, 80, 30, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.75);
   transition: all .2s;
   /* v5.14d：boss 反馈点击切换 nav 时整页灰色蒙一瞬 —— WebView2 焦点 outline 造成
@@ -283,8 +283,9 @@ body::after {
    **常态只有一种墨色，选中态才上主色**。
    （纹章守则也明确："更高级"不靠颜色堆叠；同理，导航不靠颜色区分。） */
 .nav-item .ico {
-  /* v5.26.0：24 → 28（配合按钮放大；svg 尺寸在 index.html 的 data-icon-size 里同步 15 → 18） */
-  width: 28px; height: 28px;
+  /* v5.26.1（boss：图标的边框太大 图标反而小了点）—— 图标才是主角：容器 28 → 34，
+   svg 同步 18 → 24；按钮底/边进一步淡化，让形状退后、图标顶前 */
+  width: 34px; height: 34px;
   border-radius: var(--r-ctrl, 8px);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px;
@@ -394,7 +395,21 @@ body::after {
 .dash-greet-row1 { font-size: 14px; font-weight: 600; color: var(--gold-light); }
 .dash-greet-text { font-weight: 600; }
 .dash-greet-row2 { font-size: 11px; color: rgba(230, 199, 122, 0.7); display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.dash-greet-name { color: var(--gold-light); font-weight: 700; font-size: 12px; }
+.dash-greet-name { color: var(--ink-mute); font-weight: 500; font-size: 11px; }
+/* v5.26.1（boss：进度条看不出来多少）—— 身份卡加一根明确的线性进度条：
+   底槽用米色凹槽、填充用金色渐变、右端圆角，宽度由 JS 按百分比设置 */
+.dash-greet-bar {
+  margin-top: 6px; width: 100%; max-width: 240px; height: 8px;
+  border-radius: 999px; background: rgba(0,0,0,0.08);
+  box-shadow: inset 0 1px 2px rgba(110,80,30,0.15); overflow: hidden;
+}
+.dash-greet-bar i {
+  display: block; height: 100%; width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-light), var(--gold-deep));
+  box-shadow: 0 0 6px rgba(224,186,104,0.55);
+  transition: width .35s ease;
+}
 .dash-greet-sep { opacity: 0.5; }
 /* Lv 角标（贴在 avatar 右下） */
 .greet-lv-tag {
@@ -3318,5 +3333,10 @@ input[type=text], input[type=number], input[type=password], select, textarea {
 .nav-group.collapsed { display: none; }
 /* v5.26.0（boss：「三角形太小了 这个问题我说了一万遍了吧」）—— 9 → 15px + 加粗加深。
    它是"这一组还能展开"的唯一线索，太小就等于没有。 */
-.nav-group-arrow { margin-left: auto; font-size: 15px; font-weight: 800; color: var(--ink-mute); line-height: 1; }
+.nav-group-arrow {
+  /* v5.26.1（boss：三角形还是太小 + 不能用三角形交互）——
+     ①字符从 ▸/▾ 换成 ＋/−（展开=−、收起=＋，电路图语义，一眼懂、不依赖方向感）
+     ②字号 15 → 22px；JS 侧的字符同步在 app3.js 替换 */
+  margin-left: auto; font-size: 22px; font-weight: 800; color: var(--ink-soft); line-height: 1;
+}
 .side-nav .nav-group-head.active .nav-group-arrow { color: var(--gold); }

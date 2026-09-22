@@ -493,23 +493,15 @@ fn get_archive(state: tauri::State<AppState>) -> Vec<Task> {
 #[tauri::command]
 fn get_progress(state: tauri::State<AppState>) -> ProgressInfo {
     let db = state.db.lock().unwrap();
-    let now = chrono::Local::now().timestamp_millis();
-    let start = now - 86_400_000;
-    let total: i64 = db.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND (due_at BETWEEN ?1 AND ?2 OR track_status='tracking')",
-        params![start, now], |r| r.get(0)
-    ).unwrap_or(0);
-    let done: i64 = db.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE deleted=0 AND track_status='done' AND done_at BETWEEN ?1 AND ?2",
-        params![start, now], |r| r.get(0)
-    ).unwrap_or(0);
+    // v5.26.1（boss 实测「今日待办有 2 个但列表只有 1 个」）：口径与 get_today_tasks 对齐，
+    //   仪表盘/列表/侧栏三处永远同口径（旧口径 due 近24h OR tracking 与列表不一致）。
+    let (day_start, day_end) = today_range();
+    let remaining: i64 = db.query_row("SELECT COUNT(*) FROM tasks WHERE deleted=0 AND (track_status!='done' OR (category='daily' AND (done_at IS NULL OR done_at < ?1)))", params![day_start], |r| r.get(0)).unwrap_or(0);
+    let total: i64 = db.query_row("SELECT COUNT(*) FROM tasks WHERE deleted=0 AND ((track_status!='done' OR (category='daily' AND (done_at IS NULL OR done_at < ?1))) OR (track_status='done' AND done_at IS NOT NULL AND done_at >= ?1 AND done_at < ?2))", params![day_start, day_end], |r| r.get(0)).unwrap_or(0);
+    let done = total - remaining;
     ProgressInfo { done_today: done, total_today: total }
 }
 
-// 每日进度（今日任务完成度）—— 前端进度条 / 祝福弹窗的数据源
-// 口径（v5.13f）：每个 task 算 1 项（次数任务不再 count SUM），daily 全部 + 今日到期 time-limited；
-// 已完成与未完成都要计入 total 否则每完成一项 total 就减 1，进度条永远停在 0%。
-// 次数任务的"完成度"通过 count_done / count_total 单独返回给 widget/detail 展示。
 #[tauri::command]
 fn get_daily_progress(state: tauri::State<AppState>) -> serde_json::Value {
     let (day_start, day_end) = today_range();
@@ -2038,17 +2030,6 @@ pub fn run() {
             Ok(())
         })
         .manage(state)
-/// v5.26.1：发 Windows 系统通知（弹窗会被全屏软件挡住 → 12 个测试身份死于这一点）
-#[tauri::command]
-fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
-    use tauri_plugin_notification::NotificationExt;
-    app.notification()
-        .builder()
-        .title(title)
-        .body(body)
-        .show()
-        .map_err(|e| e.to_string())
-}
 
         .invoke_handler(tauri::generate_handler![
             get_track_cards, get_today_tasks, get_archive, get_progress, get_next_reminder,
@@ -2075,6 +2056,19 @@ fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<
         })
         .run(tauri::generate_context!())
         .expect("启动 Tauri 失败");
+}
+
+
+/// v5.26.1：发 Windows 系统通知（弹窗会被全屏软件挡住 → 12 个测试身份死于这一点）
+#[tauri::command]
+fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 // helper：把 &AppState 转成只引用结构供 tauri::State::new 调用
