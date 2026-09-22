@@ -110,6 +110,43 @@ private val ALL_DONE_TEXT: String
     get() = ALL_DONE_LINES[java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR) % ALL_DONE_LINES.size]
 
 @OptIn(ExperimentalMaterial3Api::class)
+/** v5.26.1（第五轮卸载原因单项第一）：通知权限被拒时，主页**常驻**一条红色警告。
+ *  背景：权限只在安装后第一次启动时问一次，用户顺手一拒 = 所有提醒永久静默，
+ *  且 App 里**没有任何地方告诉用户"你的提醒已经哑了"** —— 第五轮 21 个身份里 6 个因此卸载。
+ *  点警告条 → 直接跳系统通知设置。权限开着则整条不渲染（零打扰）。 */
+@Composable
+private fun NotifPermBanner() {
+    val ctx = LocalContext.current
+    val enabled = remember {
+        androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    }
+    if (enabled) return
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(TGColors.Crimson.copy(alpha = 0.12f))
+            .border(1.dp, TGColors.Crimson.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+            .clickable {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+            .padding(10.dp, 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "⚠️ 通知权限未开启 —— 所有提醒都不会响！点这里去系统设置打开",
+            color = TGColors.Crimson, fontSize = 12.sp, fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val allTasks by vm.mainList.collectAsState()
@@ -135,6 +172,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
+            // v5.26.1：权限被拒时主页常驻警告（点去系统设置）
+            NotifPermBanner()
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {
