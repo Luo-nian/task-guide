@@ -32,7 +32,7 @@ class TaskBarApp : Application() {
         // 兜底：磁盘库失败时降级为内存库，保证 repo 永远有值（TaskViewModel 构造才不崩）
         val db = try {
             Room.databaseBuilder(this, AppDatabase::class.java, AppDatabase.NAME)
-                .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
+                .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
                 .build()
         } catch (e: Exception) {
             Log.e("TaskBarApp", "磁盘库初始化失败，降级内存库", e)

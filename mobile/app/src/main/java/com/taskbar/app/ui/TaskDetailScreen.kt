@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -98,6 +99,10 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
     }
     val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
+    // v5.27.0：动态（协作三件套 · 谁改了什么）—— 状态声明须在 Composable 顶层（LazyListScope 里不能调 remember/collect）
+    val isProDetail = remember { com.taskbar.app.billing.License.isPro(ctx) }
+    val logs by vm.observeChangeLogs(uuid).collectAsStateWithLifecycle(initialValue = emptyList())
+
     Column(Modifier.fillMaxSize()) {
         // v5.15.16：左上角返回键（boss：不要完全依赖系统返回；系统返回依然可用）
         Row(
@@ -137,6 +142,27 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                         Spacer(Modifier.width(4.dp))
                         Text("截止 ${dateFmt.format(Date(it))}", color = TGColors.Crimson, fontSize = 12.sp)
                     }
+                }
+            }
+        }
+        // v5.27.0：动态（协作三件套 · 谁改了什么）—— Pro 专属；手机端是服务器，记录最全
+        if (isProDetail && logs.isNotEmpty()) item {
+            val timeFmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+            TGCard(Modifier.fillMaxWidth()) {
+                Text("动态", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(6.dp))
+                logs.take(20).forEach { log ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${log.who} ${log.detail}",
+                            color = TGColors.InkSoft, fontSize = 12.sp,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(timeFmt.format(Date(log.createdAt)), color = TGColors.InkFaint, fontSize = 10.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
             }
         }
@@ -540,6 +566,11 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
     }
     // 里程碑目标次数
     var milestoneTarget by remember { mutableStateOf("1") }
+    // v5.27.0：负责人（协作三件套）—— 存设备身份名，空 = 自己/全员；Pro 且有已配对设备才显示
+    var owner by remember { mutableStateOf("") }
+    val pairedDevices by vm.observeDevices().collectAsState(initial = emptyList())
+    val selfName by vm.observeSelfName().collectAsState()
+    val isProUser = remember { com.taskbar.app.billing.License.isPro(ctx) }
     // 新建/编辑时临时添加的步骤（title, attrLabel, attrValue）——保存后批量入库
     var pendingSteps by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
     var showAddStepInline by remember { mutableStateOf(false) }
@@ -563,6 +594,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 else -> "once"
             }
             category = t.category; dueAt = t.dueAt; habitRule = t.repeatRule; remindAhead = t.remindAheadMin
+            owner = t.owner
             if (catSel == "goal" && t.dueAt != null) goalDeadlineOn = true
             // 编辑：解析任务已存配置
             val (ch, sc) = ReminderStrength.parseConfig(t.reminderStrength)
@@ -769,6 +801,39 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                 }
 
                 Spacer(Modifier.height(8.dp))
+                // v5.27.0：负责人（Pro + 已有配对设备才显示；单机用户不见此控件）
+                if (isProUser && pairedDevices.isNotEmpty()) {
+                    var ownerMenu by remember { mutableStateOf(false) }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("负责人", color = TGColors.InkSoft, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { ownerMenu = true }) {
+                            Text(
+                                if (owner.isBlank()) "自己" else owner,
+                                color = TGColors.GoldDeep, fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        DropdownMenu(expanded = ownerMenu, onDismissRequest = { ownerMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("自己", color = TGColors.Ink) },
+                                onClick = { owner = ""; ownerMenu = false }
+                            )
+                            pairedDevices
+                                .filter { it.name.isNotBlank() && it.name != selfName }
+                                .forEach { d ->
+                                    DropdownMenuItem(
+                                        text = { Text(d.name, color = TGColors.Ink) },
+                                        onClick = { owner = d.name; ownerMenu = false }
+                                    )
+                                }
+                        }
+                    }
+                    Text(
+                        "提醒只发到负责人名下的设备",
+                        color = TGColors.InkMute, fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 // 步骤（保存前先拆解好，保存后自动批量入库）
                 Text("步骤（选填）", color = TGColors.InkSoft, fontSize = 13.sp)
                 if (pendingSteps.isNotEmpty()) {
@@ -841,7 +906,8 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                                 repeatRule = finalRepeat, deadline = deadline,
                                 reminderStrength = remCfg,
                                 target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1,
-                                remindAheadMin = remindAhead
+                                remindAheadMin = remindAhead,
+                                owner = owner.trim()
                             ))
                             // 批量添加新建的步骤
                             pendingSteps.forEach { (t, l, v) ->
@@ -852,6 +918,7 @@ fun AddEditTaskScreen(vm: TaskViewModel, navController: NavController, editUuid:
                                 reminderStrength = remCfg,
                                 target = milestoneTarget.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                                 remindAheadMin = remindAhead,
+                                owner = owner.trim(),
                                 onCreated = { uuid ->
                                     pendingSteps.forEach { (t, l, v) ->
                                         if (t.isNotBlank()) vm.addStep(uuid, t.trim(), l.trim(), v.trim())

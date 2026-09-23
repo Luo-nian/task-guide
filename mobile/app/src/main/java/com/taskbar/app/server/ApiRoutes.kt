@@ -146,12 +146,14 @@ fun Application.configureServer() {
         get("/api/pair/status") {
             if (call.guard("GET", "") == null) return@get
             val app = TaskBarApp.instance
-            val device = app.repo.getSetting("paired_device", "")
+            // v5.27.0：多设备 —— paired = 表非空；device/fp 取第一台（响应字段与旧版一致，桌面端兼容）
+            val first = AuthState.allDevices().firstOrNull()
             val connected = LinkState.isConnected
-            val fp = AuthState.fingerprint()
+            val fp = first?.let { AuthState.fingerprintOf(it) } ?: ""
+            val deviceName = first?.name ?: ""
             call.respondSecure(
-                """{"paired":${device.isNotEmpty()},"connected":$connected,""" +
-                    """"device":${appJson.encodeToString(String.serializer(), device)},"fp":"$fp"}"""
+                """{"paired":${first != null},"connected":$connected,""" +
+                    """"device":${appJson.encodeToString(String.serializer(), deviceName)},"fp":"$fp"}"""
             )
         }
 
@@ -195,9 +197,11 @@ fun Application.configureServer() {
             }
             val app = TaskBarApp.instance
             // v5.15.7：逐条 runCatching —— 单条数据异常不该让整批变更一起失败
+            // v5.27.0：who = 按 token 反查的设备名（变更记录记「谁」）
+            val who = call.currentDevice()?.name ?: ""
             var accepted = 0
             req.changes.forEach {
-                runCatching { app.repo.applyChange(it) }.onSuccess { accepted++ }
+                runCatching { app.repo.applyChange(it, who) }.onSuccess { accepted++ }
                     .onFailure { e -> android.util.Log.e("sync", "applyChange 失败: ${it.entity}/${it.op}", e) }
             }
             call.respondSecure("""{"status":"ok","accepted":$accepted}""")
@@ -222,12 +226,13 @@ fun Application.configureServer() {
 
         // WebSocket 实时推送（握手校验 token；**帧内容同样加密**）
         webSocket("/ws") {
-            val token = call.request.queryParameters["token"]
-            if (!wsTokenOk(token)) {
+            // v5.27.0：按 token 反查**这台连接对应的设备** —— 该连接的加解密与变更记录「谁」都用它
+            val device = wsMatchDevice(call.request.queryParameters["token"])
+            if (device == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "unauthorized"))
                 return@webSocket
             }
-            val keys = AuthState.keys()
+            val keys = AuthState.keysOf(device)
             if (keys == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "not_paired"))
                 return@webSocket
@@ -250,7 +255,8 @@ fun Application.configureServer() {
                             val msg = appJson.decodeFromString(WsMessage.serializer(), text)
                             if (msg.op == "upsert" || msg.op == "delete") {
                                 app.repo.applyChange(
-                                    ChangeOp(msg.op, msg.entity, msg.uuid, msg.data.ifEmpty { null })
+                                    ChangeOp(msg.op, msg.entity, msg.uuid, msg.data.ifEmpty { null }),
+                                    device.name
                                 )
                             }
                         }

@@ -936,6 +936,18 @@ private fun TaskRow(
                     //   与另一分支/习惯行的 17sp Medium 不一致 → 同一个列表里字号字重跳变。
                     //   统一到 17sp Medium。
                     Text(task.title, color = TGColors.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                    // v5.27.0：负责人标签 —— 派给别人的任务一眼看到派给谁（追踪中布局不加，挤按钮）
+                    if (task.owner.isNotBlank()) {
+                        Spacer(Modifier.height(3.dp))
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(TGColors.Azure.copy(alpha = 0.14f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("给 ${task.owner}", color = TGColors.Azure, fontSize = 11.sp)
+                        }
+                    }
                     task.dueAt?.let {
                         Spacer(Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {

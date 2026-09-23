@@ -205,10 +205,15 @@ object ReminderScheduler {
         // 全局默认提醒方式存 SharedPreferences（与 SettingsScreen/NotificationHelper 一致）
         val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
             .getString("reminder_strength", "notify") ?: "notify"
+        // v5.27.0：负责人路由 —— 本机身份名（self_name），owner 非空且不是本机 → 不排不提醒
+        val selfName = repo.selfName()
         // v5.18.4：不能用 observeMainList() —— 它的 SQL 自带 `track_status != 'done'`，
         //   会让"昨天完成的每日任务"在 SQL 层就被滤掉（见 TaskDao.observeRemindable 注释）。
         val tasks = repo.observeRemindable().first()
         tasks.forEach { t ->
+            // v5.27.0：派给别人的任务不在本机响（负责人设备才响；owner 空 = 自己/全员）
+            val owner = t.owner.trim()
+            if (owner.isNotEmpty() && owner != selfName) return@forEach
             // v5.18.4：每日型任务「昨天已完成」在原始库里仍然是 DONE ——
             //   每日折算（normalizeDailyReset）只发生在 UI 读取层，rescheduleAll 拿的是原始行。
             //   于是新的一天里它被判成 DONE 直接跳过 → **今天的提醒根本排不上**，
@@ -261,6 +266,12 @@ object ReminderScheduler {
         //   并不会取消已排的提醒（删除路径里没有 cancel）→ 删掉的任务到点还会弹一次。
         //   这里补一道守卫，顺带让历史遗留的"孤儿"提醒条目自动失效（触发后自行作废）。
         if (t.deleted != 0) return
+
+        // v5.27.0：负责人路由兜底 —— 排程后 owner 可能被改到别人头上，触发那一刻再判一次。
+        //   owner 非空且不是本机身份名 → 本机不响（同步照常，由负责人那台设备提醒）。
+        val selfName = app.repo.selfName()
+        val owner = t.owner.trim()
+        if (owner.isNotEmpty() && owner != selfName) return
 
         NotificationHelper.showReminder(ctx.applicationContext, uuid, t.title, strength)
 

@@ -3159,12 +3159,18 @@ if (_widgetToggle) {
 }
 
 // =============== 紧急任务弹窗 ===============
+// v5.27.0：本机身份名（配对时由 Rust 写入 settings）—— 负责人路由：派给别人的任务不弹本机
+let SELF_NAME = '';
+try { call('get_setting', { key: 'self_name' }).then(v => { SELF_NAME = v || ''; }).catch(() => {}); } catch (e) {}
+
 function checkEmergency() {
   if (!settings.emergency_on) return;
   const now = Date.now();
   for (const t of tasks) {
     if (!t.deadline && !t.due_at) continue;
     if (t.track_status === 'done') continue;
+    // v5.27.0：负责人路由 —— 任务派给别人（owner 非空且不是本机）时本机不弹
+    if (t.owner && SELF_NAME && t.owner !== SELF_NAME) continue;
     const dueAt = t.deadline || t.due_at;
     if (typeof dueAt !== 'number') continue;
     const total = (dueAt - (t.created_at || now));

@@ -47,6 +47,8 @@ pub struct Task {
     pub reward_points: i64,
     #[serde(default)]
     pub reminder_strength: Option<String>,  // 每任务提醒强度：standard|repeat|alarm；null=跟随默认
+    #[serde(default)]
+    pub owner: String,        // v5.27.0：负责人（设备身份名，空=自己/全员；提醒路由按它过滤）
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted: i64,
@@ -125,6 +127,11 @@ fn migrate(conn: &Connection) {
     if !has("reminder_strength") {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN reminder_strength TEXT DEFAULT NULL;");
         log::info!("[migrate] tasks 新增列 reminder_strength");
+    }
+    // v5.27.0：负责人（协作三件套）—— 手机端派任务字段，桌面端只存不编（提醒路由用它过滤）
+    if !has("owner") {
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN owner TEXT NOT NULL DEFAULT '';");
+        log::info!("[migrate] tasks 新增列 owner");
     }
     // boss #41：桌面的"任务重复"实际是同 title 但 uuid 不同的脏数据（占位 UUID 0000000X + 真实 UUID）
     //   旧版 schema.sql 没正确执行 → uuid 列无 UNIQUE 约束 + 部分 add_task 用了占位 uuid
@@ -333,6 +340,7 @@ pub fn row_to_task(r: &rusqlite::Row) -> rusqlite::Result<Task> {
         done_count: r.get::<_, Option<i64>>("done_count").unwrap_or(None).unwrap_or(0),
         reward_points: r.get::<_, Option<i64>>("reward_points").unwrap_or(None).unwrap_or(10),
         reminder_strength: r.get("reminder_strength").ok(),
+        owner: r.get::<_, Option<String>>("owner").unwrap_or(None).unwrap_or_default(),
         created_at: r.get::<_, Option<i64>>("created_at").unwrap_or(None).unwrap_or(0),
         updated_at: r.get::<_, Option<i64>>("updated_at").unwrap_or(None).unwrap_or(0),
         deleted: r.get::<_, Option<i64>>("deleted").unwrap_or(None).unwrap_or(0),
@@ -571,7 +579,11 @@ fn get_next_reminder(state: tauri::State<AppState>) -> Option<ReminderInfo> {
     let db = state.db.lock().unwrap();
     let now = chrono::Local::now().timestamp_millis();
     db.query_row(
-        "SELECT title, due_at FROM tasks WHERE due_at>?1 AND track_status!='done' AND deleted=0 ORDER BY due_at ASC LIMIT 1",
+        // v5.27.0：负责人路由 —— 派给别人的任务不进本机提醒（owner 空 = 自己/全员）
+        "SELECT title, due_at FROM tasks \
+         WHERE due_at>?1 AND track_status!='done' AND deleted=0 \
+           AND (owner IS NULL OR owner='' OR owner=(SELECT value FROM settings WHERE key='self_name')) \
+         ORDER BY due_at ASC LIMIT 1",
         params![now],
         |r| Ok(ReminderInfo { title: r.get(0)?, due_at: r.get(1)?, remaining_ms: r.get::<_, i64>(1)? - now })
     ).ok()
@@ -1046,13 +1058,21 @@ fn get_widget_visible(app: tauri::AppHandle) -> bool {
 /// ⭐ 安全边界在「人在手机上点允许」那一下 —— 不再有需要用户抄写的验证码。
 ///    SAS = sha256(cNonce|sNonce|sessionId) 前 6 位。数字不一致即说明信道上有人改过东西。
 #[tauri::command]
-fn pair_request(url: String, device_name: Option<String>, device_id: Option<String>) -> String {
+fn pair_request(state: tauri::State<AppState>, url: String, device_name: Option<String>, device_id: Option<String>) -> String {
     let base = crate::sync::server_base(&url);
     if base.is_empty() { return "error:手机地址为空".to_string(); }
     let pc_name = device_name
         .filter(|s| !s.trim().is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
         .unwrap_or_else(|| "BOOS PC".to_string());
+    // v5.27.0：本机身份名落 settings 表（重启不丢）—— 提醒路由按它判断"派给别人的任务不弹"
+    {
+        let db = state.db.lock().unwrap();
+        let _ = db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('self_name', ?1)",
+            params![pc_name],
+        );
+    }
     let body = serde_json::json!({
         "deviceName": pc_name,
         "deviceId": device_id.unwrap_or_default(),

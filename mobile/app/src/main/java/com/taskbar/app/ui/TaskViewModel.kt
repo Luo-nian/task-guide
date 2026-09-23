@@ -140,6 +140,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             if (removed) return@runCatching
             val t = repo.observeTask(uuid).first() ?: return@runCatching
             if (t.deleted != 0) return@runCatching
+            // v5.27.0：负责人路由 —— 派给别人的任务不在本机排（rescheduleAll/fireNow 已同判，
+            // 这里是写操作后的单任务重排路径，漏了会把别人名下的任务排回本机）
+            val ownerTrim = t.owner.trim()
+            if (ownerTrim.isNotEmpty() && ownerTrim != repo.selfName()) return@runCatching
             val due = t.dueAt ?: return@runCatching
             val now = System.currentTimeMillis()
             val daily = com.taskbar.app.notify.ReminderScheduler.isDailyKindForReminder(t)
@@ -173,10 +177,12 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         type: String, title: String, desc: String, category: String,
         priority: String, dueAt: Long?, repeatRule: String?, deadline: Long?,
         reminderStrength: String? = null, target: Int = 1, remindAheadMin: Int = 0,
+        owner: String = "",
         onCreated: (String) -> Unit = {}
     ) = viewModelScope.launch {
         val task = repo.createTask(type, title, desc, category, priority, dueAt, repeatRule, deadline,
-            reminderStrength = reminderStrength, target = target, remindAheadMin = remindAheadMin)
+            reminderStrength = reminderStrength, target = target, remindAheadMin = remindAheadMin,
+            owner = owner)
         refreshWidget()
         rescheduleOne(task.uuid)
         onCreated(task.uuid)
@@ -348,6 +354,25 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun setTrackLimit(limit: Int) = viewModelScope.launch { repo.setTrackLimit(limit) }
     fun setSetting(key: String, value: String) = viewModelScope.launch { repo.setSetting(key, value) }
     suspend fun getSetting(key: String, default: String = ""): String = repo.getSetting(key, default)
+
+    // ==================== v5.27.0 协作三件套 ====================
+
+    /** 已配对设备列表（设置页设备管理） */
+    fun observeDevices() = repo.pairedDeviceDao.observeAll()
+
+    /** 解绑单台设备（该设备 token 立即失效，其它设备不受影响） */
+    fun unbindDevice(deviceId: String) = viewModelScope.launch {
+        com.taskbar.app.server.AuthState.unbind(deviceId)
+    }
+
+    /** 本机身份名（负责人路由的匹配基准；空设置回落默认） */
+    fun observeSelfName(): StateFlow<String> =
+        repo.observeSetting("self_name").map { it ?: "" }
+            .map { it.ifBlank { "我的手机" } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "我的手机")
+
+    /** 变更记录流（任务详情页「动态」） */
+    fun observeChangeLogs(taskUuid: String) = repo.changeLogDao.observeByTask(taskUuid)
 
     // ===== 分类 =====
     suspend fun getCustomCategories(): List<String> = repo.getCustomCategories()

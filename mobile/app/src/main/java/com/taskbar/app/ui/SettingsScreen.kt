@@ -687,6 +687,85 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
         }
 
+        // ══════════ v5.27.0 协作：本机名称 + 已配对设备管理 ══════════
+        // 多客户端配对后每台设备一行（各自密钥），解绑即吊销该设备 token。
+        val devices by vm.observeDevices().collectAsState(initial = emptyList())
+        val selfName by vm.observeSelfName().collectAsState()
+        val isProDevice = remember { com.taskbar.app.billing.License.isPro(ctx) }
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("协作", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            var editSelf by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("本机名称", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { editSelf = true }) {
+                    Text(selfName, color = TGColors.Jade, fontSize = 13.sp)
+                }
+            }
+            Text(
+                "派任务时选负责人，提醒只响负责人名下的设备",
+                color = TGColors.InkMute, fontSize = 11.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            if (devices.isEmpty()) {
+                Text("尚未配对任何设备", color = TGColors.InkMute, fontSize = 12.sp)
+            } else {
+                devices.forEach { d ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(d.name, color = TGColors.Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "指纹 " + AuthState.fingerprintOf(d),
+                                color = TGColors.InkMute, fontSize = 11.sp
+                            )
+                        }
+                        TextButton(onClick = { vm.unbindDevice(d.deviceId) }) {
+                            Text("解绑", color = TGColors.Crimson)
+                        }
+                    }
+                }
+            }
+            if (!isProDevice && devices.size >= AuthState.MAX_DEVICES_FREE) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "已到免费版配对上限（1 台）——多设备协作需要买断授权",
+                    color = TGColors.Crimson, fontSize = 11.sp
+                )
+            }
+            if (editSelf) {
+                var nameInput by remember { mutableStateOf(selfName) }
+                AlertDialog(
+                    onDismissRequest = { editSelf = false },
+                    title = { Text("本机名称", color = TGColors.Ink, fontSize = 17.sp) },
+                    text = {
+                        OutlinedTextField(
+                            value = nameInput,
+                            onValueChange = { nameInput = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = TGColors.Ink, fontSize = 14.sp
+                            )
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            vm.setSetting("self_name", nameInput.trim())
+                            editSelf = false
+                        }) { Text("保存", color = TGColors.Jade, fontWeight = FontWeight.Medium) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { editSelf = false }) { Text("取消", color = TGColors.InkMute) }
+                    }
+                )
+            }
+        }
+
         // ══════════ v5.17.0 配对确认框 ══════════
         // boss 要求："一端发出申请，另一端弹出确认窗口进行确认"。
         // 这个弹窗就是那"另一端"——**只有人在这里点「允许」，配对才会成立**。
@@ -716,7 +795,13 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        pairScope.launch { PairingState.approve(req.id) }
+                        pairScope.launch {
+                            // v5.27.0：超限拒绝（免费 1 台 / Pro 5 台）→ 给出买断引导
+                            val err = PairingState.approve(req.id)
+                            if (err == "limit") {
+                                ToastHelper.show(ctx, "已达设备上限，多设备协作需要买断授权")
+                            }
+                        }
                     }) { Text("允许", color = TGColors.Jade, fontWeight = FontWeight.Medium) }
                 },
                 dismissButton = {

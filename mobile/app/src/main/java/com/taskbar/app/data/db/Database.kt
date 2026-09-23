@@ -11,7 +11,9 @@ import androidx.room.RoomDatabase
 import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.taskbar.app.data.model.ChangeLog
 import com.taskbar.app.data.model.HabitLog
+import com.taskbar.app.data.model.PairedDevice
 import com.taskbar.app.data.model.Setting
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.SyncMeta
@@ -273,10 +275,55 @@ interface SyncMetaDao {
     suspend fun upsert(meta: SyncMeta)
 }
 
+// ==================== ChangeLog DAO（v5.27.0 协作三件套） ====================
+@Dao
+interface ChangeLogDao {
+    @Insert
+    suspend fun insert(log: ChangeLog)
+
+    /** 任务详情页「动态」时间线 */
+    @Query("SELECT * FROM change_logs WHERE task_uuid = :taskUuid ORDER BY created_at DESC, id DESC")
+    fun observeByTask(taskUuid: String): Flow<List<ChangeLog>>
+
+    @Query("SELECT * FROM change_logs WHERE task_uuid = :taskUuid ORDER BY created_at DESC, id DESC")
+    suspend fun getByTask(taskUuid: String): List<ChangeLog>
+
+    /** 每任务只保留最新 keep 条（id 大 = 新） */
+    @Query("""
+        DELETE FROM change_logs WHERE task_uuid = :taskUuid AND id NOT IN
+        (SELECT id FROM change_logs WHERE task_uuid = :taskUuid ORDER BY id DESC LIMIT :keep)
+    """)
+    suspend fun trimTask(taskUuid: String, keep: Int)
+
+    /** 全局上限（防膨胀） */
+    @Query("DELETE FROM change_logs WHERE id NOT IN (SELECT id FROM change_logs ORDER BY id DESC LIMIT :keep)")
+    suspend fun trimGlobal(keep: Int)
+}
+
+// ==================== PairedDevice DAO（v5.27.0 多客户端配对） ====================
+@Dao
+interface PairedDeviceDao {
+    @Query("SELECT * FROM paired_devices ORDER BY paired_at ASC")
+    suspend fun getAll(): List<PairedDevice>
+
+    @Query("SELECT * FROM paired_devices ORDER BY paired_at ASC")
+    fun observeAll(): Flow<List<PairedDevice>>
+
+    @Upsert
+    suspend fun upsert(device: PairedDevice)
+
+    @Query("DELETE FROM paired_devices WHERE device_id = :deviceId")
+    suspend fun delete(deviceId: String)
+
+    @Query("SELECT COUNT(*) FROM paired_devices")
+    suspend fun count(): Int
+}
+
 // ==================== Database ====================
 @Database(
-    entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class],
-    version = 5,
+    entities = [Task::class, Step::class, HabitLog::class, SyncMeta::class, Setting::class,
+                ChangeLog::class, PairedDevice::class],
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -285,6 +332,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun habitLogDao(): HabitLogDao
     abstract fun settingsDao(): SettingsDao
     abstract fun syncMetaDao(): SyncMetaDao
+    abstract fun changeLogDao(): ChangeLogDao
+    abstract fun pairedDeviceDao(): PairedDeviceDao
 
     companion object {
         const val NAME = "taskguide.db"
@@ -308,6 +357,41 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN remind_ahead_min INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v5 → v6（v5.27.0 协作三件套）：
+         *  ① tasks 加 owner（负责人，空 = 自己/全员）
+         *  ② 新表 change_logs（变更记录，仅手机端记录与展示）
+         *  ③ 新表 paired_devices（多客户端配对，每台设备一行独立密钥）
+         *  ④ 旧 auth_secret + paired_device 迁成一行 legacy（device_id=''）—— 现有配对不失效
+         * boss 手机上有真实数据，迁移失败 = 数据全毁，建表 SQL 必须与 Room 期望 schema 一致。
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `change_logs` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`task_uuid` TEXT NOT NULL, `who` TEXT NOT NULL, `action` TEXT NOT NULL, " +
+                        "`detail` TEXT NOT NULL, `created_at` INTEGER NOT NULL)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_change_logs_task_uuid` ON `change_logs` (`task_uuid`)"
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `paired_devices` (" +
+                        "`device_id` TEXT NOT NULL, `name` TEXT NOT NULL, `master_hex` TEXT NOT NULL, " +
+                        "`paired_at` INTEGER NOT NULL, PRIMARY KEY(`device_id`))"
+                )
+                // legacy：把旧的单密钥配对迁成第一行，已配对的电脑不受升级影响
+                database.execSQL(
+                    "INSERT INTO paired_devices (device_id, name, master_hex, paired_at) " +
+                        "SELECT '', COALESCE((SELECT value FROM settings WHERE key = 'paired_device'), '电脑'), " +
+                        "(SELECT value FROM settings WHERE key = 'auth_secret'), 0 " +
+                        "WHERE EXISTS (SELECT 1 FROM settings WHERE key = 'auth_secret' AND value != '')"
+                )
             }
         }
     }

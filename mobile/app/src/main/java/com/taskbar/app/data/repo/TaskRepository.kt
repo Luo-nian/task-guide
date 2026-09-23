@@ -71,8 +71,36 @@ class TaskRepository(private val db: AppDatabase) {
     private val settingsDao = db.settingsDao()
     private val syncDao = db.syncMetaDao()
 
+    /** v5.27.0：变更记录 DAO（公开：AuthState/UI 都要用） */
+    val changeLogDao = db.changeLogDao()
+
+    /** v5.27.0：已配对设备 DAO（公开：AuthState/设置页都要用） */
+    val pairedDeviceDao = db.pairedDeviceDao()
+
     private fun now() = System.currentTimeMillis()
     private fun newUuid() = UUID.randomUUID().toString()
+
+    // ==================== 变更记录（v5.27.0 协作三件套） ====================
+    // 只在手机端（服务器）记录：它看得到所有端提交的变更，正好匹配
+    // "派任务的人看动态"的主场景（远程照护：看得见他今天做了没）。不同步、不进备份。
+
+    /** 本机身份名（设置 self_name，默认「我的手机」） */
+    suspend fun selfName(): String =
+        getSetting("self_name", "我的手机").ifBlank { "我的手机" }
+
+    /** 记一条变更 + 修剪（每任务 ≤20 条、全局 ≤2000 条）。失败静默（日志不能拖垮业务）。 */
+    suspend fun logChange(taskUuid: String, who: String, action: String, detail: String) {
+        runCatching {
+            changeLogDao.insert(
+                com.taskbar.app.data.model.ChangeLog(
+                    taskUuid = taskUuid, who = who, action = action,
+                    detail = detail, createdAt = now()
+                )
+            )
+            changeLogDao.trimTask(taskUuid, 20)
+            changeLogDao.trimGlobal(2000)
+        }
+    }
 
     /** 同步用 Json：encodeDefaults=true 才能把默认值字段也序列化给桌面端 */
     private val syncJson = kotlinx.serialization.json.Json {
@@ -243,7 +271,8 @@ class TaskRepository(private val db: AppDatabase) {
         deadline: Long? = null,
         reminderStrength: String? = null,
         target: Int = 1,
-        remindAheadMin: Int = 0
+        remindAheadMin: Int = 0,
+        owner: String = ""
     ): Task {
         val t = now()
         // v5.15.21 P2：次数任务（category=once）与里程碑共用 target 承载"次数"。
@@ -261,21 +290,31 @@ class TaskRepository(private val db: AppDatabase) {
             reminderStrength = reminderStrength,
             progress = 0, target = cnt,
             remindAheadMin = remindAheadMin.coerceIn(0, 7 * 24 * 60),
+            owner = owner.trim(),
             createdAt = t, updatedAt = t
         )
         taskDao.upsert(task)
         emitWithData(ChangeOp("upsert", "task", task.uuid))
+        logChange(task.uuid, selfName(), "create", "创建了任务")
         return task
     }
 
     suspend fun updateTask(task: Task) {
         // 编辑时同步按当前类型/优先级重算积分，保证规则一致；次数任务（target>1）按 P2 降分
+        val old = taskDao.getByUuid(task.uuid)
         val recalculated = task.copy(
             rewardPoints = com.taskbar.app.data.model.RewardRules.forTask(task.type, task.priority, task.target),
             updatedAt = now()
         )
         taskDao.upsert(recalculated)
         emitWithData(ChangeOp("upsert", "task", recalculated.uuid))
+        // v5.27.0：变更记录（编辑 + 负责人变更单独记，动态里一眼看到派给谁）
+        val who = selfName()
+        logChange(recalculated.uuid, who, "update", "修改了任务")
+        if (old != null && old.owner != recalculated.owner) {
+            logChange(recalculated.uuid, who, "owner",
+                if (recalculated.owner.isBlank()) "负责人改回自己" else "负责人改为 ${recalculated.owner}")
+        }
     }
 
     suspend fun deleteTask(uuid: String) {
@@ -290,6 +329,7 @@ class TaskRepository(private val db: AppDatabase) {
             emitWithData(ChangeOp("delete", "step", it.uuid))
         }
         emitWithData(ChangeOp("delete", "task", uuid))
+        logChange(uuid, selfName(), "delete", "删除了任务")
     }
 
     /**
@@ -332,12 +372,14 @@ class TaskRepository(private val db: AppDatabase) {
             emitWithData(ChangeOp("upsert", "step", first.uuid))
         }
         emitWithData(ChangeOp("upsert", "task", uuid))
+        logChange(uuid, selfName(), "track_start", "开始追踪")
         return true
     }
 
     suspend fun stopTracking(uuid: String) {
         taskDao.updateTrackStatus(uuid, TrackStatus.PENDING, now())
         emitWithData(ChangeOp("upsert", "task", uuid))
+        logChange(uuid, selfName(), "track_stop", "停止追踪")
     }
 
     /** 直接完成任务（无步骤或一键完成），累加积分。
@@ -362,6 +404,7 @@ class TaskRepository(private val db: AppDatabase) {
             if (!already) {
                 habitDao.insert(HabitLog(taskUuid = uuid, checkDate = date, createdAt = t))
                 emitWithData(ChangeOp("upsert", "habit", uuid))
+                logChange(uuid, selfName(), "habit_check", "完成了今日打卡")
             }
             // v5.15.23 C-006（boss：「这些任务都完成不掉，点了但是去不掉」）——
             //   根因：习惯完成只写 log、**不解除追踪态**；下次再点完成时 `isChecked → return`
@@ -414,6 +457,13 @@ class TaskRepository(private val db: AppDatabase) {
             emitWithData(ChangeOp("upsert", "step", it.uuid))
         }
         emitWithData(ChangeOp("upsert", "task", uuid))
+        // v5.27.0：完成/推进动态（habit 的打卡已在上面单独记，不重复）
+        if (task.type != TaskType.HABIT) {
+            logChange(uuid, selfName(), "complete",
+                if (task.target > 1 || task.type == TaskType.MILESTONE)
+                    "推进了任务（${task.progress + if (task.trackStatus == TrackStatus.DONE) 0 else 1}/${task.target}）"
+                else "完成了任务")
+        }
     }
 
     /** 从归档恢复（取消完成）—— 同步扣回完成任务时奖励的积分 */
@@ -431,6 +481,7 @@ class TaskRepository(private val db: AppDatabase) {
         val cost = if (overdueHalf) maxOf(1, task.rewardPoints / 2) else task.rewardPoints
         bumpPoints(-cost)
         emitWithData(ChangeOp("upsert", "task", uuid))
+        logChange(uuid, selfName(), "restore", "恢复了任务")
     }
 
     /** v5.15.23 C-006：一次性修复"今天已打卡、却还挂在追踪中"的习惯
@@ -638,6 +689,7 @@ class TaskRepository(private val db: AppDatabase) {
         val newDue = task.dueAt + delayMillis
         taskDao.upsert(task.copy(dueAt = newDue, delayedCount = task.delayedCount + 1, updatedAt = t))
         emitWithData(ChangeOp("upsert", "task", uuid))
+        logChange(uuid, selfName(), "delay", "延期了任务")
     }
 
     // ==================== 仓库置顶/置底（把任务在今天/未来之间移动） ====================
@@ -671,6 +723,7 @@ class TaskRepository(private val db: AppDatabase) {
         val log = HabitLog(taskUuid = taskUuid, checkDate = date, createdAt = now())
         habitDao.insert(log)
         emitWithData(ChangeOp("upsert", "habit", log.taskUuid))
+        logChange(taskUuid, selfName(), "habit_check", "完成了今日打卡")
         return true
     }
 
@@ -887,15 +940,17 @@ class TaskRepository(private val db: AppDatabase) {
         return changes
     }
 
-    suspend fun upsertTaskFromSync(task: Task) {
+    /** @return true = 真的写入了（本地更旧或不存在）；false = LWW 跳过 */
+    suspend fun upsertTaskFromSync(task: Task): Boolean {
         // 冲突处理：本地更新则跳过
         val local = taskDao.getByUuid(task.uuid)
-        if (local != null && local.updatedAt > task.updatedAt) return
+        if (local != null && local.updatedAt > task.updatedAt) return false
         // v5.15.7 P0：Room 的 @Upsert 按自增主键 id 定位行（不是 uuid 唯一索引）。
         //   远端 JSON 里没有本地 id（=0），直接 upsert 会 INSERT 撞 uuid 唯一索引 → IGNORE，
         //   再按 id=0 UPDATE 又找不到行 → 静默什么都不做（手机端永远收不到电脑端的状态）。
         //   这里显式沿用本地行的 id。
         taskDao.upsert(if (local != null) task.copy(id = local.id) else task.copy(id = 0))
+        return true
     }
 
     suspend fun upsertStepFromSync(step: Step) {
@@ -905,13 +960,31 @@ class TaskRepository(private val db: AppDatabase) {
         stepDao.upsert(if (local != null) step.copy(id = local.id) else step.copy(id = 0))
     }
 
-    suspend fun applyChange(change: ChangeOp) {
+    /**
+     * 应用来自客户端的变更。
+     * v5.27.0：@param who 来源设备身份名（guard/WS 按 token 反查），变更记录的「谁」就记它。
+     */
+    suspend fun applyChange(change: ChangeOp, who: String = "") {
+        val by = who.ifBlank { "电脑端" }
         when (change.op) {
             "upsert" -> when (change.entity) {
                 "task" -> change.data?.let {
                     // 用宽松 Json（ignoreUnknownKeys）：桌面端将来加字段也不会让整批同步 500
                     val t = syncJson.decodeFromString<Task>(it)
-                    upsertTaskFromSync(t)
+                    val local = taskDao.getByUuid(t.uuid)
+                    if (upsertTaskFromSync(t)) {
+                        when {
+                            local == null ->
+                                logChange(t.uuid, by, "create", "创建了任务")
+                            local.trackStatus != TrackStatus.DONE && t.trackStatus == TrackStatus.DONE ->
+                                logChange(t.uuid, by, "complete", "完成了任务")
+                            local.owner != t.owner ->
+                                logChange(t.uuid, by, "owner",
+                                    if (t.owner.isBlank()) "负责人改回自己" else "负责人改为 ${t.owner}")
+                            else ->
+                                logChange(t.uuid, by, "update", "修改了任务")
+                        }
+                    }
                 }
                 "step" -> change.data?.let {
                     val s = syncJson.decodeFromString<Step>(it)
@@ -922,6 +995,7 @@ class TaskRepository(private val db: AppDatabase) {
                     runCatching {
                         val h = syncJson.decodeFromString<HabitLog>(it)
                         habitDao.insert(h.copy(id = 0))
+                        logChange(h.taskUuid, by, "habit_check", "完成了今日打卡")
                     }
                 }
                 // v5.15.7：电脑端的设置变更（积分/等级、头像、昵称…）→ 最新为主
@@ -938,6 +1012,7 @@ class TaskRepository(private val db: AppDatabase) {
                     // v5.18.1：级联软删步骤（兜底"只推了 task delete"的对端）
                     val t = now()
                     stepDao.getByTask(change.uuid).forEach { stepDao.softDelete(it.uuid, t) }
+                    logChange(change.uuid, by, "delete", "删除了任务")
                 }
                 "step" -> stepDao.softDelete(change.uuid, now())
             }

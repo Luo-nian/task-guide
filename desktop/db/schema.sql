@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     done_count    INTEGER NOT NULL DEFAULT 0,          -- 次数任务：已完成的次数
     reward_points INTEGER NOT NULL DEFAULT 10,         -- 完成本任务获得的积分（原神奖励区）
     reminder_strength TEXT DEFAULT NULL,               -- 每任务提醒强度：standard|repeat|alarm，null=跟随默认
+    owner         TEXT    NOT NULL DEFAULT '',         -- v5.27.0 负责人（设备身份名，空=自己/全员）
     created_at    INTEGER NOT NULL,                    -- 创建时间
     updated_at    INTEGER NOT NULL,                    -- 最后修改时间（同步冲突判断）
     deleted       INTEGER NOT NULL DEFAULT 0           -- 软删除 0/1（同步用）

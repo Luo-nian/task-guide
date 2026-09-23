@@ -8,6 +8,7 @@ import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.response.header
 import io.ktor.server.response.respondText
+import io.ktor.util.AttributeKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Base64
@@ -42,46 +43,75 @@ private const val ALLOWED_SKEW_MS = 180_000L
 // ═══════════════════════════ 长期密钥 ═══════════════════════════
 
 /**
- * 长期密钥（master 32 字节，hex 存在 settings 表 `auth_secret`）。
+ * 长期密钥（v5.27.0 多客户端改造）：
  *
- * 注意：**它不参与同步**（`applySettingFromSync` 只处理白名单 key），
- * 否则会出现"要同步得先有密钥、要密钥得先同步"的自锁。
+ * 旧版只有一个 master（settings 表 `auth_secret`），第二台设备配对 = 覆盖 = 旧设备被踢。
+ * 现在**每台设备一行**（paired_devices 表，各持独立密钥）：
+ *   - 请求鉴权按 X-TB-Token（= 该设备的 master）反查设备身份 → guard 能回答「这是谁」
+ *   - 旧 `auth_secret` 仅在 MIGRATION_5_6 里迁成第一行 legacy（device_id=''），此后不再读写
+ *   - 解绑某台设备 = 删它那一行，该设备 token 立即失效（其它设备不受影响）
  */
 object AuthState {
-    private const val KEY = "auth_secret"
+    /** 配对上限：免费版 1 台（与旧行为一致），买断 5 台 */
+    const val MAX_DEVICES_FREE = 1
+    const val MAX_DEVICES_PRO = 5
 
-    @Volatile
-    private var cached: TbCrypto.Keys? = null
+    private fun dao() = TaskBarApp.instance.repo.pairedDeviceDao
 
-    /** 已配对的密钥；未配对返回 null */
+    suspend fun allDevices(): List<com.taskbar.app.data.model.PairedDevice> = dao().getAll()
+
+    suspend fun isPaired(): Boolean = dao().count() > 0
+
+    /**
+     * 按 token（= 设备 master 字节）反查设备身份。防时序比较。
+     * @return 匹配的设备；null = 未配对/无效 token
+     */
+    suspend fun match(tokenBytes: ByteArray): com.taskbar.app.data.model.PairedDevice? {
+        if (tokenBytes.isEmpty()) return null
+        val devices = dao().getAll()
+        for (d in devices) {
+            val master = runCatching { TbCrypto.keysOfHex(d.masterHex) }.getOrNull() ?: continue
+            if (TbCrypto.ctEq(tokenBytes, master.master)) return d
+        }
+        return null
+    }
+
+    /** 兼容旧调用点（如 WS 加密通道初始化）：返回任一设备密钥；未配对返回 null */
     suspend fun keys(): TbCrypto.Keys? {
-        cached?.let { return it }
-        val hex = TaskBarApp.instance.repo.getSetting(KEY, "")
-        if (hex.isEmpty()) return null
-        val k = TbCrypto.keysOfHex(hex) ?: return null
-        cached = k
-        return k
+        val d = dao().getAll().firstOrNull() ?: return null
+        return TbCrypto.keysOfHex(d.masterHex)
     }
 
-    suspend fun isPaired(): Boolean = keys() != null
+    /** 某台设备的密钥 */
+    fun keysOf(device: com.taskbar.app.data.model.PairedDevice): TbCrypto.Keys? =
+        TbCrypto.keysOfHex(device.masterHex)
 
-    /** 配对获批时调用：把手机端生成的 master 存下来 */
-    suspend fun issue(masterHex: String) {
-        TaskBarApp.instance.repo.setSetting(KEY, masterHex)
-        cached = TbCrypto.keysOfHex(masterHex)
+    /** 配对获批时调用：新增一台设备（**不再覆盖**旧密钥） */
+    suspend fun issue(deviceId: String, name: String, masterHex: String) {
+        dao().upsert(
+            com.taskbar.app.data.model.PairedDevice(
+                deviceId = deviceId.ifBlank { TbCrypto.toHex(TbCrypto.randBytes(8)) },
+                name = name,
+                masterHex = masterHex,
+                pairedAt = System.currentTimeMillis()
+            )
+        )
     }
 
-    /** 作废（解除配对 / 换设备）—— 旧 token 立即失效 */
+    /** 解绑单台设备 —— 该设备 token 立即失效，其它设备不受影响 */
+    suspend fun unbind(deviceId: String) {
+        dao().delete(deviceId)
+    }
+
+    /** 解除全部配对（设置页「解除配对」沿用旧行为） */
     suspend fun clear() {
-        TaskBarApp.instance.repo.setSetting(KEY, "")
-        cached = null
+        val all = dao().getAll()
+        all.forEach { dao().delete(it.deviceId) }
     }
 
-    /** 密钥指纹（前 4 位），设置页显示用 */
-    suspend fun fingerprint(): String {
-        val k = keys() ?: return ""
-        return k.masterHex().take(4).uppercase()
-    }
+    /** 设备指纹（前 4 位），设备列表显示用 */
+    fun fingerprintOf(d: com.taskbar.app.data.model.PairedDevice): String =
+        d.masterHex.take(4).uppercase()
 }
 
 // ═══════════════════════════ 重放保护 ═══════════════════════════
@@ -226,18 +256,35 @@ object PairingState {
         return r
     }
 
-    /** boss 在手机上点了「允许」→ 生成并下发长期密钥 */
-    suspend fun approve(id: String): Boolean {
-        val r = current ?: return false
-        if (r.id != id || r.status != "pending") return false
+    /**
+     * boss 在手机上点了「允许」→ 生成并下发**该设备专属**长期密钥。
+     *
+     * v5.27.0：多客户端 —— 新密钥**新增一行**（不再覆盖），同一 deviceId 重配视为换新密钥不占名额。
+     * 配对上限：免费 1 台 / Pro 5 台，超限拒绝并返回 "limit"（UI 提示买断）。
+     *
+     * @return null = 成功；非 null = 失败原因（"limit" = 超出设备数上限）
+     */
+    suspend fun approve(id: String): String? {
+        val r = current ?: return null
+        if (r.id != id || r.status != "pending") return null
+        val pro = com.taskbar.app.billing.License.isPro(TaskBarApp.instance)
+        val max = if (pro) AuthState.MAX_DEVICES_PRO else AuthState.MAX_DEVICES_FREE
+        val existing = AuthState.allDevices()
+        val isRePair = existing.any { it.deviceId == r.deviceId && r.deviceId.isNotBlank() }
+        if (!isRePair && existing.size >= max) {
+            android.util.Log.w("PairingState", "拒绝配对：已达设备上限 $max（pro=$pro）")
+            r.status = "denied"
+            r.masterHex = null
+            _pending.value = null
+            return "limit"
+        }
         val master = TbCrypto.newMasterHex()
-        AuthState.issue(master)
-        TaskBarApp.instance.repo.setSetting("paired_device", r.name)
+        AuthState.issue(r.deviceId, r.name, master)
         r.masterHex = master
         r.status = "approved"
         _pending.value = null
         android.util.Log.i("PairingState", "已允许配对：${r.name} @ ${r.ip}")
-        return true
+        return null
     }
 
     /** boss 点了「拒绝」 */
@@ -297,28 +344,37 @@ object PairingState {
 // ═══════════════════════════ 请求级鉴权 ═══════════════════════════
 
 /**
+ * v5.27.0：guard 匹配到的设备存在这里，后续 respondSecure / 变更记录「谁」都用它。
+ */
+val TB_DEVICE_KEY = io.ktor.util.AttributeKey<com.taskbar.app.data.model.PairedDevice>("tbDevice")
+
+/** 当前请求是哪台已配对设备发起的（guard 成功后才有值） */
+fun ApplicationCall.currentDevice(): com.taskbar.app.data.model.PairedDevice? =
+    attributes.getOrNull(TB_DEVICE_KEY)
+
+/**
  * 受保护路由的统一入口（**双向认证的"手机验电脑"半边**）。
  *
- * 依次校验：密钥存在 → token → 时间戳 → nonce 未用过 → 签名 → 解密 body。
+ * 依次校验：设备存在 → token（= 某台已配对设备的 master）→ 时间戳 → nonce 未用过 → 签名 → 解密 body。
+ *
+ * v5.27.0 多客户端：token 反查 paired_devices 表（≤5 行遍历 + 防时序比较），
+ * 匹配到的设备写入 call attribute（[currentDevice]）。
  *
  * @param method  HTTP 方法（大写）
  * @param rawBody **原始** body（未解密）—— 签名是对密文做的
  * @return 解密后的明文 body；返回 null 表示已回 401，调用方直接 `return@get`
  */
 suspend fun ApplicationCall.guard(method: String, rawBody: String): String? {
-    val keys = AuthState.keys()
-    if (keys == null) {
-        deny("not_paired")
-        return null
-    }
-
-    // ① 身份
+    // ① 身份（v5.27.0：按 token 反查设备）
     val tok = request.header("X-TB-Token") ?: ""
     val tokBytes = runCatching { Base64.getDecoder().decode(tok) }.getOrNull()
-    if (tokBytes == null || !TbCrypto.ctEq(tokBytes, keys.master)) {
+    val device = if (tokBytes == null) null else AuthState.match(tokBytes)
+    if (device == null) {
         deny("bad_token")
         return null
     }
+    val keys = AuthState.keysOf(device) ?: run { deny("bad_token"); return null }
+    attributes.put(TB_DEVICE_KEY, device)
 
     // ② 新鲜度
     val ts = request.header("X-TB-Ts")?.toLongOrNull() ?: 0L
@@ -362,9 +418,12 @@ private suspend fun ApplicationCall.deny(reason: String) {
 /**
  * 加密 + 签名响应（**双向认证的"电脑验手机"半边**）。
  * 电脑端会验签，失败即认为回话方不是真手机。
+ *
+ * v5.27.0 多客户端：响应用**发起请求那台设备**的密钥加密（guard 已把设备写入 attribute）。
  */
 suspend fun ApplicationCall.respondSecure(json: String) {
-    val keys = AuthState.keys()
+    val device = currentDevice()
+    val keys = device?.let { AuthState.keysOf(it) }
     if (keys == null) {
         respondText("""{"status":"unauthorized"}""", status = HttpStatusCode.Unauthorized)
         return
@@ -378,16 +437,20 @@ suspend fun ApplicationCall.respondSecure(json: String) {
     respondText(wire, status = HttpStatusCode.OK, contentType = ContentType.Application.Json)
 }
 
-/** WebSocket 握手鉴权（WS 不能自定义头，token 走查询参数） */
-suspend fun wsTokenOk(token: String?): Boolean {
-    val keys = AuthState.keys() ?: return false
-    if (token.isNullOrEmpty()) return false
-    // v5.17.2：同时接受标准 base64 与 URL-safe base64（有无 padding 都认）。
-    //   起因：桌面端曾把含 `+` 的 token 原样拼进 query，被解成空格 → 校验失败 → 每 5s 重连。
-    //   桌面端已改为百分号编码；这里做容错，避免以后再因编码细节互相踢线。
+/**
+ * WebSocket 握手鉴权（WS 不能自定义头，token 走查询参数）。
+ * v5.27.0：改为返回匹配到的**设备**（后续 applyChange 记「谁」、WS 加密都用它）。
+ * 兼容：token 同时接受标准 base64 与 URL-safe base64（有无 padding 都认）。
+ *   起因：桌面端曾把含 `+` 的 token 原样拼进 query，被解成空格 → 校验失败 → 每 5s 重连。
+ */
+suspend fun wsMatchDevice(token: String?): com.taskbar.app.data.model.PairedDevice? {
+    if (token.isNullOrEmpty()) return null
     val raw = token.replace(" ", "+")          // 万一又被解成空格（旧端）：还原成 +
     val b = runCatching { Base64.getDecoder().decode(raw) }.getOrNull()
         ?: runCatching { Base64.getUrlDecoder().decode(raw.trimEnd('=')) }.getOrNull()
-        ?: return false
-    return TbCrypto.ctEq(b, keys.master)
+        ?: return null
+    return AuthState.match(b)
 }
+
+/** 兼容旧调用：WS 握手是否通过 */
+suspend fun wsTokenOk(token: String?): Boolean = wsMatchDevice(token) != null

@@ -126,6 +126,8 @@ struct TaskSyncDto {
     delayed_count: i64,
     reward_points: i64,
     reminder_strength: Option<String>,
+    /// v5.27.0：负责人（桌面端只存不编；漏了会在"桌面→手机"方向把 owner 清空）
+    owner: String,
     created_at: i64,
     updated_at: i64,
     deleted: i64,
@@ -152,6 +154,7 @@ impl From<&Task> for TaskSyncDto {
             delayed_count: t.delayed_count,
             reward_points: t.reward_points,
             reminder_strength: t.reminder_strength.clone(),
+            owner: t.owner.clone(),
             created_at: t.created_at,
             updated_at: t.updated_at,
             deleted: t.deleted,
@@ -282,9 +285,9 @@ pub fn full_sync(db: &Arc<Mutex<Connection>>, url: &Arc<Mutex<String>>) -> Resul
         if local_newer { continue; }
         preserve_count_progress(&conn, &mut t);
         let _ = conn.execute(
-            "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,count,done_count,reward_points,reminder_strength,created_at,updated_at,deleted) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)",
-            params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.count, t.done_count, t.reward_points, t.reminder_strength, t.created_at, t.updated_at, t.deleted]
+            "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,count,done_count,reward_points,reminder_strength,owner,created_at,updated_at,deleted) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
+            params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.count, t.done_count, t.reward_points, t.reminder_strength, t.owner, t.created_at, t.updated_at, t.deleted]
         );
     }
     for s in resp.steps {
@@ -763,10 +766,12 @@ fn apply_change(db: &Arc<Mutex<Connection>>, op: &ChangeOp) {
                     ).ok().map(|u| u > t.updated_at).unwrap_or(false);
                     if local_newer { return; }
                     preserve_count_progress(&conn, &mut t);
+                    // v5.27.0：INSERT 列表补 count/done_count（原来漏了 —— preserve 塞回结构体
+                    //   也写不进库，REPLACE 后次数任务被重置回默认值）+ owner（负责人路由数据）
                     let _ = conn.execute(
-                        "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,reward_points,reminder_strength,created_at,updated_at,deleted) \
-                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)",
-                        params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.reward_points, t.reminder_strength, t.created_at, t.updated_at, t.deleted]
+                        "INSERT OR REPLACE INTO tasks (uuid,type,title,desc,category,priority,due_at,repeat_rule,deadline,track_status,done,done_at,delayed_count,count,done_count,reward_points,reminder_strength,owner,created_at,updated_at,deleted) \
+                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
+                        params![t.uuid, t.task_type, t.title, t.desc, t.category, t.priority, t.due_at, t.repeat_rule, t.deadline, t.track_status, t.done, t.done_at, t.delayed_count, t.count, t.done_count, t.reward_points, t.reminder_strength, t.owner, t.created_at, t.updated_at, t.deleted]
                     );
                 }
             }

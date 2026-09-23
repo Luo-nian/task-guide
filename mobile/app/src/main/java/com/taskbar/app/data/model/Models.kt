@@ -76,7 +76,15 @@ data class Task(
      *   多份体验测试命中：产检、交片、服药这类"错过就麻烦"的事，只有到点响一次，
      *   而"提前量"此前是个**没有任何消费点**的死设置 —— 用户以为设了，实际没人读。
      */
-    @ColumnInfo(name = "remind_ahead_min") val remindAheadMin: Int = 0
+    @ColumnInfo(name = "remind_ahead_min") val remindAheadMin: Int = 0,
+
+    /**
+     * v5.27.0：**负责人**（协作三件套）。存「设备身份名」：
+     *   空 = 自己/全员（向后兼容，所有设备都收提醒）；
+     *   非空 = 只有身份名匹配的设备响提醒（见 ReminderScheduler / 桌面端 get_next_reminder）。
+     * Pro 专属：免费版编辑页不显示该控件。
+     */
+    @ColumnInfo(name = "owner") val owner: String = ""
 )
 
 // ==================== 提醒方式（四通道多选：通知栏/振动/提示音/铃声 + 端选择 + 未受理升级） ====================
@@ -482,6 +490,44 @@ data class SyncMeta(
     @ColumnInfo(name = "device") val device: String,
     @ColumnInfo(name = "last_sync") val lastSync: Long = 0,
     @ColumnInfo(name = "last_change_id") val lastChangeId: Long = 0
+)
+
+/**
+ * v5.27.0：**已配对设备**（协作三件套 · 多客户端）。
+ *
+ * 旧版只存一个 `auth_secret`（settings 表），第二台设备配对 = 覆盖旧密钥 = 旧设备被踢。
+ * 改为每台设备一行、各持独立密钥：
+ *   - `device_id`：客户端配对时上报的 deviceId（legacy 旧行用空串）
+ *   - `master_hex`：该设备专属的长期密钥（token 即 master，guard 按 token 反查设备身份）
+ *   - 迁移（MIGRATION_5_6）：旧 auth_secret + paired_device → 插入一行 device_id=''，现有配对不失效
+ * 不参与同步（和 auth_secret 同一安全边界）。
+ */
+@Entity(tableName = "paired_devices")
+data class PairedDevice(
+    @PrimaryKey @ColumnInfo(name = "device_id") val deviceId: String,
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "master_hex") val masterHex: String,
+    @ColumnInfo(name = "paired_at") val pairedAt: Long
+)
+
+/**
+ * v5.27.0：**任务变更记录**（协作三件套 ·「谁改了什么」）。
+ *
+ * 只在手机端（服务器）记录与展示 —— 它看得到所有端提交的变更，
+ * 正好匹配"派任务的人看动态"的主场景（远程照护：看得见他今天做了没）。
+ * 不参与同步、不进备份导出。保留策略：每任务 ≤20 条、全局 ≤2000 条（写入时修剪）。
+ */
+@Entity(tableName = "change_logs", indices = [Index("task_uuid")])
+data class ChangeLog(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(name = "task_uuid") val taskUuid: String,
+    /** 操作者设备身份名（self_name 或来源设备名） */
+    @ColumnInfo(name = "who") val who: String,
+    /** 动作：create/update/delete/complete/restore/track_start/track_stop/habit_check/delay */
+    @ColumnInfo(name = "action") val action: String,
+    /** 人类可读摘要（如「完成了任务」「负责人改为 老公电脑」） */
+    @ColumnInfo(name = "detail") val detail: String = "",
+    @ColumnInfo(name = "created_at") val createdAt: Long
 )
 
 // ==================== 设置（键值对） ====================
