@@ -583,6 +583,9 @@ class TaskRepository(private val db: AppDatabase) {
             }
         }
 
+    // v5.27.1：正在追踪数（实时）——设置页实况与拦截 toast 用
+    fun observeTrackingCount(): Flow<Int> = taskDao.observeTrackingCount()
+
     /** 实时观察习惯连续天数（Flow 驱动，打卡后自动刷新；算法统一走 streakOf） */
     fun observeHabitStreak(taskUuid: String): Flow<Int> =
         habitDao.observeCheckDatesByTask(taskUuid).map { streakOf(it) }

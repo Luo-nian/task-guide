@@ -451,6 +451,8 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         val isPro by vm.isPro.collectAsState()
         // 追踪上限：直接显示当前值 + 更改按钮（点更改弹窗输入新值）
         var showLimitDialog by remember { mutableStateOf(false) }
+        // v5.27.1：正在追踪数实况——"明明还能追却被拦"时，先看这里是不是名额已被占满
+        val trackingCount by vm.trackingCount.collectAsState()
         TGCard(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -461,6 +463,14 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                         Spacer(Modifier.width(4.dp))
                         Text("个任务", color = TGColors.InkMute, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
                     }
+                    Spacer(Modifier.height(2.dp))
+                    // v5.27.1：名额实况。达到上限时给出一句指引（老任务占坑一眼可见）
+                    Text(
+                        if (trackingCount >= trackLimit) "正在追踪 $trackingCount 个——名额已满，回主页置顶区可取消"
+                        else "正在追踪 $trackingCount 个",
+                        color = if (trackingCount >= trackLimit) TGColors.Crimson else TGColors.InkMute,
+                        fontSize = 12.sp
+                    )
                 }
                 TextButton(onClick = {
                     if (isPro) showLimitDialog = true

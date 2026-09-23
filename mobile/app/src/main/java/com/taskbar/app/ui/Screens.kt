@@ -392,6 +392,9 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                      // v5.26.0：左右滑动露出的动作需要"编辑"入口
                      onEdit: (() -> Unit)? = null) {
     val ctx = LocalContext.current
+    // v5.27.1：拦截 toast 要显示"占了几个/上限几个"，一眼看出名额被谁占满
+    val trackLimit by vm.trackLimit.collectAsState()
+    val trackingCount by vm.trackingCount.collectAsState()
     // v5.15.23 V2（boss：所有任务页面更多是视觉上的问题）——
     //   已完成不再把**整张卡**染成淡绿（12 张绿卡叠在一起像一整块），
     //   改成干净的白卡 + 左侧一条玉色色条：同样一眼看出"做完了"，但层次清爽得多。
@@ -511,7 +514,7 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             } else {
                 PressIcon(onClick = {
                     vm.startTracking(task.uuid) { ok ->
-                        if (!ok) ToastHelper.show(ctx, "追踪已达上限，先取消别的追踪或在设置里调高上限")
+                        if (!ok) ToastHelper.show(ctx, "追踪名额已满($trackingCount/$trackLimit)，先取消别的追踪或在设置里调高上限")
                     }
                 }) {
                     TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
@@ -681,6 +684,7 @@ private fun TaskRow(
     val scope = rememberCoroutineScope()
     val hasSteps = steps.isNotEmpty()
     val trackLimit by vm.trackLimit.collectAsState()
+    val trackingCount by vm.trackingCount.collectAsState()
     val tracking = task.trackStatus == TrackStatus.TRACKING
     var lastClick by remember { mutableStateOf(0L) }
     var clicksInWindow by remember { mutableStateOf(0) }
@@ -980,7 +984,7 @@ private fun TaskRow(
                     PressIcon(onClick = {
                         vm.startTracking(task.uuid) { ok ->
                             if (!ok) {
-                                ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
+                                ToastHelper.show(ctx, "追踪名额已满($trackingCount/$trackLimit)，先取消别的追踪或在设置里调高上限")
                             } else {
                                 onJustTracked()
                             }

@@ -92,6 +92,10 @@ interface TaskDao {
     @Query("SELECT COUNT(*) FROM tasks WHERE track_status = 'tracking' AND deleted = 0")
     suspend fun countTracking(): Int
 
+    /** v5.27.1：实时追踪数（设置页"当前正在追踪 N 个"实况用） */
+    @Query("SELECT COUNT(*) FROM tasks WHERE track_status = 'tracking' AND deleted = 0")
+    fun observeTrackingCount(): Flow<Int>
+
     @Query("SELECT * FROM tasks WHERE track_status = 'done' AND deleted = 0 ORDER BY done_at DESC")
     fun observeArchive(): Flow<List<Task>>
 

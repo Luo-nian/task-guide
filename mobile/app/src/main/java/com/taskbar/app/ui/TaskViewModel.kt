@@ -345,6 +345,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     val allHabitStats: StateFlow<Map<String, HabitStat>> = repo.observeAllHabitStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    /** v5.27.1：当前正在追踪数（实时）——设置页"当前 N 个"实况用 */
+    val trackingCount: StateFlow<Int> = repo.observeTrackingCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     suspend fun habitStreak(taskUuid: String) = repo.habitStreak(taskUuid)
 
     /** 所有习惯最长连续天数（"我的"页"坚持"统计） */
