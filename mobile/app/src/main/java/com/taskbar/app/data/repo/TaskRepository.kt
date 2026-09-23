@@ -478,11 +478,55 @@ class TaskRepository(private val db: AppDatabase) {
         val t = now()
         taskDao.upsert(task.copy(trackStatus = TrackStatus.PENDING, done = 0, doneAt = null, updatedAt = t))
         // 扣积分（防刷分：完成→恢复→完成 来回刷）+ 推电脑端
-        val cost = if (overdueHalf) maxOf(1, task.rewardPoints / 2) else task.rewardPoints
+        // v5.28.0 C4 防刷分：代价按**每条自身**是否真领过积分判定（done==1=完成时领过 → 全额扣回；
+        //   done==0=逾期未完成、没领过 → 半额）。原先由调用方按"批次里有没有逾期"**整批传参**，
+        //   混合批次里纯完成任务被连坐半价 → 恢复只扣半价、再完成拿全额 = 每条净赚半价（刷分洞）。
+        //   现在一律内部判定，调用方传什么都以任务自身状态为准。
+        val half = task.done != 1
+        val cost = if (half) maxOf(1, task.rewardPoints / 2) else task.rewardPoints
         bumpPoints(-cost)
         emitWithData(ChangeOp("upsert", "task", uuid))
         logChange(uuid, selfName(), "restore", "恢复了任务")
     }
+
+    // ==================== v5.28.0 C1：习惯补卡（每月 2 次） ====================
+
+    /** 补卡配额的 settings 键：每个习惯每月独立 2 次 */
+    private fun makeupKey(uuid: String, ym: String) = "makeup_${uuid}_$ym"
+
+    private fun ymOf(cal: java.util.Calendar): String =
+        "%04d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+
+    /**
+     * 给过去的漏卡日期补一条打卡。规则：
+     * - 只能补**过去**的日期（今天及以后走正常打卡），且限 30 天内
+     * - 该日期没打过卡才有效（幂等）
+     * - **每个习惯每月 2 次**（护士/司机三班倒场景：断的不是懒，是班表——连击不该一断清零）
+     * 返回：null=成功；其他字符串=失败原因（UI 直接展示）
+     */
+    suspend fun makeupHabit(taskUuid: String, date: String): String? {
+        val today = java.time.LocalDate.now()
+        val d = runCatching { java.time.LocalDate.parse(date) }.getOrNull() ?: return "日期不对"
+        if (!d.isBefore(today)) return "只能补过去的日期"
+        if (d.isBefore(today.minusDays(30))) return "只能补最近 30 天内的"
+        if (habitDao.isChecked(taskUuid, date)) return "这天已经打过卡了"
+        val cal = java.util.Calendar.getInstance()
+        val used = getSetting(makeupKey(taskUuid, ymOf(cal)), "0").toIntOrNull() ?: 0
+        if (used >= 2) return "本月补卡次数已用完（每月 2 次）"
+        setSetting(makeupKey(taskUuid, ymOf(cal)), (used + 1).toString())
+        habitDao.insert(HabitLog(taskUuid = taskUuid, checkDate = date, createdAt = now()))
+        emitWithData(ChangeOp("upsert", "habit", taskUuid))
+        logChange(taskUuid, selfName(), "habit_makeup", "补卡：$date")
+        return null
+    }
+
+    /** 某习惯全部打卡日期（补卡弹窗用来标记"这天已打过"） */
+    suspend fun habitDates(taskUuid: String): List<String> =
+        habitDao.getByTask(taskUuid).map { it.checkDate }
+
+    /** 本月补卡已用次数（弹窗标题展示 已用 x/2） */
+    suspend fun makeupUsedThisMonth(taskUuid: String): Int =
+        getSetting(makeupKey(taskUuid, ymOf(java.util.Calendar.getInstance())), "0").toIntOrNull() ?: 0
 
     /** v5.15.23 C-006：一次性修复"今天已打卡、却还挂在追踪中"的习惯
      *  （这类行会让完成键点了没反应 —— boss 的「完成不掉」）。

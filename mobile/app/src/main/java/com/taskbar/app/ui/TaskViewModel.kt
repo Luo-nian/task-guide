@@ -323,6 +323,14 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun checkHabitAndReturn(taskUuid: String, date: String): Boolean =
         repo.checkHabit(taskUuid, date)
 
+    // ===== v5.28.0 C1：习惯补卡（每月 2 次）=====
+    /** 返回 null=补卡成功；其他=失败原因（UI 直接展示） */
+    suspend fun makeupHabitAndReturn(taskUuid: String, date: String): String? =
+        repo.makeupHabit(taskUuid, date)
+
+    suspend fun habitDatesOf(taskUuid: String): List<String> = repo.habitDates(taskUuid)
+    suspend fun makeupUsedOf(taskUuid: String): Int = repo.makeupUsedThisMonth(taskUuid)
+
     /** 进入页面时初始化 checkedToday 用 */
     suspend fun repoIsCheckedToday(taskUuid: String, date: String): Boolean =
         repo.isHabitCheckedToday(taskUuid, date)

@@ -529,8 +529,9 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
+                        // v5.28.0 C5 明码标价（大学生测试：App 内看不到价格 = 不买断的第一理由）
                         if (isPro) "已点亮 · 谢谢你的支持"
-                        else "还没点亮 · 免费版任务不限量，同时追踪 1 个",
+                        else "¥12 一次买断 · 永久：自定义追踪上限、多设备协作、动态时间线",
                         color = if (isPro) TGColors.Jade else TGColors.InkMute,
                         fontSize = 12.sp
                     )
@@ -994,6 +995,45 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
         }
         Spacer(Modifier.height(10.dp))
+        // v5.28.0 A2：通知权限实况——权限被拒后 App 全哑（护士测试死因的一半）。
+        //   用户最常见操作是装完顺手"全部拒绝"，之后所有提醒静默丢失，自己毫无感知。
+        val notifEnabled = remember {
+            androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+        }
+        TGCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("通知权限", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (notifEnabled) "已开启 · 提醒能正常送达"
+                        else "已被关闭 —— 所有任务提醒都不会响！",
+                        color = if (notifEnabled) TGColors.Jade else TGColors.Crimson,
+                        fontSize = 12.sp
+                    )
+                }
+                if (!notifEnabled) {
+                    TextButton(onClick = {
+                        // 先走通知专属设置页；部分机型没有 → 退回应用详情页
+                        runCatching {
+                            ctx.startActivity(
+                                Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                            )
+                        }.onFailure {
+                            runCatching {
+                                ctx.startActivity(
+                                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                        .setData(Uri.parse("package:${ctx.packageName}"))
+                                )
+                            }
+                        }
+                    }) { Text("去开启", color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
         // 同步服务器（给电脑端连接用）
         TGCard(Modifier.fillMaxWidth()) {
             Text("同步服务器", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -1008,15 +1048,37 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
         TGCard(Modifier.fillMaxWidth()) {
             Text("数据备份", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(8.dp))
-            Button(onClick = {
-                scope.launch {
-                    val msg = withContext(Dispatchers.IO) { exportJson(ctx) }
-                    ToastHelper.show(ctx, msg, Toast.LENGTH_LONG)
+            // v5.28.0 B1：导出改 SAF——用户自己挑位置（下载/网盘/发给自己都行）。
+            //   原先落在 Android/data 应用私有目录，4 份独立测试报告都"找不到文件"。
+            val exportLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.CreateDocument("application/json")
+            ) { uri ->
+                if (uri != null) {
+                    scope.launch {
+                        val msg = withContext(Dispatchers.IO) {
+                            try {
+                                val text = exportJson(ctx)
+                                if (text == null) "导出失败：备份内容没能生成"
+                                else {
+                                    ctx.contentResolver.openOutputStream(uri)?.use { os ->
+                                        os.write(text.toByteArray(Charsets.UTF_8))
+                                    }
+                                    "已导出到你选择的位置 ✓"
+                                }
+                            } catch (e: Exception) {
+                                "导出失败: ${e.message}"
+                            }
+                        }
+                        ToastHelper.show(ctx, msg, Toast.LENGTH_LONG)
+                    }
                 }
+            }
+            Button(onClick = {
+                val name = "taskguide-backup-" +
+                    java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault())
+                        .format(java.util.Date()) + ".json"
+                exportLauncher.launch(name)
             }, colors = ButtonDefaults.buttonColors(containerColor = TGColors.Gold)) {
-                // v5.21.x 按钮主次统一：这里原来是**玉青实底**——全 App 唯一一个用非主色
-                //   做的实底主按钮（玉青在别处一律表示"已完成/已连接"状态）。
-                //   实底主按钮统一回主色（与「点亮」「确定」一致），玉青只留给成功态。
                 Text("导出 JSON 备份", color = Color.White)
             }
             // v5.21.x：删掉「备份文件保存在应用私有目录，可通过文件管理器查看」——
@@ -1026,6 +1088,8 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             //   此前全 App 没有任何导入入口，是各轮体验测试里被点名最多的欠账。
             var parsed by remember { mutableStateOf<ParsedBackup?>(null) }
             var importing by remember { mutableStateOf(false) }
+            // v5.28.0 B2/B3：导入成功弹层（新增/更新条数）
+            var importResult by remember { mutableStateOf<Pair<Int, Int>?>(null) }
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenDocument()
             ) { uri ->
@@ -1111,6 +1175,10 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                                     }
                                     importing = false
                                     parsed = null
+                                    // v5.28.0 B2/B3：导入成功升级为完整弹层——
+                                    //   老用户换机最慌"等级积分没了/完整版没了"，明确告诉他恢复到哪一步、
+                                    //   还差什么（授权码不随导入点亮，得自己输一次）。
+                                    importResult = res
                                     ToastHelper.show(
                                         ctx,
                                         "导入完成：新增 ${res.first} 条、更新 ${res.second} 条",
@@ -1123,6 +1191,26 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
                     dismissButton = {
                         TextButton(onClick = { parsed = null }) {
                             Text("取消", color = TGColors.InkMute)
+                        }
+                    }
+                )
+            }
+            // v5.28.0 B2/B3：导入完成弹层——等级积分已恢复 + 授权码指引
+            importResult?.let { (added, updated) ->
+                AlertDialog(
+                    onDismissRequest = { importResult = null },
+                    title = { Text("导入完成", color = TGColors.Ink, fontSize = 16.sp) },
+                    text = {
+                        Text(
+                            "新增 $added 条、更新 $updated 条。\n" +
+                                "等级和积分已经一并恢复（积分只增不减）。\n\n" +
+                                "授权码不会自动点亮——如果是换机，请在设置页「完整版」里输入你自己的码。",
+                            color = TGColors.InkSoft, fontSize = 13.sp
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { importResult = null }) {
+                            Text("知道了", color = TGColors.GoldDeep, fontWeight = FontWeight.Bold)
                         }
                     }
                 )
@@ -1184,7 +1272,11 @@ private fun TimePickDialog(
     )
 }
 
-private suspend fun exportJson(ctx: android.content.Context): String {
+/**
+ * v5.28.0 B1：生成备份 JSON 文本（写入位置改由 SAF 由用户决定）。
+ * 返回 null = 生成失败。
+ */
+private suspend fun exportJson(ctx: android.content.Context): String? {
     return try {
         val app = ctx.applicationContext as TaskBarApp
         // v5.22.5：导出的备份里**不能带配对密钥 auth_secret**。
@@ -1223,12 +1315,10 @@ private suspend fun exportJson(ctx: android.content.Context): String {
             )
         }
         val text = json.encodeToString(JsonObject.serializer(), root)
-        val dir = File(ctx.getExternalFilesDir(null), "backups").apply { mkdirs() }
-        val file = File(dir, "taskguide-backup-${System.currentTimeMillis()}.json")
-        file.writeText(text, Charsets.UTF_8)
-        "已导出到: ${file.absolutePath}"
+        return text
     } catch (e: Exception) {
-        "导出失败: ${e.message}"
+        android.util.Log.e("backup", "生成备份失败", e)
+        null
     }
 }
 

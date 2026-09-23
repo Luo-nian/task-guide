@@ -395,6 +395,8 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
     // v5.27.1：拦截 toast 要显示"占了几个/上限几个"，一眼看出名额被谁占满
     val trackLimit by vm.trackLimit.collectAsState()
     val trackingCount by vm.trackingCount.collectAsState()
+    // v5.28.0 A3：名额满弹窗
+    var showLimitGate by remember { mutableStateOf(false) }
     // v5.15.23 V2（boss：所有任务页面更多是视觉上的问题）——
     //   已完成不再把**整张卡**染成淡绿（12 张绿卡叠在一起像一整块），
     //   改成干净的白卡 + 左侧一条玉色色条：同样一眼看出"做完了"，但层次清爽得多。
@@ -512,10 +514,9 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                     onJustStopped()   // v5.15.21 P3
                 }, iconSize = 22.dp)
             } else {
+                // v5.28.0 A3：被拦不再只 toast——弹窗给出口（去解锁/去调上限）
                 PressIcon(onClick = {
-                    vm.startTracking(task.uuid) { ok ->
-                        if (!ok) ToastHelper.show(ctx, "追踪名额已满($trackingCount/$trackLimit)，先取消别的追踪或在设置里调高上限")
-                    }
+                    vm.startTracking(task.uuid) { ok -> if (!ok) showLimitGate = true }
                 }) {
                     TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
                 }
@@ -544,6 +545,8 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
             }
         )
     }
+    // v5.28.0 A3：追踪名额满 → 弹窗给出口
+    if (showLimitGate) LimitGateDialog(trackingCount, trackLimit) { showLimitGate = false }
     }
 }
 
@@ -689,6 +692,8 @@ private fun TaskRow(
     var lastClick by remember { mutableStateOf(0L) }
     var clicksInWindow by remember { mutableStateOf(0) }
     var showFinish by remember { mutableStateOf(false) }
+    // v5.28.0 A3：追踪名额满弹窗
+    var showLimitGate by remember { mutableStateOf(false) }
 
     // 当前步骤（doing 优先，否则第一个未完成）
     val currentStep = steps.firstOrNull { it.status == StepStatus.DOING }
@@ -981,13 +986,11 @@ private fun TaskRow(
                     // v5.15.22 M5：追踪态下取消键带涟漪呼吸；M6：图标统一 22dp
                     TrackRippleKey(onClick = { vm.stopTracking(task.uuid); onJustStopped() }, iconSize = 22.dp)
                 } else {
+                    // v5.28.0 A3：被拦不再只 toast——弹窗给出口（去解锁/去调上限）
                     PressIcon(onClick = {
                         vm.startTracking(task.uuid) { ok ->
-                            if (!ok) {
-                                ToastHelper.show(ctx, "追踪名额已满($trackingCount/$trackLimit)，先取消别的追踪或在设置里调高上限")
-                            } else {
-                                onJustTracked()
-                            }
+                            if (!ok) showLimitGate = true
+                            else onJustTracked()
                         }
                     }) {
                         TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
@@ -1081,6 +1084,8 @@ private fun TaskRow(
             }
         )
     }
+    // v5.28.0 A3：追踪名额满 → 弹窗给出口
+    if (showLimitGate) LimitGateDialog(trackingCount, trackLimit) { showLimitGate = false }
     }
 }
 
@@ -1445,6 +1450,8 @@ fun HabitScreen(vm: TaskViewModel) {
     val habits by vm.habits.collectAsState()
     val ctx = LocalContext.current
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    // v5.28.0 C1：正在补卡的习惯 uuid（null=弹窗关）
+    var makeupFor by remember { mutableStateOf<String?>(null) }
     // v5.15.2：切换卡顿优化 —— 整页只订阅 2 个聚合 Flow（原每行独立 observeHabitStreak Flow + DB 查询）
     val habitStats by vm.allHabitStats.collectAsState()
     val checkedSet by vm.todayCheckedHabits.collectAsState()
@@ -1478,34 +1485,107 @@ fun HabitScreen(vm: TaskViewModel) {
                                 fontSize = 12.sp
                             )
                         }
-                        Button(
-                            enabled = !checkedToday,
-                            onClick = {
-                                scope.launch {
-                                    val ok = vm.checkHabitAndReturn(habit.uuid, today)
-                                    // v5.15.2：checkedToday 派生自聚合 Flow，db 写入后自动刷新，无需手动置位
-                                    if (ok) {
-                                        ToastHelper.show(ctx, "已打卡 ✓")
-                                    } else {
-                                        ToastHelper.show(ctx, "今天已打过卡了")
+                        // v5.28.0 C1：打卡按钮 + 补卡入口（三班倒断卡不该背连击清零的锅）
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                enabled = !checkedToday,
+                                onClick = {
+                                    scope.launch {
+                                        val ok = vm.checkHabitAndReturn(habit.uuid, today)
+                                        // v5.15.2：checkedToday 派生自聚合 Flow，db 写入后自动刷新，无需手动置位
+                                        if (ok) {
+                                            ToastHelper.show(ctx, "已打卡 ✓")
+                                        } else {
+                                            ToastHelper.show(ctx, "今天已打过卡了")
+                                        }
                                     }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (checkedToday) TGColors.BgPaperDeep else TGColors.Jade,
-                                disabledContainerColor = TGColors.BgPaperDeep
-                            )
-                        ) {
-                            Text(
-                                if (checkedToday) "已打卡" else "打卡",
-                                color = if (checkedToday) TGColors.InkMute else Color.White
-                            )
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (checkedToday) TGColors.BgPaperDeep else TGColors.Jade,
+                                    disabledContainerColor = TGColors.BgPaperDeep
+                                )
+                            ) {
+                                Text(
+                                    if (checkedToday) "已打卡" else "打卡",
+                                    color = if (checkedToday) TGColors.InkMute else Color.White
+                                )
+                            }
+                            TextButton(onClick = { makeupFor = habit.uuid }, enabled = makeupFor == null) {
+                                Text("补卡", color = TGColors.InkMute, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
             }
         }
+        // v5.28.0 C1：补卡弹窗
+        makeupFor?.let { uid ->
+            habits.firstOrNull { it.uuid == uid }?.let { h ->
+                MakeupDialog(h, vm, onDismiss = { makeupFor = null })
+            }
+        }
     }
+}
+
+/**
+ * v5.28.0 C1：习惯补卡弹窗——列最近 7 天（不含今天），打过卡的置灰。
+ * 每个习惯每月 2 次（标题实况）；补上的日期会自动接进连击（streakOf 按日期集合算）。
+ */
+@Composable
+private fun MakeupDialog(habit: Task, vm: TaskViewModel, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var used by remember { mutableStateOf(0) }
+    var dates by remember { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(habit.uuid) {
+        used = vm.makeupUsedOf(habit.uuid)
+        dates = vm.habitDatesOf(habit.uuid).toSet()
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("补卡 · 本月已用 $used/2", color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        },
+        text = {
+            Column {
+                Text(
+                    "「${habit.title}」哪天漏了？点一下补上，连击会自动接上。",
+                    color = TGColors.InkSoft, fontSize = 13.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                val days = remember { (1..7).map { java.time.LocalDate.now().minusDays(it.toLong()) } }
+                days.forEach { d ->
+                    val key = d.toString()
+                    val checked = key in dates
+                    TextButton(
+                        enabled = !checked,
+                        onClick = {
+                            scope.launch {
+                                val err = vm.makeupHabitAndReturn(habit.uuid, key)
+                                if (err == null) {
+                                    ToastHelper.show(ctx, "已补 $key ✓")
+                                    onDismiss()
+                                } else {
+                                    ToastHelper.show(ctx, err, android.widget.Toast.LENGTH_LONG)
+                                }
+                            }
+                        }
+                    ) {
+                        Text(
+                            "${d.dayOfWeek.toString().take(3)} ${d.monthValue}/${d.dayOfMonth}",
+                            color = if (checked) TGColors.InkMute else TGColors.Ink,
+                            fontSize = 14.sp
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (checked) Text("已打", color = TGColors.InkMute, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭", color = TGColors.InkMute) }
+        }
+    )
 }
 
 /**
@@ -1519,6 +1599,43 @@ private val VIEW_MODES = listOf(
     ViewMode("列表", isCalendar = false),
     ViewMode("日历", isCalendar = true),
 )
+
+/**
+ * v5.28.0 A3：追踪名额已满弹窗——替代冷 toast（护士测试：只有文案没有出口 = 死路）。
+ * 未点亮给「去解锁完整版」直达设置页（GlobalNav 跳板）；已点亮给「去调上限」。
+ */
+@Composable
+private fun LimitGateDialog(trackingCount: Int, limit: Int, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val isPro = remember { com.taskbar.app.billing.License.isPro(ctx) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "追踪名额已满（$trackingCount/$limit）",
+                color = TGColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium
+            )
+        },
+        text = {
+            Text(
+                if (isPro) "回主页置顶区可以取消不用的追踪，或到设置里把上限调高（最多 10 个）。"
+                else "免费版同时追踪 1 个；完整版一次买断 ¥12，追踪上限自定义（最多 10 个），还能多设备协作。",
+                color = TGColors.InkSoft, fontSize = 13.sp
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onDismiss(); GlobalNav.navigate?.invoke("settings") }) {
+                Text(
+                    if (isPro) "去设置调上限" else "去解锁完整版",
+                    color = TGColors.GoldDeep, fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("先不了", color = TGColors.InkMute) }
+        }
+    )
+}
 
 // ==================== 所有任务（追踪/待办/未来 全量，不含已完成——已完成只进历史任务） ====================
 @Composable
@@ -2066,7 +2183,11 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
     var confirmRestore by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val entries = remember(archive, logs) { expandHistoryByDay(archive, logs) }
-    val allIds = entries.map { it.uuid }.distinct()
+    // v5.28.0 C2：标题搜索——历史一多翻着找太苦（程序员测试诉求）
+    var query by remember { mutableStateOf("") }
+    val visible = if (query.isBlank()) entries
+        else entries.filter { it.title.contains(query, ignoreCase = true) }
+    val allIds = visible.map { it.uuid }.distinct()
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(4.dp, 8.dp, 4.dp, 12.dp),
@@ -2145,6 +2266,15 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
             }
             }
         }
+        // v5.28.0 C2：历史搜索框（列表/日历共用一个过滤词）
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            placeholder = { Text("搜索任务标题", color = TGColors.InkMute, fontSize = 13.sp) },
+            textStyle = androidx.compose.ui.text.TextStyle(color = TGColors.Ink, fontSize = 14.sp),
+            modifier = Modifier.fillMaxWidth()
+        )
         if (archive.isEmpty()) {
             EmptyState("还没有已完成的任务\n完成的任务会自动收进这里", Modifier.fillMaxSize())
         } else if (calView) {
@@ -2157,7 +2287,7 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                     .verticalScroll(rememberScrollState())
             ) {
                 TaskCalendarView(
-                    tasks = entries,
+                    tasks = visible,
                     dateOf = { it.doneAt ?: it.dueAt ?: it.deadline ?: it.createdAt },
                     onTaskClick = { navController.navigate("ro/${it.uuid}") },
                     emptyHint = "这一天没有完成的任务",
@@ -2179,10 +2309,12 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(archive, key = { it.uuid }) { task ->
-                    DoneTaskRow(task, vm,
-                        selecting = ms.selecting, selected = ms.isSelected(task.uuid),
-                        onToggleSelect = { ms.toggle(task.uuid) },
-                        onLongSelect = { ms.begin(task.uuid) })
+                    if (query.isBlank() || task.title.contains(query, ignoreCase = true)) {
+                        DoneTaskRow(task, vm,
+                            selecting = ms.selecting, selected = ms.isSelected(task.uuid),
+                            onToggleSelect = { ms.toggle(task.uuid) },
+                            onLongSelect = { ms.begin(task.uuid) })
+                    }
                 }
             }
         }

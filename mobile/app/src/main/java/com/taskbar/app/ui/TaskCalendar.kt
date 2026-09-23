@@ -90,6 +90,25 @@ fun TaskCalendarView(
         if (selectedKey == null) selectedKey = todayKey
     }
 
+    // v5.28.0 C3：翻月后选中日带到目标月份的"同一天"（月底溢出 clamp 到该月最后一天）。
+    //   原先翻月把 selectedKey 清 null → 兜底回今天，下方清单跟着跳回今天（boss 测试死点）。
+    fun shiftMonthKey(key: String?, monthDelta: Int): String? {
+        if (key == null) return null
+        val p = key.split("-").mapNotNull { it.toIntOrNull() }
+        if (p.size != 3) return null
+        val c = java.util.Calendar.getInstance().apply {
+            clear(); set(p[0], p[1] - 1, 1)
+            add(java.util.Calendar.MONTH, monthDelta)
+        }
+        val max = c.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        c.set(java.util.Calendar.DAY_OF_MONTH, minOf(p[2], max))
+        return "%04d-%02d-%02d".format(
+            c.get(java.util.Calendar.YEAR),
+            c.get(java.util.Calendar.MONTH) + 1,
+            c.get(java.util.Calendar.DAY_OF_MONTH)
+        )
+    }
+
     // 任务按天分组
     val byDay = remember(tasks) {
         val m = HashMap<String, MutableList<Task>>()
@@ -121,7 +140,7 @@ fun TaskCalendarView(
             Modifier.fillMaxWidth().padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PressIcon(onClick = { monthOffset -= 1; selectedKey = null }) {
+            PressIcon(onClick = { monthOffset -= 1; selectedKey = shiftMonthKey(selectedKey, -1) }) {
                 TGIcon(R.drawable.ic_back, contentDescription = "上个月", tint = TGColors.InkSoft, size = 18.dp)
             }
             Text(
@@ -133,7 +152,7 @@ fun TaskCalendarView(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
-            PressIcon(onClick = { monthOffset += 1; selectedKey = null }) {
+            PressIcon(onClick = { monthOffset += 1; selectedKey = shiftMonthKey(selectedKey, 1) }) {
                 Box(Modifier.graphicsLayer { rotationZ = 180f }) {
                     TGIcon(R.drawable.ic_back, contentDescription = "下个月", tint = TGColors.InkSoft, size = 18.dp)
                 }

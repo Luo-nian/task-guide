@@ -918,3 +918,13 @@ fun CompletionCelebration(
         }
     }
 }
+
+// ==================== v5.28.0 A3：全局导航跳板 ====================
+/**
+ * 行组件（TaskRow/HabitRow 等）在组合树深处拿不到 navController，
+ * 但「追踪名额已满」弹窗需要跳设置页解锁 —— 在这里注册一个全局跳转函数即可。
+ * MainActivity 在创建 navController 后注册一次；离开组合时置空防泄漏。
+ */
+object GlobalNav {
+    @Volatile var navigate: ((String) -> Unit)? = null
+}

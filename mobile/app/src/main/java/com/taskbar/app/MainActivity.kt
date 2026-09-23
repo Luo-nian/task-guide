@@ -140,6 +140,12 @@ fun MainApp() {
     val navController = rememberNavController()
     val vm: TaskViewModel = viewModel()
 
+    // v5.28.0 A3：注册全局导航跳板——行组件（追踪名额弹窗）也能跳设置页
+    DisposableEffect(Unit) {
+        GlobalNav.navigate = { route -> runCatching { navController.navigate(route) } }
+        onDispose { GlobalNav.navigate = null }
+    }
+
     // v5.22.5：点提醒通知 → 直接打开那条任务的详情
     val pendingOpen by TaskBarApp.pendingOpenTask.collectAsState()
     LaunchedEffect(pendingOpen) {
