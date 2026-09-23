@@ -27,7 +27,16 @@ object NotificationHelper {
     const val CHANNEL_NOTIFY = "ch_notify"      // 通知栏弹窗
     const val CHANNEL_VIBRATE = "ch_vibrate"    // 振动
     const val CHANNEL_BEEP = "ch_beep"          // 提示音
-    const val CHANNEL_RING = "ch_ring"          // 响铃
+    const val CHANNEL_RING = "ch_ring"          // 响铃（旧档，v5.26.2 起弃用 → 删除）
+    /**
+     * v5.26.2：闹钟级响铃通道。
+     *   第五轮 40 个身份里 4 个死于「提醒被勿扰/静音压住」——
+     *   原通道 USAGE_NOTIFICATION 走的是通知音量、默认被勿扰拦下。
+     *   新通道：USAGE_ALARM（走闹钟音量，勿扰模式默认放行闹钟）+ setBypassDnd(true)
+     *   （通道申请勿扰打断权，用户在系统设置里点一次允许即长期生效）。
+     *   注意：系统不允许修改已存在通道的声音属性 → 必须换新 id。
+     */
+    const val CHANNEL_RING_ALARM = "ch_ring_alarm"   // 闹钟级响铃（可破勿扰）
     /**
      * 追踪中任务的常驻通知通道（前台服务用）。
      * v5.18.0 前这条通道叫"同步服务"、常驻文案是"同步服务运行中" ——
@@ -87,6 +96,24 @@ object NotificationHelper {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             })
         }
+        // 4.5 v5.26.2：闹钟级响铃通道（USAGE_ALARM + 请求破勿扰）
+        if (nm.getNotificationChannel(CHANNEL_RING_ALARM) == null) {
+            nm.createNotificationChannel(NotificationChannel(
+                CHANNEL_RING_ALARM, "响铃提醒（闹钟级）", NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "走闹钟音量、可申请在勿扰时照响（第一次请在系统弹窗里允许「勿扰打断」）"
+                enableVibration(true)
+                vibrationPattern = parseVibratePattern(DEFAULT_VIBRATE_PATTERN)
+                val ringUri2 = getRingUriSetting(context)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                setSound(ringUri2, AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)   // ⭐ 闹钟音量流，勿扰默认放行
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                setBypassDnd(true)   // ⭐ 申请勿扰打断（用户批准后长期有效）
+            })
+        }
+        // 旧"响铃提醒"通道换成闹钟级后直接删除（系统不允许改旧通道的声音属性）
+        runCatching { nm.deleteNotificationChannel(CHANNEL_RING) }
         // 5. 追踪中任务的常驻通知通道
         //    注意：这里不用 getNotificationChannel()==null 判断 —— 老装机上该通道已存在
         //    且名字还是"同步服务"，必须重新创建一次才能把名称/描述改过来
@@ -128,7 +155,8 @@ object NotificationHelper {
             ReminderStrength.NOTIFY -> CHANNEL_NOTIFY to false
             ReminderStrength.VIBRATE -> CHANNEL_VIBRATE to true
             ReminderStrength.BEEP -> CHANNEL_BEEP to false
-            ReminderStrength.RING -> CHANNEL_RING to true
+            // v5.26.2：RING 改走闹钟级通道（USAGE_ALARM + 破勿扰申请）
+            ReminderStrength.RING -> CHANNEL_RING_ALARM to true
             else -> CHANNEL_NOTIFY to false
         }
     }

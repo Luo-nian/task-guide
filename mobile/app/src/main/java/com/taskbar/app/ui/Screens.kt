@@ -147,6 +147,69 @@ private fun NotifPermBanner() {
     }
 }
 
+/** v5.26.2：错过补看 —— 提醒响过但任务还没完成的，回 App 置顶显示「你错过了」。
+ *  只统计仍未完成的任务（完成的自动消失）；点开看清单，「知道了」清旗标。 */
+@Composable
+private fun MissedBanner(tasks: List<com.taskbar.app.data.model.Task>) {
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("taskguide_prefs", android.content.Context.MODE_PRIVATE) }
+    var missed by remember { mutableStateOf(listOf<com.taskbar.app.data.model.Task>()) }
+    var showAll by remember { mutableStateOf(false) }
+    LaunchedEffect(tasks) {
+        val firedKeys = prefs.all.keys.filter { it.startsWith("fired_") }
+        if (firedKeys.isEmpty()) { missed = emptyList(); return@LaunchedEffect }
+        val uuids = firedKeys.map { it.removePrefix("fired_") }.toSet()
+        missed = tasks.filter { it.uuid in uuids }
+        // 已不在当前列表里的（完成/归档/删除）→ 清旗标，防止越积越多
+        firedKeys.forEach { k ->
+            val u = k.removePrefix("fired_")
+            if (tasks.none { it.uuid == u }) prefs.edit().remove(k).apply()
+        }
+    }
+    if (missed.isEmpty()) return
+    if (showAll) {
+        AlertDialog(
+            onDismissRequest = { showAll = false },
+            title = { Text("你错过了这些提醒", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    missed.forEach {
+                        Text("· " + it.title, fontSize = 14.sp, modifier = Modifier.padding(vertical = 3.dp))
+                    }
+                    Text(
+                        "它们的提醒已经响过了，但任务还没完成。",
+                        fontSize = 12.sp, color = TGColors.InkMute, modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.all.keys.filter { it.startsWith("fired_") }
+                        .forEach { prefs.edit().remove(it).apply() }
+                    showAll = false
+                }) { Text("知道了") }
+            }
+        )
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(TGColors.Gold.copy(alpha = 0.14f))
+            .border(1.dp, TGColors.Gold.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+            .clickable { showAll = true }
+            .padding(10.dp, 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "⏰ 你错过了 " + missed.size + " 条提醒：" +
+                missed.take(2).joinToString("、") { it.title } + if (missed.size > 2) " 等" else "",
+            color = TGColors.Ink, fontSize = 12.sp, fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 @Composable
 fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     val allTasks by vm.mainList.collectAsState()
@@ -174,6 +237,8 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
         Column(Modifier.padding(padding)) {
             // v5.26.1：权限被拒时主页常驻警告（点去系统设置）
             NotifPermBanner()
+            // v5.26.2：错过补看（响过但没完成的提醒，回 App 置顶可见）
+            MissedBanner(tasks)
             if (tasks.isEmpty()) {
                 EmptyState("还没有任务\n点右下角加号，添加第一个", Modifier.fillMaxHeight(0.45f))
             } else {

@@ -155,11 +155,24 @@ object ReminderScheduler {
         //   后一次只是覆盖前一次，用户只看到一条。
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = alarmPending(context, taskUuid, strength)
+        // v5.26.2：升级为 setAlarmClock（闹钟级）——
+        //   ① 勿扰模式默认放行"闹钟"类（第五轮 4 个身份死于被勿扰压住）
+        //   ② Doze 深度休眠也照响 ③ 时钟 App 里能看到这次提醒（误排可见）
+        //   setExactAndAllowWhileIdle 保留为降级路径（部分 ROM 限制 setAlarmClock 时仍可用）。
+        val showPi = android.app.PendingIntent.getActivity(
+            context, 10001,
+            (context.packageManager.getLaunchIntentForPackage(context.packageName)
+                ?: android.content.Intent()).addFlags(
+                android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
         try {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi)
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(fireAt, showPi), pi)
         } catch (e: Exception) {
-            // Android 12+ 未授予 SCHEDULE_EXACT_ALARM 时降级为不精确闹钟（仍远优于 WorkManager）
-            try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) } catch (_: Exception) {}
+            try { am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) }
+            catch (_: Exception) {
+                try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) } catch (_: Exception) {}
+            }
         }
     }
 
@@ -250,6 +263,13 @@ object ReminderScheduler {
         if (t.deleted != 0) return
 
         NotificationHelper.showReminder(ctx.applicationContext, uuid, t.title, strength)
+
+        // v5.26.2：错过补看 —— 记下「这条提醒响过了」。
+        //   场景（第五轮消防员/听障用户）：手机摸不到/没感知到，提醒响过即失效。
+        //   回到 App 时主页置顶显示「你错过了 N 条提醒」，点开看清单。
+        //   任务完成后横幅自动消失（只统计未完成的）；「知道了」清旗标。
+        ctx.applicationContext.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
+            .edit().putLong("fired_" + uuid, System.currentTimeMillis()).apply()
 
         // repeat 模式（旧版兼容）：5 分钟后再提醒一次，最多 MAX_REPEAT 次
         if (strength == "repeat" && repeatCount < ReminderScheduler.MAX_REPEAT) {
