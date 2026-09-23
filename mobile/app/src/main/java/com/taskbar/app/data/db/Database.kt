@@ -158,6 +158,10 @@ interface TaskDao {
     @Query("UPDATE tasks SET deleted = 1, updated_at = :now WHERE uuid = :uuid")
     suspend fun softDelete(uuid: String, now: Long)
 
+    /** v5.28.4（孤儿闹钟清理）：全部软删任务的 uuid —— 冷启动时逐个撤销残留闹钟 */
+    @Query("SELECT uuid FROM tasks WHERE deleted = 1")
+    suspend fun getDeletedUuids(): List<String>
+
     /** v5.15.24 F11：撤销删除 —— 把软删任务恢复（配合 Undo 条） */
     @Query("UPDATE tasks SET deleted = 0, updated_at = :now WHERE uuid = :uuid")
     suspend fun undelete(uuid: String, now: Long)

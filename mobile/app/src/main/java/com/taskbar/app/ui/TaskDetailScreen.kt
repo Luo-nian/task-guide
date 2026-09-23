@@ -1183,7 +1183,12 @@ private fun DailyTimeEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
                 color = TGColors.GoldDeep, fontSize = 14.sp, fontWeight = FontWeight.SemiBold
             )
         }
-        Text("点这里改时间", color = TGColors.InkMute, fontSize = 11.sp)
+        Text(
+            "点这里改时间", color = TGColors.InkMute, fontSize = 11.sp,
+            // v5.28.4（B-02）：这行原本是纯 Text 不可点，文案却叫「点这里」——真入口是左侧胶囊。
+            //   补上 clickable 让文案兑现承诺（与胶囊同等弹系统时间选择器）。
+            modifier = Modifier.clickable { showPicker = true }
+        )
     }
     Spacer(Modifier.height(6.dp))
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1283,24 +1288,54 @@ private fun DueAtEditor(dueAt: Long?, onChange: (Long?) -> Unit) {
     }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 手动输入日期（可编辑，校验后自动修正）
-        OutlinedTextField(
-            value = dateInput,
-            onValueChange = {
-                dateInput = it.filter { c -> c.isDigit() || c == '-' }.take(10)
-                if (it.length >= 10) applyDateInput(it)
-            },
-            label = { Text("日期") },
-            placeholder = { Text("选择日期") },
-            isError = dateError,
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = borderColor,
-                unfocusedBorderColor = borderColor,
-                errorBorderColor = TGColors.Crimson
-            ),
-            modifier = Modifier.weight(1f)
-        )
+        // v5.28.4（A-01/A-02）：日期框改为「点按弹日期选择器」。
+        //   原状：placeholder 写「选择日期」实为手输 YYYY-MM-DD 的文本框——新用户两连点没反应必困惑；
+        //   且框宽放不下 10 字符（左端被裁成看起来像":"）。现：readOnly + 透明覆盖层拦点击弹
+        //   系统 DatePickerDialog（与 TimePickerDialog 同风格），选完走 applyDateInput 复用校验。
+        Box(Modifier.weight(1f)) {
+            val showDateDialog = remember { androidx.compose.runtime.mutableStateOf(false) }
+            OutlinedTextField(
+                value = dateInput,
+                onValueChange = {
+                    dateInput = it.filter { c -> c.isDigit() || c == '-' }.take(10)
+                    if (it.length >= 10) applyDateInput(it)
+                },
+                label = { Text("日期") },
+                placeholder = { Text("点按选择日期") },
+                isError = dateError,
+                singleLine = true,
+                readOnly = true,
+                textStyle = androidx.compose.material3.LocalTextStyle.current.copy(fontSize = 13.sp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = borderColor,
+                    errorBorderColor = TGColors.Crimson
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clickable { showDateDialog.value = true }
+            )
+            if (showDateDialog.value) {
+                val init = java.util.Calendar.getInstance()
+                if (dueAt != null) init.timeInMillis = dueAt
+                android.app.DatePickerDialog(
+                    ctx,
+                    { _, y, m, d ->
+                        showDateDialog.value = false
+                        applyDateInput("%04d-%02d-%02d".format(y, m + 1, d))
+                    },
+                    init.get(java.util.Calendar.YEAR),
+                    init.get(java.util.Calendar.MONTH),
+                    init.get(java.util.Calendar.DAY_OF_MONTH)
+                ).apply {
+                    setOnDismissListener { showDateDialog.value = false }
+                    show()
+                }
+            }
+        }
         // 时间（系统 TimePicker 保留，boss 认可现状）
         OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.weight(1f)) {
             Text(if (dueAt != null) dfTime.format(Date(dueAt)) else "选时间")

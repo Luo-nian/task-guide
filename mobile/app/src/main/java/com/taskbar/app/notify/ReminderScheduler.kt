@@ -213,6 +213,14 @@ object ReminderScheduler {
     /** 启动/开机后：重新调度所有未完成带 due_at 的任务 */
     suspend fun rescheduleAll(repo: com.taskbar.app.data.repo.TaskRepository, context: Context) {
         val now = System.currentTimeMillis()
+        // v5.28.4（孤儿闹钟兜底清理）：先把软删任务残留的闹钟全部撤掉 ——
+        //   历史欠账（删除路径早期没有 cancel）会在系统时钟 App 里一直挂着
+        //   「下一个闹钟」，到点触发一次空跑。冷启动全量清一次，永绝后患。
+        //   （cancel 的 PendingIntent 相等性只看 action/component/requestCode，
+        //    requestCode=uuid.hashCode()，所以拿 uuid 就能精确撤。）
+        runCatching {
+            repo.deletedTaskUuids().forEach { u -> cancel(context, u) }
+        }
         // 全局默认提醒方式存 SharedPreferences（与 SettingsScreen/NotificationHelper 一致）
         val defaultStrength = context.getSharedPreferences("taskguide_prefs", Context.MODE_PRIVATE)
             .getString("reminder_strength", "notify") ?: "notify"

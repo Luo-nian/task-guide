@@ -882,7 +882,9 @@ private fun TaskRow(
                 Modifier.padding(start = 36.dp, end = 6.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                TypeChip(task.type)
+                // v5.28.4（A-03）：限时任务数据层 type=REPEAT → TypeChip 会显示「重复」，
+                //   与「限时」语义冲突 → 限时卡不渲染 TypeChip，只留汉化后的 CategoryChip。
+                if (task.category != "time-limited") TypeChip(task.type)
                 if (task.category.isNotBlank()) CategoryChip(task.category)
                 PriorityChip(task.priority)
                 Box(
@@ -924,8 +926,11 @@ private fun TaskRow(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TypeChip(task.type)
-                        Spacer(Modifier.width(6.dp))
+                        // v5.28.4（A-03）：同上，限时卡不渲染「重复」chip
+                        if (task.category != "time-limited") {
+                            TypeChip(task.type)
+                            Spacer(Modifier.width(6.dp))
+                        }
                         if (task.category.isNotBlank()) {
                             CategoryChip(task.category)
                             Spacer(Modifier.width(6.dp))
@@ -1115,7 +1120,9 @@ private fun CategoryFilterRow(selected: String, onSelect: (String) -> Unit, allL
     }
 }
 
-/** 分类小标签（与 TypeChip 风格统一：金色鲜明底 + 深金字，不违和） */
+/** 分类小标签（与 TypeChip 风格统一：金色鲜明底 + 深金字，不违和）
+ *  v5.28.4（A-03）：分类键走中文名映射（time-limited→限时任务、once→次数任务），
+ *  未知键兜底显示原文 —— 修「卡片上直接裸露 time-limited 英文」的汉化遗漏。 */
 @Composable
 private fun CategoryChip(category: String) {
     Box(
@@ -1124,7 +1131,7 @@ private fun CategoryChip(category: String) {
             .background(TGColors.Gold.copy(alpha = 0.14f))
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
-        Text(category, color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text(CAT_FILTER_LABEL[category] ?: category, color = TGColors.GoldDeep, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 

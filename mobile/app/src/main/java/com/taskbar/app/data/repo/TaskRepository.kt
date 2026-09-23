@@ -17,6 +17,8 @@ import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackCardItem
 import com.taskbar.app.data.model.TrackStatus
 import com.taskbar.app.data.model.TrackingInfo
+import com.taskbar.app.notify.ReminderScheduler
+import com.taskbar.app.TaskBarApp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -331,7 +333,15 @@ class TaskRepository(private val db: AppDatabase) {
         }
         emitWithData(ChangeOp("delete", "task", uuid))
         logChange(uuid, selfName(), "delete", "删除了任务")
+        // v5.28.4（孤儿闹钟欠账，279 行注释自认）：删除后必须撤销已排的提醒 ——
+        //   否则 AlarmManager（setAlarmClock 级）里那条一直挂着：系统时钟 App 会显示
+        //   「下一个闹钟」，到点还会触发一次（fireNow 有 deleted 守卫不会真响，但观感差）。
+        //   实测案例：联测任务X 软删后 01:38 闹钟残留一整天。
+        runCatching { ReminderScheduler.cancel(TaskBarApp.instance, uuid) }
     }
+
+    /** v5.28.4（孤儿闹钟清理）：软删任务 uuid 全集 —— rescheduleAll 冷启动兜底撤钟用 */
+    suspend fun deletedTaskUuids(): List<String> = taskDao.getDeletedUuids()
 
     /**
      * v5.15.24 F11（调研 3.2 可考虑：批量操作后滑入式撤销）——
@@ -1036,6 +1046,13 @@ class TaskRepository(private val db: AppDatabase) {
                                     if (t.owner.isBlank()) "负责人改回自己" else "负责人改为 ${t.owner}")
                             else ->
                                 logChange(t.uuid, by, "update", "修改了任务")
+                        }
+                        // v5.28.4（孤儿闹钟欠账·同步侧）：桌面端删掉/完成普通任务后，
+                        //   手机的 AlarmManager 也必须撤钟（同 deleteTask 的理由）。
+                        //   每日/重复型任务的 DONE 不撤 —— 它明天还要响。
+                        val dailyish = t.type == TaskType.HABIT || t.type == TaskType.REPEAT
+                        if (t.deleted != 0 || (t.trackStatus == TrackStatus.DONE && !dailyish)) {
+                            runCatching { ReminderScheduler.cancel(TaskBarApp.instance, t.uuid) }
                         }
                     }
                 }
