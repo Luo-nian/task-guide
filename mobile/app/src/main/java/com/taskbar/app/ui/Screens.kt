@@ -156,14 +156,24 @@ private fun MissedBanner(tasks: List<com.taskbar.app.data.model.Task>) {
     var missed by remember { mutableStateOf(listOf<com.taskbar.app.data.model.Task>()) }
     var showAll by remember { mutableStateOf(false) }
     LaunchedEffect(tasks) {
-        val firedKeys = prefs.all.keys.filter { it.startsWith("fired_") }
-        if (firedKeys.isEmpty()) { missed = emptyList(); return@LaunchedEffect }
-        val uuids = firedKeys.map { it.removePrefix("fired_") }.toSet()
-        missed = tasks.filter { it.uuid in uuids }
-        // 已不在当前列表里的（完成/归档/删除）→ 清旗标，防止越积越多
-        firedKeys.forEach { k ->
-            val u = k.removePrefix("fired_")
-            if (tasks.none { it.uuid == u }) prefs.edit().remove(k).apply()
+        // v5.26.2b（真机实测发现的真 bug）：提醒在 App **运行中**触发时旗标才落盘，
+        //   而此时 tasks 往往没变 → LaunchedEffect(tasks) 不重跑 → 横幅永远不亮，
+        //   要重启 App 才看得到 —— 恰恰错过了"回来第一眼"。
+        //   改成 5 秒轮询（读 prefs + 过滤内存列表，开销可忽略）。
+        while (true) {
+            val firedKeys = prefs.all.keys.filter { it.startsWith("fired_") }
+            if (firedKeys.isEmpty()) {
+                missed = emptyList()
+            } else {
+                val uuids = firedKeys.map { it.removePrefix("fired_") }.toSet()
+                missed = tasks.filter { it.uuid in uuids }
+                // 已不在当前列表里的（完成/归档/删除）→ 清旗标，防止越积越多
+                firedKeys.forEach { k ->
+                    val u = k.removePrefix("fired_")
+                    if (tasks.none { it.uuid == u }) prefs.edit().remove(k).apply()
+                }
+            }
+            kotlinx.coroutines.delay(5_000)
         }
     }
     if (missed.isEmpty()) return
