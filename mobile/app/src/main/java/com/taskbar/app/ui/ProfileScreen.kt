@@ -295,7 +295,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     TGIcon(R.drawable.ic_trophy, contentDescription = null, tint = TGColors.Jade, size = 16.dp)
                     Spacer(Modifier.width(6.dp))
                     Text("习惯坚持", color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    Text("›", color = TGColors.InkMute, fontSize = 16.sp)
+                    // v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 16 → 12sp
+                    Text("›", color = TGColors.InkMute, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -314,7 +315,8 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 TGIcon(R.drawable.ic_settings, contentDescription = null, tint = TGColors.GoldDeep, size = 20.dp)
                 Spacer(Modifier.width(10.dp))
                 Text("设置", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Text("›", color = TGColors.InkMute, fontSize = 20.sp)
+                // v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 20 → 15sp
+                Text("›", color = TGColors.InkMute, fontSize = 15.sp)
             }
         }
     }

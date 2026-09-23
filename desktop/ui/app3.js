@@ -787,7 +787,11 @@ function toggleTypeGroup() {
 function renderTrackingView() {
   const lvEl = document.getElementById('listView');
   if (!lvEl) return;
-  const trackTasks = tasks.filter(t => isTracking(t) && !t.done && t.deleted !== 1);
+  // v5.28.2：原来硬塞 `!t.done` —— daily 任务打过卡后 done=1（「今日已打卡」不是任务终结），
+  //   手机端主页照样显示它追踪中，桌面追踪页却把它挤掉 → 双端口径不一致
+  //   （实证：健身 daily 昨天打卡，手机显示追踪 2 项，桌面只有 1 项）。
+  //   改成：普通任务要 done=0，daily 只要 track_status='tracking' 就留（打卡态照常显示）。
+  const trackTasks = tasks.filter(t => isTracking(t) && t.deleted !== 1 && (!t.done || catOf(t) === 'daily'));
   // v5.14h.9：角标统一由 render() 里 updateTrackingBadge() 更新（此处不再写）
   // v5.15.12：空态改成"中间一句话"（boss：这个页面文字很拥挤，没有看的欲望）
   let html = `

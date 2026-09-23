@@ -6,6 +6,7 @@ import com.taskbar.app.data.model.ChangesRequest
 import com.taskbar.app.data.model.FullSyncPayload
 import com.taskbar.app.data.model.IncrementalPayload
 import com.taskbar.app.data.model.WsMessage
+import com.taskbar.app.notify.ReminderScheduler
 import com.taskbar.app.data.repo.ChangeBus
 import com.taskbar.app.data.repo.LinkState
 import io.ktor.http.HttpStatusCode
@@ -200,9 +201,18 @@ fun Application.configureServer() {
             // v5.27.0：who = 按 token 反查的设备名（变更记录记「谁」）
             val who = call.currentDevice()?.name ?: ""
             var accepted = 0
+            var taskChanged = false
             req.changes.forEach {
                 runCatching { app.repo.applyChange(it, who) }.onSuccess { accepted++ }
                     .onFailure { e -> android.util.Log.e("sync", "applyChange 失败: ${it.entity}/${it.op}", e) }
+                if (it.entity == "task") taskChanged = true
+            }
+            // v5.28.2：桌面改了任务（尤其每日提醒时间）→ 必须重排本机闹钟。
+            //   实测：桌面把每日任务 09:00 改 01:29，手机库同步到位但闹钟还是旧的 09:00
+            //   （v5.26.0 修的是"UI 写路径"重排，WS 接收路径一直漏着）。
+            //   rescheduleAll 幂等（唯一名 REPLACE），顺便把被改时间的旧闹钟撤掉。
+            if (taskChanged) {
+                runCatching { ReminderScheduler.rescheduleAll(app.repo, app) }
             }
             call.respondSecure("""{"status":"ok","accepted":$accepted}""")
         }
@@ -258,6 +268,10 @@ fun Application.configureServer() {
                                     ChangeOp(msg.op, msg.entity, msg.uuid, msg.data.ifEmpty { null }),
                                     device.name
                                 )
+                                // v5.28.2：WS 实时路径同样要重排（同 /api/changes 的教训）
+                                if (msg.entity == "task") {
+                                    runCatching { ReminderScheduler.rescheduleAll(app.repo, app) }
+                                }
                             }
                         }
                     }

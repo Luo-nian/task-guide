@@ -2603,7 +2603,8 @@ body { background-color: var(--bg-paper); }
 .cat-group-head:not([onclick]) { cursor: default; }
 /* v5.15.27 P3（boss：「分类栏的三角也太小」）11 → 15px，并用金色（灰字在金色底上不显眼） */
 /* v5.15.27 P3b（boss：「三角形还是太小」）15 → 20px */
-.cat-group-head .cg-arrow { margin-left: auto; font-size: 20px; color: var(--gold-deep); font-weight: 700; line-height: 1; }
+/* v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 20 → 12px = 分组头文字字号 */
+.cat-group-head .cg-arrow { margin-left: auto; font-size: 12px; color: var(--gold-deep); font-weight: 700; line-height: 1; }
 .cat-group.collapsed .cg-body { display: none; }
 
 .lg-day { margin-bottom: 10px; }
@@ -3337,6 +3338,7 @@ input[type=text], input[type=number], input[type=password], select, textarea {
   /* v5.26.1（boss：三角形还是太小 + 不能用三角形交互）——
      ①字符从 ▸/▾ 换成 ＋/−（展开=−、收起=＋，电路图语义，一眼懂、不依赖方向感）
      ②字号 15 → 22px；JS 侧的字符同步在 app3.js 替换 */
-  margin-left: auto; font-size: 22px; font-weight: 800; color: var(--ink-soft); line-height: 1;
+  /* v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 22 → 18px = 侧栏图标(data-icon-size 18)同大 */
+  margin-left: auto; font-size: 18px; font-weight: 800; color: var(--ink-soft); line-height: 1;
 }
 .side-nav .nav-group-head.active .nav-group-arrow { color: var(--gold); }

@@ -604,11 +604,11 @@ private fun SectionHeader(
         if (onClick != null) {
             Spacer(Modifier.weight(1f))
             // v5.15.26 M2：收起指示（▾ 展开中 / ▸ 已收起）
-            // v5.15.27 M2（boss：「三角形太小了」）12 → 17sp，并改成该分组的主题色（不再用灰字）
-            // v5.15.27 M2b（boss：「三角形还是太小」）17 → 22sp —— 直接用大号加粗字形，够醒目
+            // v5.15.27 M2（boss：「三角形太小了」）12 → 17sp；M2b 17 → 22sp
+            // v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 22 → 13sp = 标题字号
             Text(
                 if (collapsed) "▸" else "▾",
-                color = color, fontSize = 22.sp, fontWeight = FontWeight.Bold
+                color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold
             )
         }
     }
@@ -1792,9 +1792,9 @@ fun AllTasksScreen(vm: TaskViewModel, navController: NavController) {
                         Text(
                             "▾",
                             color = TGColors.GoldDeep,
-                            // v5.26.0（boss 再次点名：「三角形太小了 这个问题我说了一万遍了吧」）——
-                            //   15sp 仍显小 → 20sp。这个下拉指示是"这里能展开"的唯一线索，宁大勿小。
-                            fontSize = 20.sp,
+                            // v5.26.0（boss 再次点名：「三角形太小了」）—— 15sp → 20sp
+                            // v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 20 → 12sp = 「阅览方式」字号
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2240,7 +2240,8 @@ fun HistoryScreen(vm: TaskViewModel, navController: NavController) {
                         Text("阅览方式", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.width(3.dp))
                         // v5.26.0：同主页口径，15 → 20sp（boss 反复点名"三角形太小"）
-                        Text("▾", color = TGColors.GoldDeep, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        // v5.28.2（boss：所有展开/收起三角一律跟旁边的字或图标一样大）—— 20 → 12sp
+                        Text("▾", color = TGColors.GoldDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 DropdownMenu(expanded = histViewMenu, onDismissRequest = { histViewMenu = false }) {

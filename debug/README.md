@@ -58,6 +58,7 @@ debug/
 
 | ID | 一句话 | 版本 |
 | --- | --- | --- |
+| C-032 | ⭐⭐ **桌面改任务后手机闹钟不重排**（WS 接收路径漏接 rescheduleAll）：桌面改每日提醒 09:00→01:38，手机库同步到位但 01:38 闹钟没排、09:00 旧闹钟照挂。修：`/api/sync/changes` 与 `/ws` 两处 task 变更后 `rescheduleAll`（幂等 REPLACE 顺带撤旧闹钟）。⚠️ 附：**vivo 拦 `adb shell am broadcast` 到 exported=false 组件**（dispatch 假象、receiver 从未执行）——验证提醒只能用真闹钟或演示键。覆盖安装 APK 会清空全部闹钟，冷启动 rescheduleAll 是唯一恢复口。详见 [v5.28.3](./debug-v5.28.3.md) | v5.28.3 |
 | C-031 | ⭐⭐ **追踪"名额已满(1/3)"误报**（boss 真机两轮打脸）：①计数口径不排 `deleted`（4 条死占坑，v5.27.1 已修）；②⭐ **现行真凶 = A3 弹窗把 startTracking 的一切 false 都误报"名额满" + daily 任务昨天打卡 done=1 被 v5.26.0 校验拦**（跨天折算只在读取层）。修：`TrackStartResult` 细分返回 + daily 放行 + UI 三处分流。⭐⭐ 教训：**宣布"已解决"前必须真机点一次**——计数口径正确 ≠ 用户体验正确；多失败原因的函数禁止返回 Boolean 让 UI 猜。详见 [v5.28.1](./debug-v5.28.1.md) | v5.28.1 |
 | C-030 | ⭐⭐ **提醒到点根本不执行（真根因）**：任务提醒用 `OneTimeWorkRequest`，而它本质是"不精确的后台任务"——实测「健身」的提醒**逾期 15 小时仍未执行**（state=0 / run_attempt=0；手机一直开着、App 在电池白名单、未 Doze、权限已声明）。**修：改用 `AlarmManager.setExactAndAllowWhileIdle`（与起床提醒同一套）+ 新增 `ReminderAlarmReceiver` + 把提醒逻辑抽成 `fireNow()` 两路共用**。⚠️ 教训：**"逻辑修好了"不等于"功能修好了" —— 排程机制本身也要验证**。详见 [v5.18.5](../requirements/项目需求-v5.18.5.md) | v5.18.5 |
 | C-029 | ⭐⭐ **提醒系统四连（v5.18.4，真机 A/B 实测）**：①每日任务被当"已过期未完成"→每次冷启动立即提醒；②裸 `enqueue()`+每次冷启动都跑 → 同一任务堆 20 条，开几次 App 响几次；③⭐⭐ **`observeMainList()` 的 SQL 自带 `track_status != 'done'`** → "昨天完成的每日任务"在 SQL 层就被滤掉 （每日折算只在 UI 层）→ **今天的提醒永远排不上**；⚠️ **排程/后台任务不能复用 UI 的列表查询**；④`observeByUuid` 不过滤 `deleted` 且删除路径没有 `cancel` → 删掉的任务到点还弹提醒。详见 [v5.18.4](../requirements/项目需求-v5.18.4.md) | v5.18.4 |
