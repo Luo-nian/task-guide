@@ -20,6 +20,15 @@ object Priority { const val HIGH = "high"; const val MEDIUM = "medium"; const va
 object TrackStatus { const val PENDING = "pending"; const val TRACKING = "tracking"; const val DONE = "done" }
 object StepStatus { const val TODO = "todo"; const val DOING = "doing"; const val DONE = "done" }
 
+/**
+ * v5.28.1：开始追踪的细分结果。
+ * ⭐ 背景（C-031 续）：v5.28.0 的 A3 弹窗把 startTracking 的一切 false 都当"名额满"，
+ *   实际 false 有三种原因（任务不存在/任务已完成/名额满）——每日习惯「健身」昨天打卡后
+ *   done=1（每日折算只在读取层，DB 不落库），今天点追踪被 v5.26.0 校验拦下，
+ *   却弹「追踪名额已满（1/3）」→ boss 实测炸雷。UI 必须按原因分流。
+ */
+enum class TrackStartResult { OK, LIMIT_REACHED, ALREADY_DONE, NOT_FOUND }
+
 /** 同时追踪上限的默认值 */
 const val DEFAULT_TRACK_LIMIT = 3
 

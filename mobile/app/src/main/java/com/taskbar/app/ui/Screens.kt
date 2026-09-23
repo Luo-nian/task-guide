@@ -77,6 +77,7 @@ import com.taskbar.app.data.model.StepStatus
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackStatus
+import com.taskbar.app.data.model.TrackStartResult
 import com.taskbar.app.data.repo.LinkState
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -515,8 +516,11 @@ private fun HabitRow(task: Task, vm: TaskViewModel, checkedToday: Boolean, strea
                 }, iconSize = 22.dp)
             } else {
                 // v5.28.0 A3：被拦不再只 toast——弹窗给出口（去解锁/去调上限）
+                // v5.28.1：只有真·名额满才弹窗（ALREADY_DONE 等不再误报"名额已满"，C-031 续）
                 PressIcon(onClick = {
-                    vm.startTracking(task.uuid) { ok -> if (!ok) showLimitGate = true }
+                    vm.startTracking(task.uuid) { r ->
+                        if (r == TrackStartResult.LIMIT_REACHED) showLimitGate = true
+                    }
                 }) {
                     TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)
                 }
@@ -987,10 +991,14 @@ private fun TaskRow(
                     TrackRippleKey(onClick = { vm.stopTracking(task.uuid); onJustStopped() }, iconSize = 22.dp)
                 } else {
                     // v5.28.0 A3：被拦不再只 toast——弹窗给出口（去解锁/去调上限）
+                    // v5.28.1：只有真·名额满才弹窗（C-031 续）
                     PressIcon(onClick = {
-                        vm.startTracking(task.uuid) { ok ->
-                            if (!ok) showLimitGate = true
-                            else onJustTracked()
+                        vm.startTracking(task.uuid) { r ->
+                            when (r) {
+                                TrackStartResult.LIMIT_REACHED -> showLimitGate = true
+                                TrackStartResult.OK -> onJustTracked()
+                                else -> {}
+                            }
                         }
                     }) {
                         TGIcon(R.drawable.ic_track, contentDescription = "追踪", tint = TGColors.Azure, size = 22.dp)

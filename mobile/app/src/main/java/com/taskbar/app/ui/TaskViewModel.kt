@@ -7,6 +7,7 @@ import com.taskbar.app.TaskBarApp
 import com.taskbar.app.billing.License
 import com.taskbar.app.data.model.DEFAULT_TRACK_LIMIT
 import com.taskbar.app.data.model.HabitLog
+import com.taskbar.app.data.model.TrackStartResult
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.repo.HabitStat
@@ -225,10 +226,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         uuids.forEach { rescheduleOne(it) }
     }
 
-    /** 开始追踪；已达上限返回 false（UI 据此弹提示） */
-    fun startTracking(uuid: String, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
-        val ok = repo.startTracking(uuid)
-        onResult(ok)
+    /** 开始追踪；结果细分（v5.28.1）：UI 据此分流——只有 LIMIT_REACHED 才弹名额弹窗 */
+    fun startTracking(uuid: String, onResult: (TrackStartResult) -> Unit = {}) = viewModelScope.launch {
+        val result = repo.startTracking(uuid)
+        onResult(result)
         refreshWidget()
     }
 

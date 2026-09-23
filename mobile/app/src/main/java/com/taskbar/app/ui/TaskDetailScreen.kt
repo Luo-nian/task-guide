@@ -44,6 +44,7 @@ import com.taskbar.app.data.model.ReminderStrength
 import com.taskbar.app.data.model.Task
 import com.taskbar.app.data.model.TaskType
 import com.taskbar.app.data.model.TrackStatus
+import com.taskbar.app.data.model.TrackStartResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
@@ -177,8 +178,9 @@ fun TaskDetailScreen(vm: TaskViewModel, navController: NavController, uuid: Stri
                 if (task.done == 0 && task.trackStatus != TrackStatus.DONE) {
                 Button(
                     onClick = {
-                        if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid) { ok ->
-                            if (!ok) ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
+                        if (isTracking) vm.stopTracking(uuid) else vm.startTracking(uuid) { r ->
+                            if (r == TrackStartResult.LIMIT_REACHED)
+                                ToastHelper.show(ctx, "追踪已达上限($trackLimit 个)，先取消别的追踪或在设置里调高上限")
                         }
                     },
                     modifier = Modifier.weight(1f),

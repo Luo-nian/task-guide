@@ -9,6 +9,7 @@ import com.taskbar.app.data.model.Priority
 import com.taskbar.app.data.model.Step
 import com.taskbar.app.data.model.StepStatus
 import com.taskbar.app.data.model.SyncMeta
+import com.taskbar.app.data.model.TrackStartResult
 import com.taskbar.app.data.model.SettingChange
 import com.taskbar.app.data.model.SettingKV
 import com.taskbar.app.data.model.Task
@@ -354,16 +355,21 @@ class TaskRepository(private val db: AppDatabase) {
      * 2. 当前任务转 tracking
      * 3. 第一个 todo 步骤转 doing（若有步骤）
      */
-    suspend fun startTracking(uuid: String): Boolean {
+    suspend fun startTracking(uuid: String): TrackStartResult {
         // v5.26.0（boss：「为什么我可以追踪已经完成的任务」）——
         //   原来这里只看追踪上限，**不校验任务本身的状态** → 已完成/已归档的任务
         //   点「追踪」照样进追踪列表，然后就是"点完成没反应、点取消追踪才回去"的死循环。
-        val target = taskDao.getByUuid(uuid)
-        if (target == null) return false
-        if (target.done == 1 || target.trackStatus == TrackStatus.DONE) return false
+        // v5.28.1（C-031 续，boss 真机实测炸雷）：①返回值从 Boolean 细分为 TrackStartResult，
+        //   让 UI 能分流（之前 v5.28.0 的 A3 弹窗把一切 false 都误报成"名额已满"）；
+        //   ②每日任务（category=daily）done=1 是"今天已打卡"语义（跨天折算只在读取层），
+        //   **不该被已完成校验拦**——昨天打卡、今天继续追踪是正常操作。
+        val target = taskDao.getByUuid(uuid) ?: return TrackStartResult.NOT_FOUND
+        val isDaily = target.category == "daily"
+        if (target.trackStatus == TrackStatus.DONE) return TrackStartResult.ALREADY_DONE
+        if (target.done == 1 && !isDaily) return TrackStartResult.ALREADY_DONE
         val limit = getTrackLimit()
         val current = taskDao.countTracking()
-        if (current >= limit) return false
+        if (current >= limit) return TrackStartResult.LIMIT_REACHED
         val t = now()
         taskDao.updateTrackStatus(uuid, TrackStatus.TRACKING, t)
         // 第一个 todo 步骤转 doing
@@ -373,7 +379,7 @@ class TaskRepository(private val db: AppDatabase) {
         }
         emitWithData(ChangeOp("upsert", "task", uuid))
         logChange(uuid, selfName(), "track_start", "开始追踪")
-        return true
+        return TrackStartResult.OK
     }
 
     suspend fun stopTracking(uuid: String) {

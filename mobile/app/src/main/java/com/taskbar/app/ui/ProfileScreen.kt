@@ -85,15 +85,9 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
             )
-            // v5.21.x：原来副行是「等级名 · 积分」，而主行问候语后面已经跟了名字
-            //   （没改过昵称时名字就是等级名）→ 同一屏上等级名出现 3 次。
-            //   副行只留积分，等级名交给下面那张黑金等级卡（它才是主角）。
-            Text(
-                "$points 分",
-                color = TGColors.GoldDeep,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
+            // v5.28.1（boss：问候语和身份卡之间夹一个分数不好看）——
+            //   副行「N 分」删掉。分数在下面身份卡右侧本来就有（N / 下一级），问候区和卡片之间
+            //   只留干净的一行问候语。
         }
 
         // ===== v5.15.31（boss：这两个卡片合成一个）=====
@@ -294,11 +288,14 @@ fun ProfileScreen(vm: TaskViewModel, navController: NavController) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            TGCard(Modifier.weight(1f)) {
+            // v5.28.1：习惯页一直没有入口（C-031 续：boss 问"哪里有习惯页"）——
+            //   「习惯坚持」统计卡就是入口：点进「每日任务」页（打卡/补卡/连击）。
+            TGCard(Modifier.weight(1f).clickable { navController.navigate("habit") }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TGIcon(R.drawable.ic_trophy, contentDescription = null, tint = TGColors.Jade, size = 16.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text("习惯坚持", color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text("习惯坚持", color = TGColors.InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text("›", color = TGColors.InkMute, fontSize = 16.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
