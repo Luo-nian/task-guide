@@ -899,6 +899,12 @@ document.querySelectorAll('.nav-item').forEach(n => {
     if (first) {
       selectedUuid = first.uuid;
       openDetail(selectedUuid);
+    } else {
+      // v5.30.1：当前视图**没有可见任务** → 详情必须收起。
+      //   否则会出现"左侧列表 0 项、右侧还开着上一条任务的详情"（boss 报的矛盾状态）。
+      selectedUuid = null;
+      const dv = document.getElementById('detailView');
+      if (dv) dv.style.display = 'none';
     }
   });
 });
@@ -909,9 +915,16 @@ function pickDefaultTask(navKey) {
   if (!alive.length) return null;
   const CAT_FILTER = { daily: 'daily', goal: 'goal', 'time-limited': 'time-limited', once: 'once' };
   const cat = CAT_FILTER[navKey];
-  const pool = cat ? alive.filter(t => catOf(t) === cat) : alive;
+  // v5.30.1（boss 2026-09-25 22:30 报的 bug）：「今日待办 0 项，右侧详情却自动开着一条『健身』」。
+  //   根因：这里原来用**全量未删任务**挑默认项，与左侧列表口径（renderTodayView 只渲染 `!t.done`）不一致
+  //   → 列表全空时仍能挑到一条已完成的每日任务并弹出详情，用户看到自相矛盾的状态。
+  //   现在：今日待办视图只在该视图**真正可见**的任务里挑（未完成），挑不到就不选（调用方收起详情）。
+  const isTodayView = (navKey === 'today');
+  const pool = cat
+    ? alive.filter(t => catOf(t) === cat)
+    : (isTodayView ? alive.filter(t => !t.done) : alive);
   if (!pool.length) return null;
-  return pool.find(t => isTracking(t) && !t.done) || pool.find(t => !t.done) || pool[0];
+  return pool.find(t => isTracking(t)) || pool.find(t => !t.done) || pool[0];
 }
 
 document.getElementById('archiveSearch').addEventListener('input', renderArchiveModal);
