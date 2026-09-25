@@ -23,8 +23,8 @@ android {
         applicationId = "com.taskbar.app"
         minSdk = 26          // Android 8.0，覆盖 vivo OriginOS
         targetSdk = 34
-        versionCode = 529
-        versionName = "5.29.0"
+        versionCode = 530
+        versionName = "5.30.0"
 
         // Ktor 服务器端口
         buildConfigField("int", "SERVER_PORT", "8899")

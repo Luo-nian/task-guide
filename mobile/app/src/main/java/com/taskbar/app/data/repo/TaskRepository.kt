@@ -957,7 +957,7 @@ class TaskRepository(private val db: AppDatabase) {
         p.habit_logs.forEach { habitDao.insert(it) }
 
         p.settings
-            .filterNot { it.key == "auth_secret" || it.key.startsWith("sync_ts_") }
+            .filterNot { it.key == "auth_secret" || it.key == "ai_token" || it.key.startsWith("sync_ts_") }
             .forEach { kv ->
                 if (kv.key == "total_points") {
                     val cur = settingsDao.get("total_points")?.toIntOrNull() ?: 0
@@ -979,10 +979,12 @@ class TaskRepository(private val db: AppDatabase) {
         val steps = stepDao.getAllNonDeleted()
         val habits = habitDao.getAll()
         // v5.15.7：设置也全量带上（积分/等级、头像…），sync_ts_* 内部行不外发
+        // v5.30.0：**ai_token 不外发** —— 它是 AI 控制接口的本机凭据，与 auth_secret 同理：
+        //   带上＝把"谁都能操控这台手机"的令牌发给配对设备/写进备份（v5.22.5/v5.26.0 两次教训）。
         val all = settingsDao.getAll()
         val tsMap = all.filter { it.key.startsWith("sync_ts_") }
             .associate { it.key.removePrefix("sync_ts_") to (it.value.toLongOrNull() ?: 0L) }
-        val settings = all.filterNot { it.key.startsWith("sync_ts_") }
+        val settings = all.filterNot { it.key.startsWith("sync_ts_") || it.key == "ai_token" }
             .map { SettingKV(it.key, it.value, tsMap[it.key] ?: 0L) }
         return FullSyncPayload(tasks, steps, habits, settings, System.currentTimeMillis())
     }

@@ -363,6 +363,34 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     /** 所有习惯最长连续天数（"我的"页"坚持"统计） */
     suspend fun maxHabitStreak(): Int = repo.maxHabitStreak()
 
+    // ==================== v5.30.0 主页下拉刷新 ====================
+
+    /**
+     * 与电脑端做几轮对齐（下拉刷新触发）。
+     *
+     * 手机是服务器，**没法主动"连"电脑**，所以正确的做法是：
+     *   给所有已连接的电脑端 WS 广播 `syncnow` → 电脑端收到后立刻 full_sync(拉) + push_full(推)
+     *   → 双向收敛。广播几轮 = boss 要的"进行几次双端同步"。
+     *
+     * 全程在调用方协程里跑（IO 线程），轮次之间只 delay，不阻塞 UI 线程 → 无卡顿。
+     * 本机数据不用手动刷：Room 的 Flow 订阅在电脑端写入后会自动推新数据到界面。
+     *
+     * @return 给用户看的一句话结果
+     */
+    suspend fun manualPullSync(rounds: Int = 3): String {
+        val clients = com.taskbar.app.server.WS_CLIENT_COUNT.get()
+        if (clients <= 0) {
+            return "电脑端未连接 —— 已刷新本机数据（电脑端打开后会自动对齐）"
+        }
+        var sent = 0
+        repeat(rounds) { i ->
+            if (com.taskbar.app.server.PULL_BUS.tryEmit(com.taskbar.app.server.SYNCNOW)) sent++
+            if (i < rounds - 1) kotlinx.coroutines.delay(650)
+        }
+        kotlinx.coroutines.delay(500)
+        return "已与电脑同步 $sent 轮（$clients 台连接）"
+    }
+
     // ===== 设置 =====
     fun setTrackLimit(limit: Int) = viewModelScope.launch { repo.setTrackLimit(limit) }
     fun setSetting(key: String, value: String) = viewModelScope.launch { repo.setSetting(key, value) }

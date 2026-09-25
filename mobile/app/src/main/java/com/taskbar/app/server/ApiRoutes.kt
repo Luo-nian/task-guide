@@ -39,7 +39,18 @@ import kotlinx.serialization.json.jsonPrimitive
 val appJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 /** v5.15.19：当前连接本机的电脑端 WS 数量（引用计数，归零才算"未连接"） */
-private val WS_CLIENT_COUNT = java.util.concurrent.atomic.AtomicInteger(0)
+internal val WS_CLIENT_COUNT = java.util.concurrent.atomic.AtomicInteger(0)
+
+/**
+ * v5.30.0：手机 → 电脑的**控制通道**（与 ChangeBus 的"数据变更"分开）。
+ *   用途：手机端下拉刷新 / AI 调 `/ai/sync` 时，给所有已连接的电脑端发一条
+ *   `{"op":"syncnow"}`，电脑端收到立刻拉一轮 + 推一轮 → 双端对齐。
+ *   ⚠️ 不能走 ChangeBus：那个通道发的每条消息都会被电脑端当变更写库。
+ */
+internal val PULL_BUS = kotlinx.coroutines.flow.MutableSharedFlow<String>(
+    replay = 0, extraBufferCapacity = 16,
+    onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+)
 
 /**
  * Ktor 插件 + 路由配置
@@ -252,6 +263,9 @@ fun Application.configureServer() {
         }
 
         // WebSocket 实时推送（握手校验 token；**帧内容同样加密**）
+        // v5.30.0：AI 控制接口（/ai/*，令牌鉴权，写操作走 repo → 自动双端同步）
+        aiRoutes()
+
         webSocket("/ws") {
             // v5.27.0：按 token 反查**这台连接对应的设备** —— 该连接的加解密与变更记录「谁」都用它
             val device = wsMatchDevice(call.request.queryParameters["token"])
@@ -296,10 +310,20 @@ fun Application.configureServer() {
             }
 
             try {
-                ChangeBus.events.collect { op ->
-                    val json = appJson.encodeToString(ChangeOp.serializer(), op)
-                    send(Frame.Text(TbCrypto.seal(keys, json)))
+                // v5.30.0：两条通道并行 —— 数据变更（ChangeBus）+ 控制指令（PULL_BUS）
+                val dataJob = launch {
+                    ChangeBus.events.collect { op ->
+                        val json = appJson.encodeToString(ChangeOp.serializer(), op)
+                        send(Frame.Text(TbCrypto.seal(keys, json)))
+                    }
                 }
+                val ctrlJob = launch {
+                    PULL_BUS.collect { msg ->
+                        send(Frame.Text(TbCrypto.seal(keys, msg)))
+                    }
+                }
+                dataJob.join()
+                ctrlJob.cancel()
             } finally {
                 incomingJob.cancel()
                 if (WS_CLIENT_COUNT.decrementAndGet() <= 0) {

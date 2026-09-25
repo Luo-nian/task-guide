@@ -1217,6 +1217,54 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             }
         }
 
+        // ==================== v5.30.0 AI 控制 ====================
+        // boss 诉求：「AI 一接触就能很容易地操控这个 app」——这里只负责把令牌和地址给人看，
+        //   AI 那边自己读 /ai/help 就懂怎么用（自描述接口）。
+        Spacer(Modifier.height(10.dp))
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("AI 控制", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "把下面的地址和令牌给 AI，它就能帮你加任务、完成任务、开启追踪 —— " +
+                    "改动与手动操作同一条链路，会自动同步到电脑端。",
+                color = TGColors.InkMute, fontSize = 11.sp
+            )
+            var aiToken by remember { mutableStateOf("") }
+            val aiIp = remember { SyncService.getLocalIp() ?: "手机IP" }
+            LaunchedEffect(Unit) {
+                val repo = com.taskbar.app.TaskBarApp.instance.repo
+                var cur = repo.getSetting("ai_token")
+                if (cur.isEmpty()) {
+                    cur = java.util.UUID.randomUUID().toString().replace("-", "")
+                    repo.setSetting("ai_token", cur)
+                }
+                aiToken = cur
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("接口说明（给 AI 的第一个地址）：", color = TGColors.InkMute, fontSize = 11.sp)
+            Text("http://$aiIp:${BuildConfig.SERVER_PORT}/ai/help", color = TGColors.Ink, fontSize = 12.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("令牌", color = TGColors.InkMute, fontSize = 11.sp)
+                    Text(aiToken.ifEmpty { "生成中…" }, color = TGColors.GoldDeep, fontSize = 12.sp)
+                }
+                OutlinedButton(onClick = {
+                    runCatching {
+                        val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        clip.setPrimaryClip(android.content.ClipData.newPlainText("ai_token", aiToken))
+                    }
+                    ToastHelper.show(ctx, "令牌已复制")
+                }) { Text("复制令牌", fontSize = 12.sp) }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "用法：请求头 X-AI-Token: <令牌>（或地址后加 ?token=<令牌>）。令牌只在局域网内有效，别外传。",
+                color = TGColors.InkMute, fontSize = 11.sp
+            )
+        }
+
         // v5.15.3：起床/睡前时间选择对话框
         if (showMorningPicker) {
             TimePickDialog(

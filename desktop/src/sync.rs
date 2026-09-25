@@ -748,6 +748,30 @@ pub fn ws_loop(db: Arc<Mutex<Connection>>, url: Arc<Mutex<String>>) {
                                 // v5.15.7：立刻通知前端刷新（否则要等 setInterval 15s 轮询）
                                 notify_changed();
                             }
+                            // v5.30.0：手机端下拉刷新 / AI 调 /ai/sync 发来的控制指令 ——
+                            //   立刻拉一轮 + 推一轮，让两端当场对齐。
+                            //   （此前手机端**没有任何办法**主动催电脑同步：它只是被动服务器）
+                            if plain.contains("\"syncnow\"") {
+                                sync_debug_log("收到手机端 syncnow：立即 full_sync + push_full");
+                                let db2 = db.clone();
+                                let url2 = url.clone();
+                                std::thread::spawn(move || {
+                                    match full_sync(&db2, &url2) {
+                                        Ok(_) => { notify_changed(); sync_debug_log("syncnow: 拉取 ok"); }
+                                        Err(e) => sync_debug_log(&format!("syncnow: 拉取失败 {}", e)),
+                                    }
+                                    for _attempt in 1..=2 {
+                                        match push_full_to_mobile(&db2, &url2) {
+                                            Ok(n) if n == 0 => break,
+                                            Ok(n) => { sync_debug_log(&format!("syncnow: 推送 {} 条", n)); break; }
+                                            Err(e) => {
+                                                sync_debug_log(&format!("syncnow: 推送失败 {}", e));
+                                                std::thread::sleep(Duration::from_secs(3));
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                         }
                         Ok(Message::Ping(_)) | Ok(Message::Pong(_)) => {}
                         Ok(_) => {}

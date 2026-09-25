@@ -118,8 +118,18 @@ private val ALL_DONE_TEXT: String
 @Composable
 private fun NotifPermBanner() {
     val ctx = LocalContext.current
-    val enabled = remember {
-        androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    // v5.30.0（boss 真机报的 bug）：原来用 `remember { areNotificationsEnabled() }` ——
+    //   只在**首次组合**取一次值。装机后首次启动时权限还没授（Android 13+ 安装即关闭），
+    //   取到 false 就**永久缓存**：之后哪怕在系统设置里手动打开通知，横幅照样常驻 →
+    //   boss 两台机都看到"权限未开启"的假警告。改成轮询实时值（1.2s 一次，读系统开关，
+    //   开销可忽略；与本文件 MissedBanner 同一手法）。首帧给 true 避免无谓闪现。
+    var enabled by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+            if (now != enabled) enabled = now
+            kotlinx.coroutines.delay(1200)
+        }
     }
     if (enabled) return
     Row(
@@ -228,6 +238,25 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
     //   主页直接显示全部今日待办，分类筛选只在「所有任务」页保留。
     val tasks = allTasks
 
+    // v5.30.0：下拉刷新（boss 指定）—— 下拉时与电脑端做几轮对齐（不阻塞 UI）
+    var refreshing by remember { mutableStateOf(false) }
+    val pullScope = rememberCoroutineScope()
+    val pullCtx = LocalContext.current
+
+    PullRefreshBox(
+        refreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                pullScope.launch {
+                    val msg = runCatching { vm.manualPullSync() }
+                        .getOrElse { "同步失败：" + (it.message ?: "未知原因") }
+                    refreshing = false
+                    ToastHelper.show(pullCtx, msg, android.widget.Toast.LENGTH_SHORT)
+                }
+            }
+        }
+    ) {
     Scaffold(
         containerColor = Color.Transparent,
         // 追踪 tab 已在底部 NavigationBar，这里只保留添加 FAB
@@ -374,6 +403,7 @@ fun TaskListScreen(vm: TaskViewModel, navController: NavController) {
                 }
             }
         }
+    }
     }
 }
 
