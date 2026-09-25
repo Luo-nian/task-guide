@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+// 正式签名（v5.29.0）：secrets/ 在 git 仓库之外，缺文件时回退 debug 签名
+val keystoreProps = Properties()
+val keystorePropsFile = rootProject.file("../../secrets/keystore.properties")
+val hasReleaseKeystore = keystorePropsFile.exists()
+if (hasReleaseKeystore) {
+    keystorePropsFile.inputStream().use { keystoreProps.load(it) }
 }
 
 android {
@@ -13,11 +23,22 @@ android {
         applicationId = "com.taskbar.app"
         minSdk = 26          // Android 8.0，覆盖 vivo OriginOS
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 529
+        versionName = "5.29.0"
 
         // Ktor 服务器端口
         buildConfigField("int", "SERVER_PORT", "8899")
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file("../../secrets/${keystoreProps.getProperty("storeFile")}")
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -27,8 +48,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 个人交付：release 复用 debug 签名，保证 assembleRelease 产物可直接装机（未上 Play 商店）
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release")
+                            else signingConfigs.getByName("debug")
         }
     }
 
