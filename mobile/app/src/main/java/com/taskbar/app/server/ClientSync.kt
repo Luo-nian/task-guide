@@ -206,22 +206,106 @@ object ClientSync {
 
     // ==================== 循环 ====================
 
-    fun startLoop(scope: CoroutineScope, intervalMs: Long = 8000) {
+    /**
+     * 启动客户端同步（v5.31.0 最终形态）：
+     *   **主通道 = WebSocket 实时推送**（服务器把每条变更推过来 → 收到才动，平时零请求、秒级到达）；
+     *   WS 连不上/断开时 → 退化成 60 秒轮询兜底，直到重连成功。
+     *
+     * 为什么不用固定 8 秒轮询：每小时 450 次心跳，待机耗电明显，而且并没有更快
+     *   （8 秒延迟 vs 秒级推送）。电脑端一直用的就是这条 WS 通道。
+     */
+    fun startLoop(scope: CoroutineScope, fallbackMs: Long = 60_000) {
         if (loopJob?.isActive == true) return
         loopJob = scope.launch {
-            // 首次配对后先来一次全量，之后走增量
+            // 首次配对后先来一次全量，之后靠 WS 增量
             if (isConfigured() && (repo().getSetting(K_LAST_SINCE, "0") == "0")) {
                 runCatching { fullSyncOnce() }
                     .onFailure { repo().setSetting(K_LAST_ERR, "full: ${it.message}") }
             }
             while (isActive) {
-                if (isConfigured()) {
+                if (!isConfigured()) { delay(5000); continue }
+                val ok = runCatching { wsSession() }
+                    .onFailure { repo().setSetting(K_LAST_ERR, "ws: ${it.message}") }
+                    .getOrDefault(false)
+                if (!ok) {
+                    // WS 不可用 → 兜底轮询一轮，然后等一会儿再试 WS
                     runCatching { syncOnce() }
-                        .onFailure { repo().setSetting(K_LAST_ERR, "sync: ${it.message}") }
+                        .onFailure { repo().setSetting(K_LAST_ERR, "poll: ${it.message}") }
+                    delay(fallbackMs)
                 }
-                delay(intervalMs)
             }
         }
+    }
+
+    /** 一次 WS 会话（阻塞直到断开）。返回是否曾成功连上并跑完。 */
+    private suspend fun wsSession(): Boolean = withContext(Dispatchers.IO) {
+        val k = keys() ?: throw IllegalStateException("本机还没和服务器配对")
+        val url = serverUrl()
+        val hostPort = base(url).removePrefix("http://").removePrefix("https://")
+        val host = hostPort.substringBefore(":")
+        val port = hostPort.substringAfter(":", "8899").toIntOrNull() ?: 8899
+        val token = Base64.getEncoder().encodeToString(k.master)
+
+        var pushed = false
+        val client = WsClient(host, port, token) onFrame@{ text ->
+            // 服务器推来的帧是 ChaCha20 密文；解出来可能是 ChangeOp，也可能是控制指令
+            val plain = TbCrypto.open(k, text) ?: return@onFrame
+            lastStatus = "实时同步中"
+            try {
+                if (plain.contains("\"syncnow\"")) {
+                    // 服务器要求对齐：拉一轮
+                    kotlinx.coroutines.runBlocking { syncOnce() }
+                } else {
+                    val op = json.decodeFromString(
+                        com.taskbar.app.data.model.ChangeOp.serializer(), plain
+                    )
+                    kotlinx.coroutines.runBlocking {
+                        runCatching { repo().applyChange(op, "") }
+                        if (op.entity == "task") {
+                            runCatching {
+                                com.taskbar.app.notify.ReminderScheduler.rescheduleAll(
+                                    repo(), TaskBarApp.instance
+                                )
+                            }
+                        }
+                        // 收到远端变更后，顺手把本机未推的变更交上去（双向收敛）
+                        if (!pushed) { pushed = true; runCatching { pushOnly() } }
+                    }
+                }
+            } catch (e: Exception) {
+                runCatching {
+                    kotlinx.coroutines.runBlocking {
+                        repo().setSetting(K_LAST_ERR, "frame: ${e.message}")
+                    }
+                }
+            }
+        }
+        try {
+            // 先把本机积压的变更推上去（断线期间攒的）
+            if (isConfigured()) runCatching { pushOnly() }
+            client.readLoop()          // 阻塞
+            false
+        } finally {
+            runCatching { client.close() }
+        }
+    }
+
+    /** 只推本机未推的变更（不拉） */
+    suspend fun pushOnly(): Int = withContext(Dispatchers.IO) {
+        val k = keys() ?: return@withContext 0
+        val url = serverUrl()
+        if (url.isBlank()) return@withContext 0
+        val pushSince = repo().getSetting(K_LAST_PUSH, "0").toLongOrNull() ?: 0L
+        val mine = repo().buildIncrementalChanges(pushSince)
+        if (mine.isEmpty()) return@withContext 0
+        val body = json.encodeToString(
+            ChangesRequest.serializer(), ChangesRequest(mine, System.currentTimeMillis())
+        )
+        val (code, _) = securePost(url, "/api/sync/changes", body, k)
+        if (code in 200..299) {
+            repo().setSetting(K_LAST_PUSH, System.currentTimeMillis().toString())
+            mine.size
+        } else 0
     }
 
     fun stopLoop() {
