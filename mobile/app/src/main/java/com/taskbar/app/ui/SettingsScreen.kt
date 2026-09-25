@@ -1265,6 +1265,107 @@ fun SettingsScreen(vm: TaskViewModel, navController: androidx.navigation.NavCont
             )
         }
 
+        // ==================== v5.31.0 多端同步角色 ====================
+        // boss：「我能不能让他们三个端都同步？」—— 一台手机当服务器，另一台手机 + 电脑当客户端。
+        //   本卡片负责把"角色"和"服务器地址"交给用户；同步循环在 ClientSync 里跑。
+        Spacer(Modifier.height(10.dp))
+        TGCard(Modifier.fillMaxWidth()) {
+            Text("多端同步", color = TGColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "两台手机 + 电脑看同一份数据：一台手机当「服务器」，其余设备连它（电脑一直是客户端）。" +
+                    "打开下面的开关后，本机不再对外提供服务，改为定时把服务器的数据同步过来。",
+                color = TGColors.InkMute, fontSize = 11.sp
+            )
+            var isClient by remember { mutableStateOf(false) }
+            var urlText by remember { mutableStateOf("") }
+            var roleMsg by remember { mutableStateOf("") }
+            var busy by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                isClient = com.taskbar.app.server.ClientSync.role() ==
+                    com.taskbar.app.server.ClientSync.ROLE_CLIENT
+                urlText = com.taskbar.app.server.ClientSync.serverUrl()
+                roleMsg = com.taskbar.app.server.ClientSync.statusLine()
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("本机作为客户端", color = TGColors.Ink, fontSize = 13.sp)
+                    Text("关 = 本机是服务器（默认）", color = TGColors.InkMute, fontSize = 11.sp)
+                }
+                Switch(checked = isClient, onCheckedChange = { on ->
+                    isClient = on
+                    scope.launch {
+                        com.taskbar.app.TaskBarApp.instance.repo.setSetting(
+                            com.taskbar.app.server.ClientSync.K_ROLE,
+                            if (on) com.taskbar.app.server.ClientSync.ROLE_CLIENT
+                            else com.taskbar.app.server.ClientSync.ROLE_SERVER
+                        )
+                        // 角色变了 → 让服务按新角色行事（服务器↔客户端）
+                        runCatching { SyncService.start(ctx) }
+                        roleMsg = com.taskbar.app.server.ClientSync.statusLine()
+                        ToastHelper.show(ctx, if (on) "已切到客户端模式" else "已切回服务器模式")
+                    }
+                })
+            }
+            if (isClient) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = urlText,
+                    onValueChange = { urlText = it },
+                    label = { Text("服务器地址（另一台手机）", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = !busy && urlText.isNotBlank(),
+                        onClick = {
+                            busy = true
+                            roleMsg = "正在向服务器发送配对申请…"
+                            scope.launch {
+                                com.taskbar.app.server.ClientSync.pairRequest(urlText)
+                                    .onSuccess { sid ->
+                                        roleMsg = "已申请，请在【对方手机】上点「允许」…"
+                                        var waited = 0
+                                        while (waited < 120_000) {
+                                            kotlinx.coroutines.delay(1500)
+                                            waited += 1500
+                                            val st = com.taskbar.app.server.ClientSync
+                                                .pairPoll(urlText, sid).getOrNull()
+                                            if (st == "approved") {
+                                                roleMsg = "✅ 配对成功，正在做首次全量同步…"
+                                                com.taskbar.app.server.ClientSync.fullSyncOnce()
+                                                roleMsg = com.taskbar.app.server.ClientSync.statusLine()
+                                                ToastHelper.show(ctx, "配对成功")
+                                                break
+                                            }
+                                            if (st != null && st != "pending") { roleMsg = st; break }
+                                        }
+                                    }
+                                    .onFailure { roleMsg = it.message ?: "配对失败" }
+                                busy = false
+                            }
+                        }
+                    ) { Text(if (busy) "配对中…" else "配对", fontSize = 12.sp) }
+                    OutlinedButton(
+                        enabled = !busy && urlText.isNotBlank(),
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                roleMsg = com.taskbar.app.server.ClientSync.syncOnce()
+                                    .getOrElse { it.message ?: "同步失败" }
+                                busy = false
+                            }
+                        }
+                    ) { Text("立即同步", fontSize = 12.sp) }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(roleMsg, color = TGColors.Ink, fontSize = 11.sp)
+            }
+        }
+
         // v5.15.3：起床/睡前时间选择对话框
         if (showMorningPicker) {
             TimePickDialog(

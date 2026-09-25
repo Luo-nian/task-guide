@@ -228,6 +228,62 @@ fun Route.aiRoutes() {
         call.respondJson(ok(buildJsonObject { put("ok", JsonPrimitive(true)); put("step_uuid", JsonPrimitive(uuid)) }))
     }
 
+    /**
+     * 让本机进入/退出「配对模式」（等价于人在设置页点了「配对」）。
+     * ⚠️ 这**不绕过安全边界**：真正授权仍然发生在一端手机上点「允许」的那一刻
+     *   （PairingState.approve 只由弹窗调用），这里只是省掉"人跑到那台机器前点一下开关"。
+     */
+    post("/ai/pair_arm") {
+        if (!call.aiOk()) return@post
+        val on = call.bodyJson().bool("on") ?: true
+        PairingState.setArmed(on)
+        call.respondJson(ok(buildJsonObject {
+            put("ok", JsonPrimitive(true)); put("armed", JsonPrimitive(on))
+        }))
+    }
+
+    /**
+     * 配置本机的多端同步角色（v5.31.0）：服务器 / 客户端。
+     * 客户端模式下还要写服务器地址与配对密钥 —— 于是"把一台手机加成客户端"可以全自动完成。
+     */
+    post("/ai/client") {
+        if (!call.aiOk()) return@post
+        val b = call.bodyJson()
+        val r = TaskBarApp.instance.repo
+        b.str("role")?.let { r.setSetting(ClientSync.K_ROLE, it) }
+        b.str("server_url")?.let { r.setSetting(ClientSync.K_URL, it) }
+        b.str("master_hex")?.let {
+            r.setSetting(ClientSync.K_MASTER, it)
+            r.setSetting(ClientSync.K_LAST_SINCE, "0")
+            r.setSetting(ClientSync.K_LAST_PUSH, "0")
+        }
+        // 角色变化 → 让同步服务按新角色行事（服务器↔客户端切换）
+        runCatching { SyncService.start(TaskBarApp.instance) }
+        call.respondJson(ok(buildJsonObject {
+            put("ok", JsonPrimitive(true))
+            put("role", JsonPrimitive(ClientSync.role()))
+            put("status", JsonPrimitive(ClientSync.statusLine()))
+        }))
+    }
+
+    /**
+     * 立刻跑一次「客户端模式」的同步并把结果/错误原样返回（调试与手动补同步都用它）。
+     * 注意：本端必须已配好客户端（role/url/master），否则返回明确错误。
+     */
+    post("/ai/sync_now") {
+        if (!call.aiOk()) return@post
+        // 注意：syncOnce() 本身返回 Result<String>，runCatching 会再包一层 → 用 getOrThrow 摊平
+        val res = runCatching { ClientSync.syncOnce().getOrThrow() }
+        val msg: String = res.exceptionOrNull()?.let { it.message ?: it.toString() }
+            ?: res.getOrNull().orEmpty()
+        call.respondJson(ok(buildJsonObject {
+            put("ok", JsonPrimitive(res.isSuccess))
+            put("message", JsonPrimitive(msg))
+            put("role", JsonPrimitive(ClientSync.role()))
+            put("configured", JsonPrimitive(ClientSync.isConfigured()))
+        }))
+    }
+
     /** 让双端立刻对齐：给所有已连接的电脑端广播 syncnow（桌面端收到就拉+推一轮） */
     post("/ai/sync") {
         if (!call.aiOk()) return@post

@@ -85,7 +85,39 @@ class SyncService : Service() {
             applyTracking(cached.title, cached.step, cached.count, mustForeground = true)
             scope.launch { refreshFromDb() }
         }
-        if (server == null) startServer()
+        // v5.31.0：按角色启动 —— 服务器起 Ktor 等被连；客户端跑同步循环去连服务器。
+        //   一个同步组里只能有一个服务器，客户端模式下本机不再监听端口。
+        scope.launch {
+            val role = ClientSync.role()
+            // v5.31.0 诊断：vivo 上拿不到 App 日志 → 把关键判断落库，用 run-as 就能读
+            runCatching {
+                TaskBarApp.instance.repo.setSetting(
+                    "svc_diag",
+                    "role=$role serverNull=${server == null} listen=${server != null} t=${System.currentTimeMillis()}"
+                )
+            }
+            if (role == ClientSync.ROLE_CLIENT) {
+                // 从服务器切到客户端：先把本机的 Ktor/mDNS 停掉（一个同步组只能有一个服务器）
+                if (server != null) {
+                    runCatching { server?.stop(500, 1000) }
+                    server = null
+                    runCatching { mdns?.unregister() }
+                    mdns = null
+                    Log.i("SyncService", "已切换为客户端：本机服务器已停止")
+                }
+                ClientSync.startLoop(scope)
+                // 立刻先跑一次，把失败原因落库（不然要等 8 秒且日志看不到）
+                runCatching { ClientSync.syncOnce() }
+                    .onFailure {
+                        runCatching {
+                            TaskBarApp.instance.repo.setSetting("client_last_error", "first: ${it.message}")
+                        }
+                    }
+                Log.i("SyncService", "客户端模式：已启动与服务器的同步循环")
+            } else if (server == null) {
+                startServer()
+            }
+        }
         return START_STICKY
     }
 
@@ -183,6 +215,7 @@ class SyncService : Service() {
     }
 
     override fun onDestroy() {
+        ClientSync.stopLoop()
         serverJob?.cancel()
         runCatching { server?.stop(1000, 2000) }
         mdns?.unregister()

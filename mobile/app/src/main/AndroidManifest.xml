@@ -28,6 +28,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
+        android:usesCleartextTraffic="true"
         android:name=".TaskBarApp"
         android:allowBackup="false"
         android:fullBackupContent="false"
