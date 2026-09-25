@@ -24,17 +24,6 @@ import java.util.concurrent.TimeUnit
 /** 提醒/接收器内部用的 IO 协程作用域（避免 GlobalScope 警告） */
 internal val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-/**
- * v5.28.2 诊断探针：fireNow 链路跟踪（写应用私有文件，不依赖 logcat —— vivo 日志开关默认关）。
- * 定位「广播 dispatch 正常、但无通知无 fired 旗标」的断点。修复后整段移除。
- */
-internal fun fireTrace(ctx: Context, msg: String) {
-    runCatching {
-        java.io.File(ctx.filesDir, "fire_trace.log")
-            .appendText("${java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(java.util.Date())} $msg\n")
-    }
-}
-
 object ReminderScheduler {
 
     private const val PREFIX = "reminder_"
@@ -275,28 +264,24 @@ object ReminderScheduler {
      */
     suspend fun fireNow(ctx: Context, uuid: String, strength: String, repeatCount: Int) {
         val app = ctx.applicationContext as TaskBarApp
-        fireTrace(ctx, "fire-start uuid=$uuid strength=$strength")
-        val t = app.repo.observeTask(uuid).first() ?: run { fireTrace(ctx, "task-NULL"); return }
-        fireTrace(ctx, "got-task track=${t.trackStatus} del=${t.deleted} owner='${t.owner}'")
+        val t = app.repo.observeTask(uuid).first() ?: return
 
         // 已完成则不提醒
-        if (t.trackStatus == TrackStatus.DONE) { fireTrace(ctx, "guard:track-done"); return }
+        if (t.trackStatus == TrackStatus.DONE) return
 
         // v5.18.4：已删除（软删）的任务不再提醒。
         //   observeByUuid 是 `SELECT * ... LIMIT 1`，**不过滤 deleted**；而删除任务
         //   并不会取消已排的提醒（删除路径里没有 cancel）→ 删掉的任务到点还会弹一次。
         //   这里补一道守卫，顺带让历史遗留的"孤儿"提醒条目自动失效（触发后自行作废）。
-        if (t.deleted != 0) { fireTrace(ctx, "guard:deleted"); return }
+        if (t.deleted != 0) return
 
         // v5.27.0：负责人路由兜底 —— 排程后 owner 可能被改到别人头上，触发那一刻再判一次。
         //   owner 非空且不是本机身份名 → 本机不响（同步照常，由负责人那台设备提醒）。
         val selfName = app.repo.selfName()
         val owner = t.owner.trim()
-        if (owner.isNotEmpty() && owner != selfName) { fireTrace(ctx, "guard:owner=$owner self=$selfName"); return }
+        if (owner.isNotEmpty() && owner != selfName) return
 
-        fireTrace(ctx, "before-showReminder")
         NotificationHelper.showReminder(ctx.applicationContext, uuid, t.title, strength)
-        fireTrace(ctx, "after-showReminder")
 
         // v5.26.2：错过补看 —— 记下「这条提醒响过了」。
         //   场景（第五轮消防员/听障用户）：手机摸不到/没感知到，提醒响过即失效。
@@ -466,11 +451,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val uuid = intent.getStringExtra(ReminderScheduler.KEY_UUID) ?: return
         val strength = intent.getStringExtra(ReminderScheduler.EXTRA_STRENGTH) ?: "notify"
         val app = context.applicationContext
-        fireTrace(context, "onReceive uuid=$uuid")
         val pending = goAsync()
         ioScope.launch {
             try {
-                fireTrace(context, "launch-running")
                 ReminderScheduler.fireNow(app, uuid, strength, 0)
                 // v5.22.4（体验测试发现）——**每日型提醒响过一次就再也不排了**：
                 //   全项目唯一的排程入口是"冷启动 / 开机"（TaskBarApp.onCreate），
@@ -483,7 +466,6 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 }
             } catch (e: Exception) {
                 android.util.Log.w("ReminderAlarm", "闹钟触发提醒失败", e)
-                fireTrace(context, "EXCEPTION: ${e.javaClass.simpleName}: ${e.message}")
             } finally {
                 runCatching { pending.finish() }
             }

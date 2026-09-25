@@ -1456,6 +1456,13 @@ fun StepRow(step: Step, vm: TaskViewModel, seq: Int? = null, readOnly: Boolean =
                 }
             }
         }
+
+        // v5.29.0：删除步骤入口 —— 此前双端都没有（误加的步骤永远删不掉，如测试遗留的 SyncStepA）
+        if (!readOnly) {
+            PressIcon(onClick = { vm.deleteStep(step.uuid) }, modifier = Modifier.size(30.dp)) {
+                Text("×", color = TGColors.InkMute, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            }
+        }
     }
 }
 

@@ -539,6 +539,15 @@ data class ChangeLog(
     @ColumnInfo(name = "created_at") val createdAt: Long
 )
 
+/** v5.29.0：任务动态对外瘦身 DTO（桌面详情页「动态」区数据源，不暴露 id/task_uuid） */
+@Serializable
+data class ChangeLogDto(
+    val who: String,
+    val action: String,
+    val detail: String = "",
+    val at: Long
+)
+
 // ==================== 设置（键值对） ====================
 @Entity(tableName = "settings")
 data class Setting(

@@ -3342,3 +3342,35 @@ input[type=text], input[type=number], input[type=password], select, textarea {
   margin-left: auto; font-size: 18px; font-weight: 800; color: var(--ink-soft); line-height: 1;
 }
 .side-nav .nav-group-head.active .nav-group-arrow { color: var(--gold); }
+
+
+/* ==================== v5.29.0 ==================== */
+/* 步骤删除键（行尾，hover 显眼） */
+.g-del{margin-left:auto;color:var(--ink-mute,#8a7a6a);cursor:pointer;font-size:15px;line-height:1;padding:1px 7px;border-radius:6px;opacity:.45;flex:none}
+.goal-item:hover .g-del{opacity:.9}
+.g-del:hover{opacity:1 !important;background:rgba(176,67,58,.12);color:#b0433a}
+
+/* D-01：任务动态时间线 */
+#tlBox{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.tl-item{display:flex;align-items:baseline;gap:6px;font-size:12.5px;color:var(--ink,#4a3b30);min-width:0}
+.tl-who{color:var(--gold-deep,#8a6d1f);font-weight:600;flex:none}
+.tl-who::after{content:'：';font-weight:400}
+.tl-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-time{margin-left:auto;color:var(--ink-faint,#a09484);font-size:11px;flex:none}
+
+/* B-008：夜间主题主界面硬编码暖白收口（任务条/顶栏/侧栏/统计/搜索/视图头） */
+[data-theme="dark"] .topbar{background:var(--bar) !important}
+[data-theme="dark"] .points{background:var(--panel-solid) !important}
+[data-theme="dark"] .ico-btn{background:var(--bar-hover) !important}
+[data-theme="dark"] .nav-item{background:linear-gradient(180deg,rgba(48,43,34,.92),rgba(40,35,27,.62)) !important;box-shadow:0 1px 2px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,244,208,.07) !important}
+[data-theme="dark"] .nav-count{border-color:rgba(255,244,208,.22) !important}
+[data-theme="dark"] .view-head{background:rgba(28,25,20,.82) !important}
+[data-theme="dark"] .search{background:var(--panel-solid) !important}
+[data-theme="dark"] .cat-task,[data-theme="dark"] .list-task{background:var(--card) !important}
+[data-theme="dark"] .cat-task.tracking{background:linear-gradient(90deg,rgba(94,147,192,.20),rgba(217,172,74,.13)) !important}
+[data-theme="dark"] .cat-task.overdue,[data-theme="dark"] .list-task.overdue{background:linear-gradient(90deg,rgba(140,62,44,.30),rgba(60,30,22,.42)) !important;border-color:rgba(210,101,76,.45) !important}
+
+[data-theme="dark"] .main-pane{background:linear-gradient(180deg,rgba(28,25,20,.55),rgba(20,18,14,.35)) !important}
+[data-theme="dark"] #catCardTracking{background:linear-gradient(180deg,rgba(46,42,34,.96),rgba(34,30,24,.90)) !important}
+[data-theme="dark"] .style-tab{background:rgba(36,32,26,.95) !important}
+[data-theme="dark"] #_softTip{background:rgba(27,24,19,.98) !important;color:var(--ink) !important}

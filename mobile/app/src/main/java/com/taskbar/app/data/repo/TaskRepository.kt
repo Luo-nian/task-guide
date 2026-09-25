@@ -105,6 +105,10 @@ class TaskRepository(private val db: AppDatabase) {
         }
     }
 
+    /** v5.29.0：任务动态时间线数据源（桌面 /api/task_changes 用） */
+    suspend fun changesFor(taskUuid: String): List<com.taskbar.app.data.model.ChangeLog> =
+        changeLogDao.getByTask(taskUuid)
+
     /** 同步用 Json：encodeDefaults=true 才能把默认值字段也序列化给桌面端 */
     private val syncJson = kotlinx.serialization.json.Json {
         encodeDefaults = true

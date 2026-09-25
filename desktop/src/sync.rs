@@ -383,8 +383,19 @@ fn open_response(
 /// 带签名 + 加密的 GET，返回解密后的明文
 pub fn secure_get(base: &str, path: &str, timeout_secs: u64) -> Result<String, String> {
     let k = keys().ok_or_else(|| "未配对（无密钥），请先完成配对".to_string())?;
-    let rb = signed_headers(lan_client().get(format!("{}{}", base, path)), "GET", path, "")
-        .timeout(Duration::from_secs(timeout_secs));
+    // v5.29.0：签名只覆盖 path（手机端 guard 用 request.path() 验签，**不含 query**）。
+    //   此前 task_changes 把 ?task_uuid=... 整串当 path 签名 → 手机端 bad_sig 401。
+    let (sign_path, query) = match path.find('?') {
+        Some(i) => (&path[..i], &path[i..]),
+        None => (path, ""),
+    };
+    let rb = signed_headers(
+        lan_client().get(format!("{}{}{}", base, sign_path, query)),
+        "GET",
+        sign_path,
+        "",
+    )
+    .timeout(Duration::from_secs(timeout_secs));
     let resp = rb.send().map_err(|e| e.to_string())?;
     let status = resp.status();
     let headers = resp.headers().clone();
@@ -396,7 +407,8 @@ pub fn secure_get(base: &str, path: &str, timeout_secs: u64) -> Result<String, S
             wire.chars().take(160).collect::<String>()
         ));
     }
-    open_response(&k, path, &headers, &wire)
+    // 响应验签同样用不含 query 的 path（手机端 respondSecure 用 request.path()）
+    open_response(&k, sign_path, &headers, &wire)
 }
 
 /// 带签名 + 加密请求体的 POST。返回 (是否成功, 明文响应)

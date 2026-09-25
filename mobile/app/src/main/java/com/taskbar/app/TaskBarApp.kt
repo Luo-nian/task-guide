@@ -27,11 +27,8 @@ class TaskBarApp : Application() {
         super.onCreate()
         instance = this
         installCrashHandler()
-        // v5.28.2 诊断探针：进程起来即写（判别「文件机制可用性」与「进程代码版本」），修复后移除
-        runCatching {
-            java.io.File(filesDir, "fire_trace.log")
-                .appendText("${java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(java.util.Date())} app-onCreate\n")
-        }
+        // v5.29.0：诊断探针已拆除，顺手清掉 v5.28.x 留下的诊断文件
+        runCatching { java.io.File(filesDir, "fire_trace.log").delete() }
 
         // Room 初始化失败也不能 throw —— application 一抛就被系统杀，整个 app 闪退
         // 兜底：磁盘库失败时降级为内存库，保证 repo 永远有值（TaskViewModel 构造才不崩）

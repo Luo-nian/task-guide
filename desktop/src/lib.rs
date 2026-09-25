@@ -219,18 +219,23 @@ fn today_range() -> (i64, i64) {
 // boss：5 个 title 全删为空串（前端的 LEVELS title 也已删），与界面渲染处 `lv.title || ''` + display:none 联动
 fn level_of(points: i64) -> serde_json::Value {
     // (等级, 本级下限, 名称, 标语, 图标名)
-    const TABLE: [(i64, i64, &str, &str, &str); 5] = [
-        (1,   0, "历练学徒", "",                          "lv1"),
-        (2,  20, "风华游侠", "",                          "lv2"),
-        (3,  60, "破浪骑士", "",                          "lv3"),
-        (4, 120, "群星行者", "",                          "lv4"),
-        (5, 200, "传奇勇者", "",                          "lv5"),
+    const TABLE: [(i64, i64, &str, &str, &str); 10] = [
+        (1,    0, "历练学徒",   "", "lv1"),
+        (2,   50, "风华游侠",   "", "lv2"),
+        (3,  130, "破浪骑士",   "", "lv3"),
+        (4,  250, "群星行者",   "", "lv4"),
+        (5,  420, "传奇勇者",   "", "lv5"),
+        (6,  660, "苍穹守护者", "", "lv6"),
+        (7, 1000, "深渊征服者", "", "lv7"),
+        (8, 1500, "星辰霸主",   "", "lv8"),
+        (9, 2200, "天命传奇",   "", "lv9"),
+        (10,3200, "寰宇传说",   "", "lv10"),
     ];
     let mut cur = &TABLE[0];
     for row in TABLE.iter() { if points >= row.1 { cur = row; } }
     // min/max 取自相邻等级：本级下限 → 下一级下限（末级用 999 兜底）
     let idx = (cur.0 - 1) as usize;
-    let max = if idx + 1 < TABLE.len() { TABLE[idx + 1].1 } else { 999 };
+    let max = if idx + 1 < TABLE.len() { TABLE[idx + 1].1 } else { 99_999 };
     serde_json::json!({
         "lv": cur.0, "name": cur.2, "title": cur.3, "ico": cur.4,
         "min": cur.1, "max": max
@@ -644,6 +649,36 @@ fn import_steps(
         added += 1;
     }
     serde_json::json!({ "status": "ok", "added": added, "uuids": uuids })
+}
+
+// v5.29.0：删除步骤（软删 + 同步）—— 双端一直缺这个入口（误加的步骤如 SyncStepA 删不掉）
+#[tauri::command]
+fn delete_step(state: tauri::State<AppState>, step_uuid: String, task_uuid: Option<String>) {
+    let _ = task_uuid;
+    let now = chrono::Local::now().timestamp_millis();
+    {
+        let db = state.db.lock().unwrap();
+        db.execute(
+            "UPDATE steps SET deleted=1, updated_at=?1 WHERE uuid=?2",
+            params![now, &step_uuid],
+        ).ok();
+    }
+    sync::push_change(&state.db, &state.server_url, "step", &step_uuid);
+}
+
+// v5.29.0 D-01：任务动态时间线 —— 数据源是手机端（服务器）change_logs，桌面详情页此前一直没有
+#[tauri::command]
+fn task_changes(state: tauri::State<AppState>, task_uuid: String) -> serde_json::Value {
+    let url = {
+        let g = state.server_url.lock().unwrap();
+        crate::sync::server_base(&g)
+    };
+    if url.is_empty() { return serde_json::json!([]); }
+    let path = format!("/api/task_changes?task_uuid={}", task_uuid);
+    match crate::sync::secure_get(&url, &path, 5) {
+        Ok(plain) => serde_json::from_str(&plain).unwrap_or_else(|_| serde_json::json!([])),
+        Err(e) => serde_json::json!({ "error": e }),   // 未配对/离线：JS 据此隐藏「动态」区
+    }
 }
 
 // 步骤插入公共逻辑：自动排 sort_order，返回新 uuid
@@ -2056,7 +2091,7 @@ pub fn run() {
             get_habits_status, get_task_detail, get_total_points,
             get_tasks_by_category,
             get_level, get_daily_progress, check_night_notify, dismiss_night_notify,
-            advance_step, add_step, import_steps, complete_task, delete_task, add_task, update_task, start_tracking, stop_tracking,
+            advance_step, add_step, import_steps, complete_task, delete_task, add_task, update_task, start_tracking, stop_tracking, delete_step, task_changes,
             delay_task,
             restore_task,
             set_display_mode, set_window_size,

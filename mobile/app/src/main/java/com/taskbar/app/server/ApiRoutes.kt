@@ -185,6 +185,23 @@ fun Application.configureServer() {
             call.respondSecure(appJson.encodeToString(IncrementalPayload.serializer(), payload))
         }
 
+        // v5.29.0 D-01：任务动态时间线（桌面详情页「动态」区数据源 —— 桌面端此前一直没有时间线）
+        get("/api/task_changes") {
+            if (call.guard("GET", "") == null) return@get
+            val uuid = call.request.queryParameters["task_uuid"].orEmpty()
+            if (uuid.isBlank()) {
+                call.respondSecure("""{"error":"task_uuid required"}""")
+            } else {
+                val logs = TaskBarApp.instance.repo.changesFor(uuid)
+                call.respondSecure(
+                    appJson.encodeToString(
+                        kotlinx.serialization.builtins.ListSerializer(com.taskbar.app.data.model.ChangeLogDto.serializer()),
+                        logs.map { com.taskbar.app.data.model.ChangeLogDto(it.who, it.action, it.detail, it.createdAt) }
+                    )
+                )
+            }
+        }
+
         // 电脑端推送自己的变更
         post("/api/sync/changes") {
             val raw = call.receiveText()

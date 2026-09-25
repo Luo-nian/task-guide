@@ -1513,6 +1513,31 @@ function renderProgress() {
     </div>`;
 }
 
+// =============== v5.29.0：步骤删除 + 任务动态时间线 ===============
+async function deleteStep(taskUuid, stepUuid) {
+  try {
+    await call('delete_step', { taskUuid, stepUuid });
+    showToast('已删除步骤');
+    openDetail(taskUuid); render();
+  } catch (e) { showToast('删除失败：' + (e.message || e)); }
+}
+
+async function fetchTimeline(taskUuid) {
+  try {
+    const list = await call('task_changes', { taskUuid });
+    const box = document.getElementById('tlBox');
+    if (!box) return;
+    if (list && list.error) { const sec = document.getElementById('tlSection'); if (sec) sec.style.display = 'none'; return; }
+    if (!list || !list.length) { box.innerHTML = '<div class="tl-item" style="opacity:.55">还没有动态</div>'; return; }
+    box.innerHTML = list.map(c =>
+      `<div class="tl-item"><span class="tl-who">${esc(c.who || '')}</span><span class="tl-detail">${esc(c.detail || c.action || '')}</span><span class="tl-time">${fmtTime(c.at)}</span></div>`
+    ).join('');
+  } catch (e) {
+    const sec = document.getElementById('tlSection');
+    if (sec) sec.style.display = 'none';   // 拉不到（未连接手机）就整段藏掉，不留「加载中」
+  }
+}
+
 // =============== 详情页 ===============
 window.openDetail = async function(uuid) {
   selectedUuid = uuid;
@@ -1557,6 +1582,8 @@ window.openDetail = async function(uuid) {
     ${t.count > 1 ? `<span class="chip" id="dvCountChip">次数 ${t.done_count || 0}/${t.count}</span>` : ''}
   `;
 
+  fetchTimeline(t.uuid);   // v5.29.0 D-01：任务动态
+
   body.innerHTML = `
     ${totalSteps > 0 ? `
     <div class="dv-progress-summary">
@@ -1575,10 +1602,16 @@ window.openDetail = async function(uuid) {
           <span class="g-play ${s.status==='done'?'done':''}">${s.status==='done'?svgIcon('check',13,2.7):svgIcon('ring',13,1.8)}</span>
           <span class="g-text">${esc(s.title)}</span>
           ${s.attr_value ? `<span class="g-attr">${esc(s.attr_label||'')}: ${esc(s.attr_value)}</span>` : ''}
+          <span class="g-del" onclick="event.stopPropagation();deleteStep('${t.uuid}','${s.uuid}')" title="删除此步骤">×</span>
         </div>`).join('')}
       ${totalSteps === 0 ? "" : `
         <div class="goal-add" id="goalAddBtn" onclick="addStep('${t.uuid}')">${svgIcon('plus',13,2.2)} 添加步骤</div>
       </div>`}
+    </div>
+
+    <div class="goal-box" id="tlSection">
+      <div class="goal-head"><span>▶ 动态</span></div>
+      <div id="tlBox"><div class="tl-item" style="opacity:.55">加载中…</div></div>
     </div>
 
     ${t.desc ? `<div class="detail-desc">${esc(t.desc)}</div>` : ''}
